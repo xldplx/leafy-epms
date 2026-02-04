@@ -19,14 +19,6 @@ export default function Empty() {
                 </p>
             </div>
 
-            {/* Action Button */}
-            <Link
-                to="/dashboard/main"
-                className="flex items-center gap-2 px-6 py-2.5 bg-white border border-slate-200 text-slate-600 font-medium rounded-lg hover:border-emerald-500 hover:text-emerald-600 transition-colors shadow-sm"
-            >
-                <ArrowLeft className="w-4 h-4" />
-                Return to Overview
-            </Link>
 
         </div>
     );

@@ -1,7 +1,7 @@
 import React from 'react';
 import { Activity, TrendingUp, BarChart3, Download } from 'lucide-react';
 
-export default function Main() {
+export default function Overview() {
     return (
         <div className="space-y-8">
 
