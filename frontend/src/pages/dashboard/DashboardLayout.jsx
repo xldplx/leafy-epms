@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-    LayoutDashboard, Users, Truck, Fuel, Package, Wrench, Banknote, LogOut,
-    Construction, ArrowRight
+    LayoutDashboard, Users, Truck, Fuel, Package, Wrench, Banknote,
+    LogOut, ChevronUp, User, Settings
 } from 'lucide-react';
 
 // imported files to show on the page components
@@ -10,7 +10,7 @@ import Overview from './features/Overview';
 import Manpower from './features/Manpower';
 import Empty from './features/Empty';
 
-// page components
+// page components to showcase, the format goes like "theNameOnTheNavItems: TheNameOfTheFile,"
 const pageComponents = {
     'Overview': Overview,
     'Manpower': Manpower,
@@ -22,6 +22,10 @@ export default function DashboardLayout() {
     // State for Active Page (Default to Overview)
     const [activePage, setActivePage] = useState('Overview');
 
+    // State for User Menu (Popup)
+    const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+    const menuRef = useRef(null);
+
     const userRole = localStorage.getItem('userRole') || 'Guest';
     const userName = localStorage.getItem('userName') || 'User';
 
@@ -29,6 +33,17 @@ export default function DashboardLayout() {
         localStorage.clear();
         navigate('/');
     };
+
+    // Close menu when clicking outside
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (menuRef.current && !menuRef.current.contains(event.target)) {
+                setIsUserMenuOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
 
     // Navigation Configuration
     const navItems = [
@@ -69,11 +84,10 @@ export default function DashboardLayout() {
         },
     ].filter(item => item.allowedRoles.includes(userRole));
 
-    // --- LOGIC: Resolve the Component ---
-    // 1. Find the current Nav Item object
+
     const currentNavItem = navItems.find(item => item.name === activePage) || navItems[0];
 
-    // 2. Check if a component exists in the map. If not, use GenericPage.
+    // if the feature page has its own page, show it, if not, show the Empty.jsx instead
     const ActiveComponent = pageComponents[activePage] || (() => <Empty />);
 
     return (
@@ -110,39 +124,58 @@ export default function DashboardLayout() {
                     ))}
                 </nav>
 
-                <div className="p-4 border-t border-slate-100">
-                    <div className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 border border-slate-100">
-                        <div className="w-10 h-10 rounded-full bg-emerald-600 flex items-center justify-center text-white font-bold uppercase shadow-md shadow-emerald-200">
+                {/* USER PROFILE & LOGOUT SECTION */}
+                <div className="p-4 border-t border-slate-100 relative" ref={menuRef}>
+
+                    {/* POPUP MENU (Displays when isUserMenuOpen is true) */}
+                    {isUserMenuOpen && (
+                        <div className="absolute bottom-[calc(100%-10px)] left-4 right-4 bg-white border border-slate-200 shadow-xl shadow-slate-200/50 rounded-xl overflow-hidden animate-in slide-in-from-bottom-2 fade-in duration-200 z-50">
+                            <div className="p-2 space-y-1">
+                                <button className="w-full flex items-center gap-3 px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 rounded-lg transition-colors text-left">
+                                    <User className="w-4 h-4 text-slate-400" />
+                                    My Profile
+                                </button>
+                                <button className="w-full flex items-center gap-3 px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 rounded-lg transition-colors text-left">
+                                    <Settings className="w-4 h-4 text-slate-400" />
+                                    Settings
+                                </button>
+                                <div className="h-px bg-slate-100 my-1 mx-2" />
+                                <button
+                                    onClick={handleLogout}
+                                    className="w-full flex items-center gap-3 px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors text-left"
+                                >
+                                    <LogOut className="w-4 h-4" />
+                                    Sign Out
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* MAIN TRIGGER BUTTON (Replaces the old static div) */}
+                    <button
+                        onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
+                        className={`w-full flex items-center gap-3 p-3 rounded-xl border transition-all duration-200 ${isUserMenuOpen
+                            ? 'bg-slate-50 border-emerald-200 ring-2 ring-emerald-100'
+                            : 'bg-white border-slate-100 hover:border-emerald-200 hover:shadow-sm'
+                            }`}
+                    >
+                        <div className="w-10 h-10 rounded-full bg-emerald-600 flex items-center justify-center text-white font-bold uppercase shadow-md shadow-emerald-200 shrink-0">
                             {userName.charAt(0)}
                         </div>
-                        <div className="flex-1 min-w-0">
+                        <div className="flex-1 min-w-0 text-left">
                             <p className="text-sm font-bold text-slate-800 truncate">{userName}</p>
-                            <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-tighter">{userRole}</p>
+                            <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-tighter truncate">{userRole}</p>
                         </div>
-                        <button
-                            onClick={handleLogout}
-                            className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
-                            title="Logout"
-                        >
-                            <LogOut className="w-5 h-5" />
-                        </button>
-                    </div>
+                        {/* Rotating Chevron */}
+                        <ChevronUp className={`w-4 h-4 text-slate-400 transition-transform duration-300 ${isUserMenuOpen ? 'rotate-180' : ''}`} />
+                    </button>
                 </div>
             </aside>
 
-            {/* MAIN CONTENT */}
-            <main className="flex-1 ml-72 p-8 lg:p-12 transition-all">
-                {/* Header for the Content Area */}
-                {/* <div className="flex items-center justify-between mb-8 animate-in fade-in slide-in-from-bottom-2 duration-500">
-                    <div>
-                        <h2 className="text-2xl font-bold text-slate-800">{activePage}</h2>
-                        <p className="text-slate-500 text-sm">Manage your project {activePage.toLowerCase()} here.</p>
-                    </div>
-                  
-                </div> */}
-
-                {/* Render the Active Component */}
-                <div className="animate-in fade-in zoom-in-95 h-full duration-300">
+            {/* the main component  */}
+            <main className="flex-1 ml-70 p-8 lg:p-12 transition-all">
+                {/* to handle what's inside the main component */}
+                <div className="animate-in fade-in h-full duration-300">
                     <ActiveComponent />
                 </div>
             </main>

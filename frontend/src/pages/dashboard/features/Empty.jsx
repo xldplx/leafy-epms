@@ -18,8 +18,6 @@ export default function Empty() {
                     This module is currently being built. Please check back later for updates or contact your administrator.
                 </p>
             </div>
-
-
         </div>
     );
 }
