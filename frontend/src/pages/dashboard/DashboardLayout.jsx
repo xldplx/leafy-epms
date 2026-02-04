@@ -1,26 +1,23 @@
 import React from 'react';
-import { Outlet, Link, useLocation } from 'react-router-dom';
+import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import {
-    LayoutDashboard,
-    Users,
-    Truck,
-    Package,
-    Banknote,
-    LogOut
+    LayoutDashboard, Users, Truck, Fuel, Package, Wrench, Banknote, LogOut
 } from 'lucide-react';
-
-// --- CORRECT IMPORTS (Based on your file structure) ---
-import Main from "./features/Main";         // Your "Overview" file
-import Manpower from "./features/Manpower"; // Your "Manpower" file
-import Empty from "./features/Empty";       // Your "Empty" file
 
 export default function DashboardLayout() {
     const location = useLocation();
+    const navigate = useNavigate();
 
-    // Helper to determine active state
+    const userRole = localStorage.getItem('userRole') || 'Guest';
+    const userName = localStorage.getItem('userName') || 'User';
+
+    const handleLogout = () => {
+        localStorage.clear();
+        navigate('/dashboard');
+    };
+
     const isActive = (path) => location.pathname === path;
 
-    // Navigation Items
     const navItems = [
         {
             name: 'Overview',
@@ -31,42 +28,44 @@ export default function DashboardLayout() {
         {
             name: 'Manpower',
             path: '/dashboard/manpower',
-            icon: <Package className="w-5 h-5" />
+            icon: <Users className="w-5 h-5" />,
+            allowedRoles: ['Project Manager', 'Planner', 'Site Engineer']
         },
-        // All items below are not in 'pageComponents', so they will show Empty.jsx
         {
             name: 'Equipment',
-            path: '/dashboard/empty',
-            icon: <Package className="w-5 h-5" />
+            path: '/dashboard/empty', // Sementara ke empty
+            icon: <Truck className="w-5 h-5" />,
+            allowedRoles: ['Project Manager', 'Planner', 'Site Engineer']
         },
         {
             name: 'Consumables',
             path: '/dashboard/empty',
-            icon: <Package className="w-5 h-5" />
+            icon: <Fuel className="w-5 h-5" />,
+            allowedRoles: ['Project Manager', 'Planner', 'Site Engineer']
         },
         {
             name: 'Materials',
             path: '/dashboard/empty',
-            icon: <Package className="w-5 h-5" />
+            icon: <Package className="w-5 h-5" />,
+            allowedRoles: ['Project Manager', 'Planner', 'Site Engineer']
         },
         {
             name: 'Tools',
             path: '/dashboard/empty',
-            icon: <Package className="w-5 h-5" />
+            icon: <Wrench className="w-5 h-5" />,
+            allowedRoles: ['Project Manager', 'Planner', 'Site Engineer']
         },
         {
             name: 'Budget',
             path: '/dashboard/empty',
-            icon: <Package className="w-5 h-5" />
+            icon: <Banknote className="w-5 h-5" />,
+            allowedRoles: ['Project Manager', 'Cost Engineer']
         },
-    ];
+    ].filter(item => item.allowedRoles.includes(userRole));
 
     return (
         <div className="min-h-screen bg-slate-50 flex font-sans text-slate-600">
-
-            {/* SIDEBAR */}
-            <aside className="w-72 bg-white border-r border-slate-200 flex flex-col fixed h-full z-20 shadow-[4px_0_24px_rgba(0,0,0,0.02)]">
-                {/* Brand */}
+            <aside className="w-72 bg-white border-r border-slate-200 flex flex-col fixed h-full z-20 shadow-sm">
                 <div className="h-24 flex items-center px-8 border-b border-slate-100">
                     <div className="flex flex-col">
                         <h1 className="text-xl font-bold text-slate-800">Capstone</h1>
@@ -74,23 +73,16 @@ export default function DashboardLayout() {
                     </div>
                 </div>
 
-                {/* Navigation */}
-                <nav className="flex-1 px-4 py-8 space-y-1">
+                <nav className="flex-1 px-4 py-8 space-y-1 overflow-y-auto">
                     {navItems.map((item) => (
-                        <button
+                        <Link
                             key={item.name}
                             to={item.path}
-                            className={`flex items-center gap-3 px-4 py-3.5 rounded-xl text-sm font-medium transition-all duration-200 group
-                                ${isActive(item.path)
-                                    ? 'bg-emerald-50 text-emerald-700 shadow-sm'
-                                    : 'text-slate-500 hover:bg-slate-50 hover:text-emerald-600'
+                            className={`flex items-center gap-3 px-4 py-3.5 rounded-xl text-sm font-medium transition-all ${isActive(item.path) ? 'bg-emerald-50 text-emerald-700 shadow-sm' : 'text-slate-500 hover:bg-slate-50'
                                 }`}
                         >
                             {item.icon}
                             {item.name}
-                            {isActive(item.path) && (
-                                <span className="ml-auto w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                            )}
                         </Link>
                     ))}
                 </nav>
@@ -104,15 +96,14 @@ export default function DashboardLayout() {
                             <p className="text-sm font-bold text-slate-800 truncate">{userName}</p>
                             <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-tighter">{userRole}</p>
                         </div>
-                        <Link to="/dashboard" className="text-slate-400 hover:text-red-500 transition-colors">
+                        <button onClick={handleLogout} className="text-slate-400 hover:text-red-500 transition-colors">
                             <LogOut className="w-5 h-5" />
                         </button>
                     </div>
                 </div>
             </aside>
 
-            {/* MAIN CONTENT AREA */}
-            <main className="flex-1 ml-72 p-8 lg:p-12 overflow-y-auto">
+            <main className="flex-1 ml-72 p-8 lg:p-12">
                 <Outlet />
             </main>
         </div>
