@@ -2,18 +2,26 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
     LayoutDashboard, Users, Truck, Fuel, Package, Wrench, Banknote,
-    LogOut, ChevronUp, User, Settings
+    LogOut, ChevronUp, User, Settings, FolderKanban, ClipboardList, BarChart3, Bell
 } from 'lucide-react';
 
 // imported files to show on the page components
 import Overview from './features/Overview';
 import Manpower from './features/Manpower';
+import Projects from './features/Projects';
+import DailyActuals from './features/DailyActuals';
+import PlanVsActual from './features/PlanVsActual';
+import Alerts from './features/Alerts';
 import Empty from './features/Empty';
 
 // page components to showcase, the format goes like "theNameOnTheNavItems: TheNameOfTheFile,"
 const pageComponents = {
     'Overview': Overview,
+    'Projects': Projects,
     'Manpower': Manpower,
+    'Daily Actuals': DailyActuals,
+    'Plan vs Actual': PlanVsActual,
+    'Alerts': Alerts,
 };
 
 export default function DashboardLayout() {
@@ -53,9 +61,29 @@ export default function DashboardLayout() {
             allowedRoles: ['Project Manager', 'Planner', 'Cost Engineer', 'Site Engineer', 'Management']
         },
         {
+            name: 'Projects',
+            icon: <FolderKanban className="w-5 h-5" />,
+            allowedRoles: ['Project Manager', 'Planner', 'Cost Engineer', 'Site Engineer', 'Management']
+        },
+        {
             name: 'Manpower',
             icon: <Users className="w-5 h-5" />,
             allowedRoles: ['Project Manager', 'Planner', 'Site Engineer']
+        },
+        {
+            name: 'Daily Actuals',
+            icon: <ClipboardList className="w-5 h-5" />,
+            allowedRoles: ['Project Manager', 'Planner', 'Site Engineer']
+        },
+        {
+            name: 'Plan vs Actual',
+            icon: <BarChart3 className="w-5 h-5" />,
+            allowedRoles: ['Project Manager', 'Planner', 'Cost Engineer', 'Management']
+        },
+        {
+            name: 'Alerts',
+            icon: <Bell className="w-5 h-5" />,
+            allowedRoles: ['Project Manager', 'Planner', 'Cost Engineer', 'Management']
         },
         {
             name: 'Equipment',
@@ -101,7 +129,7 @@ export default function DashboardLayout() {
                     </div>
                 </div>
 
-                <nav className="flex-1 px-4 py-8 space-y-1 overflow-y-auto custom-scrollbar">
+                <nav className="flex-1 px-4 py-8 space-y-1 overflow-y-auto">
                     {navItems.map((item) => (
                         <button
                             key={item.name}
@@ -173,7 +201,7 @@ export default function DashboardLayout() {
             </aside>
 
             {/* the main component  */}
-            <main className="flex-1 ml-70 p-8 lg:p-12 transition-all">
+            <main className="flex-1 ml-72 p-8 lg:p-12 transition-all">
                 {/* to handle what's inside the main component */}
                 <div className="animate-in fade-in h-full duration-300">
                     <ActiveComponent />
