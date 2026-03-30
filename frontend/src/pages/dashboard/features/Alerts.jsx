@@ -1,26 +1,8 @@
 import { useState } from 'react';
 import { Bell, AlertTriangle, CheckCircle2, Settings } from 'lucide-react';
-
-// Dummy EVM data — will be replaced with API calls in a later sprint
-const dummyProjects = [
-    { id: 1, project_name: 'Industrial Complex Phase 2',  project_code: 'PRJ-2026-001', schedule_pct: 0.75 },
-    { id: 2, project_name: 'Office Tower Renovation',     project_code: 'PRJ-2026-002', schedule_pct: 0.50 },
-    { id: 3, project_name: 'Warehouse Expansion Block C', project_code: 'PRJ-2026-003', schedule_pct: 0.25 },
-];
-
-const dummyTaskData = [
-    { id: 1,  project_id: 1, planned_cost: 450000000, actual_cost: 480000000, pct_complete: 100 },
-    { id: 2,  project_id: 1, planned_cost: 180000000, actual_cost: 175000000, pct_complete: 100 },
-    { id: 3,  project_id: 1, planned_cost: 920000000, actual_cost: 580000000, pct_complete:  60 },
-    { id: 4,  project_id: 1, planned_cost: 210000000, actual_cost:  65000000, pct_complete:  30 },
-    { id: 5,  project_id: 1, planned_cost: 175000000, actual_cost:          0, pct_complete:   0 },
-    { id: 6,  project_id: 2, planned_cost:  95000000, actual_cost: 100000000, pct_complete: 100 },
-    { id: 7,  project_id: 2, planned_cost: 340000000, actual_cost: 160000000, pct_complete:  45 },
-    { id: 8,  project_id: 3, planned_cost:  95000000, actual_cost:  98000000, pct_complete: 100 },
-    { id: 9,  project_id: 3, planned_cost: 280000000, actual_cost: 130000000, pct_complete:  40 },
-    { id: 10, project_id: 3, planned_cost: 320000000, actual_cost:          0, pct_complete:   0 },
-    { id: 11, project_id: 3, planned_cost: 175000000, actual_cost:          0, pct_complete:   0 },
-];
+import { dummyProjectsEvm, dummyTaskData } from '../../../data/dummyData';
+import { computeAlerts } from '../../../utils/evmHelpers';
+import { INPUT_CLASS } from '../../../utils/uiConstants';
 
 export default function Alerts() {
     const [thresholds, setThresholds] = useState({
@@ -30,6 +12,7 @@ export default function Alerts() {
         spi_red:   '0.90',
     });
 
+    const [thresholdToast, setThresholdToast] = useState(false);
     const userRole = localStorage.getItem('userRole');
 
     // Parse threshold strings to floats for computation — fallback to 0 if empty/invalid
@@ -40,67 +23,8 @@ export default function Alerts() {
         spi_red:   parseFloat(thresholds.spi_red)   || 0,
     };
 
-    // Compute alerts from EVM metrics + thresholds — no state, recalculated on every render
-    const alerts = [];
-
-    dummyProjects.forEach(project => {
-        const tasks = dummyTaskData.filter(t => t.project_id === project.id);
-        const BAC = tasks.reduce((s, t) => s + t.planned_cost, 0);
-        const EV  = tasks.reduce((s, t) => s + t.planned_cost * (t.pct_complete / 100), 0);
-        const AC  = tasks.reduce((s, t) => s + t.actual_cost, 0);
-        const PV  = BAC * project.schedule_pct;
-
-        const CPI = AC > 0 ? EV / AC : null;
-        const SPI = PV > 0 ? EV / PV : null;
-
-        if (CPI !== null) {
-            if (CPI < t.cpi_red) {
-                alerts.push({
-                    id: `${project.id}-cpi-critical`,
-                    project,
-                    metric: 'CPI',
-                    value: CPI,
-                    threshold: t.cpi_red,
-                    severity: 'critical',
-                    recommendation: 'Actual costs are significantly exceeding earned value. Review cost control measures immediately.',
-                });
-            } else if (CPI < t.cpi_amber) {
-                alerts.push({
-                    id: `${project.id}-cpi-warning`,
-                    project,
-                    metric: 'CPI',
-                    value: CPI,
-                    threshold: t.cpi_amber,
-                    severity: 'warning',
-                    recommendation: 'Cost performance is below target. Monitor spending and review upcoming task budgets.',
-                });
-            }
-        }
-
-        if (SPI !== null) {
-            if (SPI < t.spi_red) {
-                alerts.push({
-                    id: `${project.id}-spi-critical`,
-                    project,
-                    metric: 'SPI',
-                    value: SPI,
-                    threshold: t.spi_red,
-                    severity: 'critical',
-                    recommendation: 'Project is critically behind schedule. Escalate to management and consider resource reallocation.',
-                });
-            } else if (SPI < t.spi_amber) {
-                alerts.push({
-                    id: `${project.id}-spi-warning`,
-                    project,
-                    metric: 'SPI',
-                    value: SPI,
-                    threshold: t.spi_amber,
-                    severity: 'warning',
-                    recommendation: 'Schedule performance is below target. Review upcoming milestones and task dependencies.',
-                });
-            }
-        }
-    });
+    // Compute alerts from EVM metrics + thresholds — recalculated on every render
+    const alerts = computeAlerts(dummyProjectsEvm, dummyTaskData, t);
 
     const criticalCount = alerts.filter(a => a.severity === 'critical').length;
     const warningCount  = alerts.filter(a => a.severity === 'warning').length;
@@ -109,7 +33,7 @@ export default function Alerts() {
         t.cpi_red >= t.cpi_amber ||
         t.spi_red >= t.spi_amber;
 
-    const inputClass = 'w-full px-4 py-3 bg-white/50 border border-slate-200 rounded-lg outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 transition-all text-slate-700 text-sm';
+    const inputClass = INPUT_CLASS;
 
     const thresholdFields = [
         { key: 'cpi_amber', label: 'CPI — At Risk below' },
@@ -120,6 +44,13 @@ export default function Alerts() {
 
     return (
         <div className="space-y-8">
+
+            {/* THRESHOLD UPDATE TOAST */}
+            {thresholdToast && (
+                <div className="fixed top-6 right-6 z-50 bg-emerald-600 text-white px-5 py-3 rounded-xl shadow-lg shadow-emerald-200 flex items-center gap-2 text-sm font-semibold animate-in slide-in-from-top-2 fade-in duration-200">
+                    <CheckCircle2 className="w-4 h-4" /> Thresholds updated
+                </div>
+            )}
 
             {/* HEADER */}
             <div>
@@ -183,6 +114,8 @@ export default function Alerts() {
                                         const num = parseFloat(e.target.value);
                                         const clamped = isNaN(num) ? 0 : Math.min(1.5, Math.max(0, num));
                                         setThresholds({ ...thresholds, [field.key]: clamped.toFixed(2) });
+                                        setThresholdToast(true);
+                                        setTimeout(() => setThresholdToast(false), 2000);
                                     }}
                                     className={inputClass}
                                 />
@@ -203,7 +136,7 @@ export default function Alerts() {
             {/* ALERTS LIST */}
             {alerts.length > 0 ? (
                 <div className="space-y-3">
-                    {alerts.map(alert => (
+                    {[...alerts].sort((a, b) => (b.severity === 'critical' ? 1 : 0) - (a.severity === 'critical' ? 1 : 0) || a.project.project_name.localeCompare(b.project.project_name)).map(alert => (
                         <div
                             key={alert.id}
                             className={`bg-white rounded-3xl border p-6 flex items-start gap-4 ${

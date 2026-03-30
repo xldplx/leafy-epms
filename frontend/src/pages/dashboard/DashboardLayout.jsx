@@ -1,8 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-    LayoutDashboard, Users, Truck, Fuel, Package, Wrench, Banknote,
-    LogOut, ChevronUp, User, Settings, FolderKanban, ClipboardList, BarChart3, Bell
+    LayoutDashboard, Users, LogOut, ChevronUp, FolderKanban, ClipboardList, BarChart3, Bell, Upload,
+    TrendingUp, Boxes, GitBranch, Wrench, Package, Hammer, Wallet
 } from 'lucide-react';
 
 // imported files to show on the page components
@@ -12,6 +12,7 @@ import Projects from './features/Projects';
 import DailyActuals from './features/DailyActuals';
 import PlanVsActual from './features/PlanVsActual';
 import Alerts from './features/Alerts';
+import ExcelImport from './features/ExcelImport';
 import Empty from './features/Empty';
 
 // page components to showcase, the format goes like "theNameOnTheNavItems: TheNameOfTheFile,"
@@ -22,6 +23,7 @@ const pageComponents = {
     'Daily Actuals': DailyActuals,
     'Plan vs Actual': PlanVsActual,
     'Alerts': Alerts,
+    'Excel Import': ExcelImport,
 };
 
 export default function DashboardLayout() {
@@ -54,63 +56,85 @@ export default function DashboardLayout() {
     }, []);
 
     // Navigation Configuration
+    const allRoles = ['Project Manager', 'Planner', 'Cost Engineer', 'Site Engineer', 'Management'];
+
     const navItems = [
         {
             name: 'Overview',
             icon: <LayoutDashboard className="w-5 h-5" />,
-            allowedRoles: ['Project Manager', 'Planner', 'Cost Engineer', 'Site Engineer', 'Management']
+            allowedRoles: allRoles
         },
         {
             name: 'Projects',
             icon: <FolderKanban className="w-5 h-5" />,
-            allowedRoles: ['Project Manager', 'Planner', 'Cost Engineer', 'Site Engineer', 'Management']
-        },
-        {
-            name: 'Manpower',
-            icon: <Users className="w-5 h-5" />,
-            allowedRoles: ['Project Manager', 'Planner', 'Site Engineer']
+            allowedRoles: allRoles
         },
         {
             name: 'Daily Actuals',
             icon: <ClipboardList className="w-5 h-5" />,
-            allowedRoles: ['Project Manager', 'Planner', 'Site Engineer']
+            allowedRoles: allRoles
         },
         {
             name: 'Plan vs Actual',
             icon: <BarChart3 className="w-5 h-5" />,
-            allowedRoles: ['Project Manager', 'Planner', 'Cost Engineer', 'Management']
+            allowedRoles: allRoles
         },
         {
             name: 'Alerts',
             icon: <Bell className="w-5 h-5" />,
-            allowedRoles: ['Project Manager', 'Planner', 'Cost Engineer', 'Management']
+            allowedRoles: allRoles
+        },
+        {
+            name: 'Excel Import',
+            icon: <Upload className="w-5 h-5" />,
+            allowedRoles: allRoles
+        },
+        {
+            name: 'Manpower',
+            icon: <Users className="w-5 h-5" />,
+            allowedRoles: allRoles
         },
         {
             name: 'Equipment',
-            icon: <Truck className="w-5 h-5" />,
-            allowedRoles: ['Project Manager', 'Planner', 'Site Engineer']
+            icon: <Wrench className="w-5 h-5" />,
+            allowedRoles: allRoles
         },
         {
             name: 'Consumables',
-            icon: <Fuel className="w-5 h-5" />,
-            allowedRoles: ['Project Manager', 'Planner', 'Site Engineer']
+            icon: <Package className="w-5 h-5" />,
+            allowedRoles: allRoles
         },
         {
             name: 'Materials',
             icon: <Package className="w-5 h-5" />,
-            allowedRoles: ['Project Manager', 'Planner', 'Site Engineer']
+            allowedRoles: allRoles
         },
         {
             name: 'Tools',
-            icon: <Wrench className="w-5 h-5" />,
-            allowedRoles: ['Project Manager', 'Planner', 'Site Engineer']
+            icon: <Hammer className="w-5 h-5" />,
+            allowedRoles: allRoles
         },
         {
             name: 'Budget',
-            icon: <Banknote className="w-5 h-5" />,
-            allowedRoles: ['Project Manager', 'Cost Engineer']
+            icon: <Wallet className="w-5 h-5" />,
+            allowedRoles: allRoles
         },
-    ].filter(item => item.allowedRoles.includes(userRole));
+        {
+            name: 'S-Curve',
+            icon: <TrendingUp className="w-5 h-5" />,
+            allowedRoles: allRoles
+        },
+        {
+            name: 'Resources',
+            icon: <Boxes className="w-5 h-5" />,
+            allowedRoles: allRoles
+        },
+        {
+            name: 'CPM Schedule',
+            icon: <GitBranch className="w-5 h-5" />,
+            allowedRoles: allRoles
+        },
+    ];
 
 
     const currentNavItem = navItems.find(item => item.name === activePage) || navItems[0];
@@ -159,15 +183,6 @@ export default function DashboardLayout() {
                     {isUserMenuOpen && (
                         <div className="absolute bottom-[calc(100%-10px)] left-4 right-4 bg-white border border-slate-200 shadow-xl shadow-slate-200/50 rounded-xl overflow-hidden animate-in slide-in-from-bottom-2 fade-in duration-200 z-50">
                             <div className="p-2 space-y-1">
-                                <button className="w-full flex items-center gap-3 px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 rounded-lg transition-colors text-left">
-                                    <User className="w-4 h-4 text-slate-400" />
-                                    My Profile
-                                </button>
-                                <button className="w-full flex items-center gap-3 px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 rounded-lg transition-colors text-left">
-                                    <Settings className="w-4 h-4 text-slate-400" />
-                                    Settings
-                                </button>
-                                <div className="h-px bg-slate-100 my-1 mx-2" />
                                 <button
                                     onClick={handleLogout}
                                     className="w-full flex items-center gap-3 px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors text-left"

@@ -1,134 +1,222 @@
-import React from 'react';
-import { Activity, TrendingUp, BarChart3, Download } from 'lucide-react';
+import React, { useMemo } from 'react';
+import { Activity, TrendingUp, AlertTriangle, BarChart3 } from 'lucide-react';
+import { dummyProjects, dummyProjectsEvm, dummyTaskData } from '../../../data/dummyData';
+import { computeEvm, computeAlerts, indexColor, formatCurrency } from '../../../utils/evmHelpers';
+import { STATUS_STYLES } from '../../../utils/uiConstants';
 
+// --- MAIN OVERVIEW COMPONENT ---
 export default function Overview() {
+    // Per-project EVM (memoized)
+    const projectMetrics = useMemo(() => dummyProjectsEvm.map(proj => {
+        const tasks = dummyTaskData.filter(t => t.project_id === proj.id);
+        const evm = computeEvm(tasks, proj.schedule_pct);
+        const full = dummyProjects.find(p => p.id === proj.id);
+        return { ...proj, ...evm, status: full?.status || 'planning', total_budget: full?.total_budget || evm.BAC, planned_start: full?.planned_start, planned_end: full?.planned_end };
+    }), []);
+
+    // Portfolio aggregates (memoized)
+    const { totalAC, totalBAC, portfolioCPI, portfolioSPI } = useMemo(() => {
+        const tEV = projectMetrics.reduce((s, p) => s + p.EV, 0);
+        const tAC = projectMetrics.reduce((s, p) => s + p.AC, 0);
+        const tPV = projectMetrics.reduce((s, p) => s + p.PV, 0);
+        const tBAC = projectMetrics.reduce((s, p) => s + p.BAC, 0);
+        return {
+            totalAC: tAC, totalBAC: tBAC,
+            portfolioCPI: tAC > 0 ? tEV / tAC : null,
+            portfolioSPI: tPV > 0 ? tEV / tPV : null,
+        };
+    }, [projectMetrics]);
+
+    // Alerts (memoized)
+    const { alerts, criticalCount, warningCount } = useMemo(() => {
+        const defaultThresholds = { cpi_amber: 1.00, cpi_red: 0.90, spi_amber: 1.00, spi_red: 0.90 };
+        const a = computeAlerts(dummyProjectsEvm, dummyTaskData, defaultThresholds);
+        return { alerts: a, criticalCount: a.filter(x => x.severity === 'critical').length, warningCount: a.filter(x => x.severity === 'warning').length };
+    }, []);
+
+    const cpiColor = indexColor(portfolioCPI);
+    const spiColor = indexColor(portfolioSPI);
+
     return (
         <div className="space-y-8">
-
-            {/* HEADER SECTION */}
+            {/* HEADER */}
             <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
                 <div>
                     <h2 className="text-3xl font-bold text-slate-800 tracking-tight">Project Overview</h2>
-                    <p className="text-slate-500 mt-1">Real-time performance metrics & S-Curve analysis</p>
+                    <p className="text-slate-500 mt-1">Real-time performance metrics & portfolio summary</p>
                 </div>
             </div>
 
-            {/* KPI GRID */}
+            {/* KPI CARDS — with target context */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-
-                {/* KPI 1: Schedule Performance */}
+                {/* SPI */}
                 <div className="group bg-white p-6 rounded-3xl border border-slate-100 shadow-[0_2px_10px_-3px_rgba(6,182,212,0.1)] hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
                     <div className="flex justify-between items-start mb-4">
                         <div className="p-3 bg-blue-50 rounded-2xl text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-colors">
                             <Activity className="w-6 h-6" />
                         </div>
-                        <span className="text-slate-400 font-bold text-xs bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-100">
-                            SPI: --
+                        <span className={`text-[10px] font-bold uppercase px-2.5 py-1 rounded-lg border ${spiColor.bg} ${spiColor.border} ${spiColor.text}`}>
+                            {spiColor.label}
                         </span>
                     </div>
-                    <h3 className="text-slate-400 text-xs font-bold uppercase tracking-wider">Schedule Variance</h3>
+                    <h3 className="text-slate-400 text-xs font-bold uppercase tracking-wider">Schedule Performance</h3>
                     <div className="flex items-baseline gap-2 mt-1">
-                        <p className="text-3xl font-bold text-slate-800">--</p>
-                        <span className="text-sm font-medium text-slate-400">No Data</span>
+                        <p className={`text-3xl font-bold ${spiColor.text}`}>{portfolioSPI !== null ? portfolioSPI.toFixed(2) : '--'}</p>
+                        <span className="text-sm font-medium text-slate-400">SPI</span>
+                    </div>
+                    <div className="mt-3 flex items-center gap-2">
+                        <div className="flex-1 bg-slate-100 rounded-full h-1.5">
+                            <div className={`h-1.5 rounded-full transition-all duration-500 ${portfolioSPI >= 1 ? 'bg-emerald-500' : portfolioSPI >= 0.9 ? 'bg-amber-500' : 'bg-red-500'}`}
+                                style={{ width: `${Math.min((portfolioSPI || 0) * 100, 100)}%` }} />
+                        </div>
+                        <span className="text-[10px] text-slate-400 font-semibold shrink-0">Target ≥ 1.00</span>
                     </div>
                 </div>
 
-                {/* KPI 2: Cost Performance */}
+                {/* CPI */}
                 <div className="group bg-white p-6 rounded-3xl border border-slate-100 shadow-[0_2px_10px_-3px_rgba(16,185,129,0.1)] hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
                     <div className="flex justify-between items-start mb-4">
                         <div className="p-3 bg-emerald-50 rounded-2xl text-emerald-600 group-hover:bg-emerald-600 group-hover:text-white transition-colors">
                             <TrendingUp className="w-6 h-6" />
                         </div>
-                        <span className="text-slate-400 font-bold text-xs bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-100">
-                            CPI: --
+                        <span className={`text-[10px] font-bold uppercase px-2.5 py-1 rounded-lg border ${cpiColor.bg} ${cpiColor.border} ${cpiColor.text}`}>
+                            {cpiColor.label}
                         </span>
                     </div>
                     <h3 className="text-slate-400 text-xs font-bold uppercase tracking-wider">Cost Performance</h3>
                     <div className="flex items-baseline gap-2 mt-1">
-                        <p className="text-3xl font-bold text-slate-800">--</p>
-                        <span className="text-sm font-medium text-slate-400">No Data</span>
+                        <p className={`text-3xl font-bold ${cpiColor.text}`}>{portfolioCPI !== null ? portfolioCPI.toFixed(2) : '--'}</p>
+                        <span className="text-sm font-medium text-slate-400">CPI</span>
+                    </div>
+                    <div className="mt-3 flex items-center gap-2">
+                        <div className="flex-1 bg-slate-100 rounded-full h-1.5">
+                            <div className={`h-1.5 rounded-full transition-all duration-500 ${portfolioCPI >= 1 ? 'bg-emerald-500' : portfolioCPI >= 0.9 ? 'bg-amber-500' : 'bg-red-500'}`}
+                                style={{ width: `${Math.min((portfolioCPI || 0) * 100, 100)}%` }} />
+                        </div>
+                        <span className="text-[10px] text-slate-400 font-semibold shrink-0">Target ≥ 1.00</span>
                     </div>
                 </div>
 
-                {/* KPI 3: Physical Progress */}
+                {/* Alerts */}
                 <div className="group bg-white p-6 rounded-3xl border border-slate-100 shadow-[0_2px_10px_-3px_rgba(99,102,241,0.1)] hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
                     <div className="flex justify-between items-start mb-4">
-                        <div className="p-3 bg-indigo-50 rounded-2xl text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white transition-colors">
-                            <BarChart3 className="w-6 h-6" />
+                        <div className={`p-3 rounded-2xl transition-colors ${alerts.length > 0 ? 'bg-red-50 text-red-600 group-hover:bg-red-600 group-hover:text-white' : 'bg-emerald-50 text-emerald-600 group-hover:bg-emerald-600 group-hover:text-white'}`}>
+                            <AlertTriangle className="w-6 h-6" />
                         </div>
-                        <span className="text-slate-400 font-bold text-xs bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-100">
-                            Target: 0%
-                        </span>
+                        {alerts.length === 0 && (
+                            <span className="text-[10px] font-bold uppercase px-2.5 py-1 rounded-lg border bg-emerald-50 border-emerald-100 text-emerald-700">All Clear</span>
+                        )}
                     </div>
-                    <h3 className="text-slate-400 text-xs font-bold uppercase tracking-wider">Physical Progress</h3>
+                    <h3 className="text-slate-400 text-xs font-bold uppercase tracking-wider">Active Alerts</h3>
                     <div className="flex items-baseline gap-2 mt-1">
-                        <p className="text-3xl font-bold text-slate-800">0%</p>
-                        <span className="text-sm font-medium text-slate-400">--%</span>
+                        <p className={`text-3xl font-bold ${alerts.length > 0 ? 'text-red-700' : 'text-emerald-700'}`}>{alerts.length}</p>
                     </div>
+                    {alerts.length > 0 && (
+                        <div className="mt-3 flex gap-2">
+                            {criticalCount > 0 && <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-red-50 text-red-600 border border-red-100">{criticalCount} Critical</span>}
+                            {warningCount > 0 && <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-amber-50 text-amber-600 border border-amber-100">{warningCount} Warning</span>}
+                        </div>
+                    )}
+                    {alerts.length === 0 && (
+                        <p className="mt-2 text-xs text-slate-400">All projects within thresholds</p>
+                    )}
                 </div>
             </div>
 
-            {/* S-CURVE VISUALIZATION SECTION */}
-            <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm relative overflow-hidden">
-                <div className="flex justify-between items-center mb-8 relative z-10">
+            {/* PROJECT HEALTH TABLE */}
+            <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
+                <div className="p-6 border-b border-slate-50 flex items-center gap-3">
+                    <div className="p-2.5 bg-slate-50 rounded-xl text-slate-500"><BarChart3 className="w-5 h-5" /></div>
                     <div>
-                        <h3 className="text-lg font-bold text-slate-800">Cumulative Cost S-Curve</h3>
-                        <p className="text-slate-400 text-sm">Planned vs Actual Expenditure</p>
+                        <h3 className="font-bold text-slate-700">Project Health</h3>
+                        <p className="text-xs text-slate-400 mt-0.5">Per-project performance summary</p>
                     </div>
-                    <button className="text-sm font-semibold text-emerald-600 hover:text-emerald-700 bg-emerald-50 px-4 py-2 rounded-lg transition-colors flex items-center gap-2">
-                        <Download className="w-4 h-4" /> Download Report
-                    </button>
                 </div>
+                <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                        <thead>
+                            <tr className="bg-slate-50/80 text-xs uppercase tracking-wider text-slate-500 font-bold">
+                                <th className="px-6 py-4">Project</th>
+                                <th className="px-4 py-4">Status</th>
+                                <th className="px-4 py-4">CPI</th>
+                                <th className="px-4 py-4">SPI</th>
+                                <th className="px-4 py-4 min-w-44">Progress</th>
+                                <th className="px-4 py-4">BAC</th>
+                                <th className="px-4 py-4">Actual Spend</th>
+                            </tr>
+                        </thead>
+                        <tbody className="text-sm font-medium text-slate-600 divide-y divide-slate-50">
+                            {projectMetrics.map(proj => {
+                                const cpi = indexColor(proj.CPI);
+                                const spi = indexColor(proj.SPI);
+                                return (
+                                    <tr key={proj.id} className="hover:bg-slate-50/50 transition-colors">
+                                        <td className="px-6 py-4">
+                                            <p className="font-semibold text-slate-700">{proj.project_name}</p>
+                                            <p className="font-mono text-[10px] text-slate-400 mt-0.5">{proj.project_code}</p>
+                                        </td>
+                                        <td className="px-4 py-4">
+                                            <span className={`text-[10px] font-bold uppercase px-2.5 py-1 rounded-lg border ${STATUS_STYLES[proj.status] || STATUS_STYLES.planning}`}>
+                                                {proj.status.replace('_', ' ')}
+                                            </span>
+                                        </td>
+                                        <td className="px-4 py-4">
+                                            <span className={`text-xs font-bold px-2.5 py-1 rounded-lg border ${cpi.bg} ${cpi.border} ${cpi.text}`}>
+                                                {proj.CPI !== null ? proj.CPI.toFixed(2) : '\u2014'}
+                                            </span>
+                                        </td>
+                                        <td className="px-4 py-4">
+                                            <span className={`text-xs font-bold px-2.5 py-1 rounded-lg border ${spi.bg} ${spi.border} ${spi.text}`}>
+                                                {proj.SPI !== null ? proj.SPI.toFixed(2) : '\u2014'}
+                                            </span>
+                                        </td>
+                                        <td className="px-4 py-4">
+                                            <div className="flex items-center gap-3">
+                                                <div className="flex-1 bg-slate-100 rounded-full h-2">
+                                                    <div className="h-2 rounded-full bg-emerald-500 transition-all duration-500" style={{ width: `${Math.min(proj.overallPct, 100)}%` }} />
+                                                </div>
+                                                <span className="text-xs font-bold text-slate-600 shrink-0 w-12 text-right">{proj.overallPct.toFixed(1)}%</span>
+                                            </div>
+                                        </td>
+                                        <td className="px-4 py-4 text-slate-500 whitespace-nowrap">{formatCurrency(proj.BAC)}</td>
+                                        <td className="px-4 py-4 text-slate-500 whitespace-nowrap">{formatCurrency(proj.AC)}</td>
+                                    </tr>
+                                );
+                            })}
+                        </tbody>
+                        <tfoot>
+                            <tr className="bg-slate-50/50 text-sm font-bold text-slate-700 border-t border-slate-100">
+                                <td className="px-6 py-3.5" colSpan="5">Portfolio Total</td>
+                                <td className="px-4 py-3.5 whitespace-nowrap">{formatCurrency(totalBAC)}</td>
+                                <td className="px-4 py-3.5 whitespace-nowrap">{formatCurrency(totalAC)}</td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
 
-                {/* CSS Chart Construction */}
-                <div className="h-80 w-full bg-slate-50/50 rounded-2xl border border-slate-100 relative group">
-                    {/* Grid Lines */}
-                    <div className="absolute inset-0 flex flex-col justify-between py-6 px-8">
-                        <div className="border-t border-slate-200 w-full"></div>
-                        <div className="border-t border-slate-200 w-full"></div>
-                        <div className="border-t border-slate-200 w-full"></div>
-                        <div className="border-t border-slate-200 w-full"></div>
-                        <div className="border-t border-slate-200 w-full"></div>
-                    </div>
-
-                    {/* Placeholder Lines (Flat / No Data) */}
-                    <svg className="absolute inset-0 w-full h-full p-8 overflow-visible" preserveAspectRatio="none">
-                        {/* Planned Line (Dashed Gray) - Flat at bottom */}
-                        <path
-                            d="M0,280 L800,280"
-                            fill="none"
-                            stroke="#94a3b8"
-                            strokeWidth="3"
-                            strokeDasharray="8 8"
-                            className="opacity-50"
-                        />
-
-                        {/* Actual Line (Solid Emerald) - Flat at bottom */}
-                        <path
-                            d="M0,280 L800,280"
-                            fill="none"
-                            stroke="#10b981"
-                            strokeWidth="4"
-                            className="drop-shadow-sm opacity-50"
-                        />
-                    </svg>
-
-                    {/* Empty State Overlay */}
-                    <div className="absolute inset-0 flex items-center justify-center">
-                        <span className="text-slate-400 font-medium bg-white/50 px-4 py-2 rounded-lg backdrop-blur-sm border border-slate-100">
-                            Waiting for Project Baseline Data
-                        </span>
-                    </div>
-
-                    {/* Legend */}
-                    <div className="absolute bottom-4 right-8 flex gap-6 bg-white/80 backdrop-blur px-4 py-2 rounded-lg border border-slate-100 shadow-sm">
-                        <div className="flex items-center text-xs font-bold text-slate-600">
-                            <div className="w-3 h-3 bg-emerald-500 rounded-full mr-2"></div> Actual
-                        </div>
-                        <div className="flex items-center text-xs font-bold text-slate-400">
-                            <div className="w-3 h-1 bg-slate-400 rounded-full mr-2 border-t border-b border-white"></div> Planned
-                        </div>
-                    </div>
+            {/* BUDGET OVERVIEW */}
+            <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-6">
+                <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-5">Budget Overview — BAC vs Actual Spend</h3>
+                <div className="space-y-5">
+                    {projectMetrics.map(proj => {
+                        const spendPct = proj.BAC > 0 ? (proj.AC / proj.BAC) * 100 : 0;
+                        const barColor = spendPct > 100 ? 'bg-red-500' : spendPct > 80 ? 'bg-amber-500' : 'bg-emerald-500';
+                        return (
+                            <div key={proj.id}>
+                                <div className="flex items-center justify-between mb-1.5">
+                                    <span className="text-sm font-semibold text-slate-700">{proj.project_name}</span>
+                                    <span className="text-xs text-slate-400">
+                                        {formatCurrency(proj.AC)} / {formatCurrency(proj.BAC)}
+                                        <span className="ml-2 font-bold text-slate-600">{spendPct.toFixed(0)}%</span>
+                                    </span>
+                                </div>
+                                <div className="w-full bg-slate-100 rounded-full h-3">
+                                    <div className={`${barColor} h-3 rounded-full transition-all duration-500`} style={{ width: `${Math.min(spendPct, 100)}%` }} />
+                                </div>
+                            </div>
+                        );
+                    })}
                 </div>
             </div>
 

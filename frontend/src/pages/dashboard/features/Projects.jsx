@@ -1,43 +1,12 @@
-import { useState } from 'react';
-import { Plus, FolderKanban, Calendar, DollarSign, ChevronRight, X } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Plus, FolderKanban, Calendar, DollarSign, ChevronRight, X, CheckCircle2 } from 'lucide-react';
 import ProjectDetail from './ProjectDetail';
+import { dummyProjects as seedProjects, dummyProjectsEvm, dummyTaskData } from '../../../data/dummyData';
+import { formatCurrency, formatDate, computeEvm, indexColor } from '../../../utils/evmHelpers';
+import { STATUS_STYLES } from '../../../utils/uiConstants';
 
 export default function Projects() {
-    const [projects, setProjects] = useState([
-        {
-            id: 1,
-            project_name: 'Industrial Complex Phase 2',
-            project_code: 'PRJ-2026-001',
-            description: 'Construction of Phase 2 industrial facilities including structural, electrical, and MEP works.',
-            planned_start: '2025-10-01',
-            planned_end: '2026-06-30',
-            total_budget: 1935000000,
-            status: 'active',
-            created_by: 'admin_pm',
-        },
-        {
-            id: 2,
-            project_name: 'Office Tower Renovation',
-            project_code: 'PRJ-2026-002',
-            description: 'Full renovation of floors 3–12 including structural assessment, interior fit-out, and MEP upgrades.',
-            planned_start: '2026-01-15',
-            planned_end: '2026-08-31',
-            total_budget: 435000000,
-            status: 'active',
-            created_by: 'admin_pm',
-        },
-        {
-            id: 3,
-            project_name: 'Warehouse Expansion Block C',
-            project_code: 'PRJ-2026-003',
-            description: 'New warehouse block construction with loading dock, fire suppression, and electrical installation.',
-            planned_start: '2026-03-01',
-            planned_end: '2026-12-31',
-            total_budget: 870000000,
-            status: 'planning',
-            created_by: 'admin_pm',
-        },
-    ]);
+    const [projects, setProjects] = useState([...seedProjects]);
     const [selectedProject, setSelectedProject] = useState(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [form, setForm] = useState({
@@ -49,6 +18,7 @@ export default function Projects() {
         total_budget: '',
     });
     const [error, setError] = useState('');
+    const [successToast, setSuccessToast] = useState(false);
 
     const userRole = localStorage.getItem('userRole') || 'Guest';
 
@@ -86,22 +56,16 @@ export default function Projects() {
         setProjects([newProject, ...projects]);
         setIsModalOpen(false);
         setForm({ project_name: '', project_code: '', description: '', planned_start: '', planned_end: '', total_budget: '' });
+        setSuccessToast(true);
+        setTimeout(() => setSuccessToast(false), 3000);
     };
 
-    const statusStyles = {
-        active: 'bg-emerald-50 text-emerald-600 border-emerald-100',
-        planning: 'bg-blue-50 text-blue-600 border-blue-100',
-        completed: 'bg-slate-50 text-slate-500 border-slate-100',
-        on_hold: 'bg-amber-50 text-amber-600 border-amber-100',
-    };
-
-    const formatCurrency = (value) => {
-        return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(value);
-    };
-
-    const formatDate = (dateStr) => {
-        return new Date(dateStr).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
-    };
+    // Close modal on Escape key
+    useEffect(() => {
+        const handler = (e) => { if (e.key === 'Escape') setIsModalOpen(false); };
+        if (isModalOpen) document.addEventListener('keydown', handler);
+        return () => document.removeEventListener('keydown', handler);
+    }, [isModalOpen]);
 
     if (selectedProject) {
         return <ProjectDetail project={selectedProject} onBack={() => setSelectedProject(null)} />;
@@ -109,6 +73,13 @@ export default function Projects() {
 
     return (
         <div className="space-y-8">
+
+            {/* SUCCESS TOAST */}
+            {successToast && (
+                <div className="fixed top-6 right-6 z-50 bg-emerald-600 text-white px-5 py-3 rounded-xl shadow-lg shadow-emerald-200 flex items-center gap-2 text-sm font-semibold animate-in slide-in-from-top-2 fade-in duration-200">
+                    <CheckCircle2 className="w-4 h-4" /> Project created successfully
+                </div>
+            )}
 
             {/* HEADER */}
             <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
@@ -130,7 +101,14 @@ export default function Projects() {
             {/* PROJECT CARDS GRID */}
             {projects.length > 0 ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {projects.map((project) => (
+                    {projects.map((project) => {
+                        const evmProj = dummyProjectsEvm.find(p => p.id === project.id);
+                        const evmTasks = dummyTaskData.filter(t => t.project_id === project.id);
+                        const evm = evmProj && evmTasks.length > 0 ? computeEvm(evmTasks, evmProj.schedule_pct) : null;
+                        const cpi = evm ? indexColor(evm.CPI) : null;
+                        const spi = evm ? indexColor(evm.SPI) : null;
+
+                        return (
                         <div
                             key={project.id}
                             onClick={() => setSelectedProject(project)}
@@ -141,7 +119,7 @@ export default function Projects() {
                                 <div className="p-3 bg-emerald-50 rounded-2xl text-emerald-600 group-hover:bg-emerald-600 group-hover:text-white transition-colors">
                                     <FolderKanban className="w-6 h-6" />
                                 </div>
-                                <span className={`text-[10px] font-bold uppercase px-2.5 py-1 rounded-lg border ${statusStyles[project.status] || statusStyles.planning}`}>
+                                <span className={`text-[10px] font-bold uppercase px-2.5 py-1 rounded-lg border ${STATUS_STYLES[project.status] || STATUS_STYLES.planning}`}>
                                     {project.status.replace('_', ' ')}
                                 </span>
                             </div>
@@ -150,6 +128,30 @@ export default function Projects() {
                             <h3 className="text-lg font-bold text-slate-800 mb-1 group-hover:text-emerald-700 transition-colors">{project.project_name}</h3>
                             <p className="text-[10px] text-slate-400 font-mono mb-3 tracking-wide">{project.project_code}</p>
                             <p className="text-sm text-slate-500 mb-4 line-clamp-2 leading-relaxed">{project.description || 'No description provided.'}</p>
+
+                            {/* EVM Mini Metrics */}
+                            {evm && (
+                                <div className="mb-4">
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <div className="flex-1 bg-slate-100 rounded-full h-1.5">
+                                            <div className="h-1.5 rounded-full bg-emerald-500 transition-all" style={{ width: `${Math.min(evm.overallPct, 100)}%` }} />
+                                        </div>
+                                        <span className="text-[10px] font-bold text-slate-500">{evm.overallPct.toFixed(0)}%</span>
+                                    </div>
+                                    <div className="flex gap-1.5">
+                                        {cpi && (
+                                            <span className={`text-[9px] font-bold px-2 py-0.5 rounded-md border ${cpi.bg} ${cpi.border} ${cpi.text}`}>
+                                                CPI {evm.CPI !== null ? evm.CPI.toFixed(2) : '\u2014'}
+                                            </span>
+                                        )}
+                                        {spi && (
+                                            <span className={`text-[9px] font-bold px-2 py-0.5 rounded-md border ${spi.bg} ${spi.border} ${spi.text}`}>
+                                                SPI {evm.SPI !== null ? evm.SPI.toFixed(2) : '\u2014'}
+                                            </span>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
 
                             {/* Footer: Dates + Budget */}
                             <div className="pt-4 border-t border-slate-50 flex items-center justify-between text-xs text-slate-400">
@@ -170,7 +172,8 @@ export default function Projects() {
                                 </div>
                             </div>
                         </div>
-                    ))}
+                        );
+                    })}
                 </div>
             ) : (
                 /* EMPTY STATE */
@@ -185,12 +188,12 @@ export default function Projects() {
             {/* CREATE PROJECT MODAL */}
             {isModalOpen && (
                 <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50" onClick={() => setIsModalOpen(false)}>
-                    <div className="bg-white rounded-3xl p-8 w-full max-w-lg shadow-2xl border border-slate-100 animate-in fade-in duration-200" onClick={(e) => e.stopPropagation()}>
+                    <div role="dialog" aria-label="Create new project" className="bg-white rounded-3xl p-8 w-full max-w-lg shadow-2xl border border-slate-100 animate-in fade-in duration-200" onClick={(e) => e.stopPropagation()}>
 
                         {/* Modal Header */}
                         <div className="flex items-center justify-between mb-6">
                             <h3 className="text-xl font-bold text-slate-800">Create New Project</h3>
-                            <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-slate-600 transition-colors">
+                            <button onClick={() => setIsModalOpen(false)} aria-label="Close" className="text-slate-400 hover:text-slate-600 transition-colors">
                                 <X className="w-5 h-5" />
                             </button>
                         </div>

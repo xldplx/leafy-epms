@@ -1,148 +1,152 @@
-import { useState } from 'react';
-import { BarChart3 } from 'lucide-react';
+import { useState, useMemo } from 'react';
+import { BarChart3, Download, CheckCircle2 } from 'lucide-react';
+import * as XLSX from 'xlsx';
+import { dummyProjectsEvm, dummyTaskData } from '../../../data/dummyData';
+import { computeEvm, computeAlerts, indexColor, varianceColor, formatCurrency } from '../../../utils/evmHelpers';
+import { INPUT_CLASS } from '../../../utils/uiConstants';
 
-// Dummy data — will be replaced with API calls in a later sprint
-const dummyProjects = [
-    { id: 1, project_name: 'Industrial Complex Phase 2',  project_code: 'PRJ-2026-001', schedule_pct: 0.75 },
-    { id: 2, project_name: 'Office Tower Renovation',     project_code: 'PRJ-2026-002', schedule_pct: 0.50 },
-    { id: 3, project_name: 'Warehouse Expansion Block C', project_code: 'PRJ-2026-003', schedule_pct: 0.25 },
-];
-
-const dummyTaskData = [
-    // PRJ-2026-001
-    { id: 1,  project_id: 1, wbs_code: '1.1.1', task_name: 'Bored Pile 600mm Dia.',       planned_cost: 450000000, planned_hours: 320, actual_cost: 480000000, actual_hours: 340, pct_complete: 100 },
-    { id: 2,  project_id: 1, wbs_code: '1.1.2', task_name: 'Pile Cap Type PC-1',          planned_cost: 180000000, planned_hours: 140, actual_cost: 175000000, actual_hours: 135, pct_complete: 100 },
-    { id: 3,  project_id: 1, wbs_code: '1.2',   task_name: 'Column & Beam Erection',      planned_cost: 920000000, planned_hours: 580, actual_cost: 580000000, actual_hours: 360, pct_complete:  60 },
-    { id: 4,  project_id: 1, wbs_code: '2.1',   task_name: 'Main Distribution Board',     planned_cost: 210000000, planned_hours: 160, actual_cost:  65000000, actual_hours:  50, pct_complete:  30 },
-    { id: 5,  project_id: 1, wbs_code: '2.2',   task_name: 'Fire Suppression System',     planned_cost: 175000000, planned_hours: 120, actual_cost:          0, actual_hours:   0, pct_complete:   0 },
-    // PRJ-2026-002
-    { id: 6,  project_id: 2, wbs_code: '1.0',   task_name: 'Structural Assessment',       planned_cost:  95000000, planned_hours:  80, actual_cost: 100000000, actual_hours:  85, pct_complete: 100 },
-    { id: 7,  project_id: 2, wbs_code: '2.0',   task_name: 'Interior Fit-Out',            planned_cost: 340000000, planned_hours: 260, actual_cost: 160000000, actual_hours: 120, pct_complete:  45 },
-    // PRJ-2026-003
-    { id: 8,  project_id: 3, wbs_code: '1.0',   task_name: 'Site Preparation & Earthworks', planned_cost:  95000000, planned_hours: 120, actual_cost:  98000000, actual_hours: 115, pct_complete: 100 },
-    { id: 9,  project_id: 3, wbs_code: '2.0',   task_name: 'Foundation & Pile Works',     planned_cost: 280000000, planned_hours: 240, actual_cost: 130000000, actual_hours: 110, pct_complete:  40 },
-    { id: 10, project_id: 3, wbs_code: '3.0',   task_name: 'Structural Steel Frame',      planned_cost: 320000000, planned_hours: 280, actual_cost:          0, actual_hours:   0, pct_complete:   0 },
-    { id: 11, project_id: 3, wbs_code: '4.0',   task_name: 'Electrical Installation',     planned_cost: 175000000, planned_hours: 160, actual_cost:          0, actual_hours:   0, pct_complete:   0 },
-];
+const dummyProjects = dummyProjectsEvm;
 
 export default function PlanVsActual() {
     const [selectedProjectId, setSelectedProjectId] = useState('');
+    const [exportFeedback, setExportFeedback] = useState(false);
 
     const selectedProject = dummyProjects.find(p => p.id === parseInt(selectedProjectId));
     const tasks = dummyTaskData.filter(t => t.project_id === parseInt(selectedProjectId));
 
-    // EVM calculations
-    const BAC = tasks.reduce((s, t) => s + t.planned_cost, 0);
-    const EV  = tasks.reduce((s, t) => s + t.planned_cost * (t.pct_complete / 100), 0);
-    const AC  = tasks.reduce((s, t) => s + t.actual_cost, 0);
-    const PV  = BAC * (selectedProject?.schedule_pct || 0);
+    // EVM calculations via shared helper (memoized)
+    const { evm, kpiCards, refValues, forecastValues } = useMemo(() => {
+        const e = computeEvm(tasks, selectedProject?.schedule_pct || 0);
+        const { BAC, EV, AC, PV, CPI, SPI, CV, SV, EAC, ETC, VAC, TCPI } = e;
 
-    const CPI = AC > 0 ? EV / AC : null;
-    const SPI = PV > 0 ? EV / PV : null;
-    const CV  = EV - AC;
-    const SV  = EV - PV;
+        const cpiC = indexColor(CPI);
+        const spiC = indexColor(SPI);
+        const cvC  = varianceColor(CV);
+        const svC  = varianceColor(SV);
+        const tcpiC = indexColor(TCPI);
+        const vacC  = VAC !== null ? varianceColor(VAC) : null;
 
-    // Forecast metrics
-    const EAC  = CPI !== null && CPI > 0 ? BAC / CPI : null;
-    const ETC  = EAC !== null ? EAC - AC : null;
-    const VAC  = EAC !== null ? BAC - EAC : null;
-    const TCPI = (BAC - AC) > 0 ? (BAC - EV) / (BAC - AC) : null;
+        return {
+            evm: e,
+            kpiCards: [
+                { label: 'CPI', subtitle: 'Cost Performance Index — target ≥ 1.00', value: CPI !== null ? CPI.toFixed(2) : '—', color: cpiC },
+                { label: 'SPI', subtitle: 'Schedule Performance Index — target ≥ 1.00', value: SPI !== null ? SPI.toFixed(2) : '—', color: spiC },
+                { label: 'CV (Cost Variance)', subtitle: CV >= 0 ? 'Under budget' : 'Over budget', value: formatCurrency(CV), color: cvC },
+                { label: 'SV (Schedule Variance)', subtitle: SV >= 0 ? 'Ahead of schedule' : 'Behind schedule', value: formatCurrency(SV), color: svC },
+            ],
+            refValues: [
+                { label: 'PV (Planned Value)',    value: formatCurrency(PV)  },
+                { label: 'EV (Earned Value)',     value: formatCurrency(EV)  },
+                { label: 'AC (Actual Cost)',      value: formatCurrency(AC)  },
+                { label: 'BAC (Budget at Comp.)', value: formatCurrency(BAC) },
+            ],
+            forecastValues: [
+                { label: 'EAC (Est. at Completion)', value: EAC !== null ? formatCurrency(EAC) : '—', textClass: 'text-slate-800' },
+                { label: 'ETC (Est. to Complete)', value: ETC !== null ? formatCurrency(ETC) : '—', textClass: 'text-slate-800' },
+                { label: 'VAC (Variance at Comp.)', value: VAC !== null ? formatCurrency(VAC) : '—', textClass: vacC ? vacC.text : 'text-slate-800' },
+                { label: 'TCPI (To-Complete PI)', value: TCPI !== null ? TCPI.toFixed(2) : '—', textClass: tcpiC.text },
+            ],
+        };
+    }, [tasks, selectedProject?.schedule_pct]);
 
-    const overallPct = BAC > 0 ? (EV / BAC) * 100 : 0;
-    const totalHV = tasks.reduce((s, t) => t.actual_hours > 0
-        ? s + (Math.round(t.planned_hours * (t.pct_complete / 100)) - t.actual_hours)
-        : s, 0);
+    const { BAC, EV, AC, PV, CPI, SPI, CV, SV, EAC, ETC, VAC, TCPI, overallPct, totalHoursVariance: totalHV } = evm;
 
-    const indexColor = (val) => {
-        if (val === null) return { bg: 'bg-slate-50',   text: 'text-slate-500',   border: 'border-slate-100',   label: 'N/A'      };
-        if (val >= 1.0)  return { bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-100', label: 'On Track' };
-        if (val >= 0.9)  return { bg: 'bg-amber-50',   text: 'text-amber-700',   border: 'border-amber-100',   label: 'At Risk'  };
-        return                  { bg: 'bg-red-50',     text: 'text-red-700',     border: 'border-red-100',     label: 'Critical' };
+    const fmtIDR = (v) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(v);
+
+    const handleExport = () => {
+        if (!selectedProject) return;
+        const wb = XLSX.utils.book_new();
+
+        // Sheet 1: KPI Summary — readable formatted values
+        const kpiData = [
+            { Metric: 'CPI (Cost Performance Index)',         Value: CPI !== null ? CPI.toFixed(2) : 'N/A',   Status: indexColor(CPI).label },
+            { Metric: 'SPI (Schedule Performance Index)',      Value: SPI !== null ? SPI.toFixed(2) : 'N/A',   Status: indexColor(SPI).label },
+            { Metric: 'CV (Cost Variance)',                   Value: fmtIDR(CV),                               Status: varianceColor(CV).label },
+            { Metric: 'SV (Schedule Variance)',               Value: fmtIDR(SV),                               Status: varianceColor(SV).label },
+            { Metric: 'BAC (Budget at Completion)',           Value: fmtIDR(BAC),                              Status: '' },
+            { Metric: 'EV (Earned Value)',                    Value: fmtIDR(EV),                               Status: '' },
+            { Metric: 'AC (Actual Cost)',                     Value: fmtIDR(AC),                               Status: '' },
+            { Metric: 'PV (Planned Value)',                   Value: fmtIDR(PV),                               Status: '' },
+            { Metric: 'EAC (Estimate at Completion)',         Value: EAC !== null ? fmtIDR(Math.round(EAC)) : 'N/A', Status: '' },
+            { Metric: 'ETC (Estimate to Complete)',           Value: ETC !== null ? fmtIDR(Math.round(ETC)) : 'N/A', Status: '' },
+            { Metric: 'VAC (Variance at Completion)',         Value: VAC !== null ? fmtIDR(Math.round(VAC)) : 'N/A', Status: VAC !== null ? varianceColor(VAC).label : '' },
+            { Metric: 'TCPI (To-Complete Performance Index)', Value: TCPI !== null ? TCPI.toFixed(2) : 'N/A',  Status: TCPI !== null ? indexColor(TCPI).label : '' },
+        ];
+        const ws1 = XLSX.utils.json_to_sheet(kpiData);
+        ws1['!cols'] = [{ wch: 38 }, { wch: 28 }, { wch: 14 }];
+        XLSX.utils.book_append_sheet(wb, ws1, 'KPI Summary');
+
+        // Sheet 2: Task Details — formatted currency columns
+        const taskRows = tasks.map(t => {
+            const taskEV = t.planned_cost * (t.pct_complete / 100);
+            const earnedHrs = Math.round((t.planned_hours || 0) * (t.pct_complete / 100));
+            return {
+                'Task Name': t.task_name,
+                'WBS': t.wbs_code,
+                'Planned Cost': fmtIDR(t.planned_cost),
+                'Actual Cost': fmtIDR(t.actual_cost),
+                'Cost Variance': fmtIDR(taskEV - t.actual_cost),
+                'Planned Hours': t.planned_hours,
+                'Actual Hours': t.actual_hours,
+                'Hours Variance': t.actual_hours > 0 ? earnedHrs - t.actual_hours : 0,
+                '% Complete': `${t.pct_complete}%`,
+            };
+        });
+        const ws2 = XLSX.utils.json_to_sheet(taskRows);
+        ws2['!cols'] = [{ wch: 28 }, { wch: 8 }, { wch: 22 }, { wch: 22 }, { wch: 22 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 12 }];
+        XLSX.utils.book_append_sheet(wb, ws2, 'Task Details');
+
+        // Sheet 3: Alerts
+        const projectAlerts = computeAlerts(
+            [selectedProject],
+            tasks,
+            { cpi_amber: 1.00, cpi_red: 0.90, spi_amber: 1.00, spi_red: 0.90 }
+        );
+        const alertRows = projectAlerts.length > 0
+            ? projectAlerts.map(a => ({
+                'Metric': a.metric,
+                'Value': a.value.toFixed(2),
+                'Threshold': a.threshold.toFixed(2),
+                'Severity': a.severity === 'critical' ? 'CRITICAL' : 'WARNING',
+                'Recommendation': a.recommendation,
+            }))
+            : [{ 'Metric': '-', 'Value': '-', 'Threshold': '-', 'Severity': 'No Alerts', 'Recommendation': 'All metrics are within configured thresholds.' }];
+        const ws3 = XLSX.utils.json_to_sheet(alertRows);
+        ws3['!cols'] = [{ wch: 10 }, { wch: 8 }, { wch: 10 }, { wch: 12 }, { wch: 60 }];
+        XLSX.utils.book_append_sheet(wb, ws3, 'Alerts');
+
+        XLSX.writeFile(wb, `EVM_Report_${selectedProject.project_code}_${new Date().toISOString().slice(0, 10)}.xlsx`);
+        setExportFeedback(true);
+        setTimeout(() => setExportFeedback(false), 2500);
     };
 
-    const varianceColor = (val) =>
-        val >= 0
-            ? { text: 'text-emerald-700', bg: 'bg-emerald-50', border: 'border-emerald-100', label: 'Favorable'   }
-            : { text: 'text-red-700',     bg: 'bg-red-50',     border: 'border-red-100',     label: 'Unfavorable' };
-
-    const formatCurrency = (v) =>
-        new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(v);
-
-    const cpiColor = indexColor(CPI);
-    const spiColor = indexColor(SPI);
-    const cvColor  = varianceColor(CV);
-    const svColor  = varianceColor(SV);
-
-    const kpiCards = [
-        {
-            label: 'CPI',
-            subtitle: 'Cost Performance Index — target ≥ 1.00',
-            value: CPI !== null ? CPI.toFixed(2) : '—',
-            color: cpiColor,
-        },
-        {
-            label: 'SPI',
-            subtitle: 'Schedule Performance Index — target ≥ 1.00',
-            value: SPI !== null ? SPI.toFixed(2) : '—',
-            color: spiColor,
-        },
-        {
-            label: 'CV (Cost Variance)',
-            subtitle: CV >= 0 ? 'Under budget' : 'Over budget',
-            value: formatCurrency(CV),
-            color: cvColor,
-        },
-        {
-            label: 'SV (Schedule Variance)',
-            subtitle: SV >= 0 ? 'Ahead of schedule' : 'Behind schedule',
-            value: formatCurrency(SV),
-            color: svColor,
-        },
-    ];
-
-    const refValues = [
-        { label: 'PV (Planned Value)',    value: formatCurrency(PV)  },
-        { label: 'EV (Earned Value)',     value: formatCurrency(EV)  },
-        { label: 'AC (Actual Cost)',      value: formatCurrency(AC)  },
-        { label: 'BAC (Budget at Comp.)', value: formatCurrency(BAC) },
-    ];
-
-    const tcpiColor = indexColor(TCPI);
-    const vacColor  = VAC !== null ? varianceColor(VAC) : null;
-
-    const forecastValues = [
-        {
-            label: 'EAC (Est. at Completion)',
-            value: EAC !== null ? formatCurrency(EAC) : '—',
-            textClass: 'text-slate-800',
-        },
-        {
-            label: 'ETC (Est. to Complete)',
-            value: ETC !== null ? formatCurrency(ETC) : '—',
-            textClass: 'text-slate-800',
-        },
-        {
-            label: 'VAC (Variance at Comp.)',
-            value: VAC !== null ? formatCurrency(VAC) : '—',
-            textClass: vacColor ? vacColor.text : 'text-slate-800',
-        },
-        {
-            label: 'TCPI (To-Complete PI)',
-            value: TCPI !== null ? TCPI.toFixed(2) : '—',
-            textClass: tcpiColor.text,
-        },
-    ];
-
-    const inputClass = 'w-full px-4 py-3 bg-white/50 border border-slate-200 rounded-lg outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all text-slate-700 text-sm';
+    const inputClass = INPUT_CLASS;
 
     return (
         <div className="space-y-8">
 
             {/* HEADER */}
-            <div>
-                <h2 className="text-3xl font-bold text-slate-800 tracking-tight">Plan vs Actual</h2>
-                <p className="text-slate-500 mt-1">Earned Value Management performance report</p>
+            <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+                <div>
+                    <h2 className="text-3xl font-bold text-slate-800 tracking-tight">Plan vs Actual</h2>
+                    <p className="text-slate-500 mt-1">Earned Value Management performance report</p>
+                </div>
+                {selectedProject && (
+                    <button
+                        onClick={handleExport}
+                        className="text-sm font-semibold px-4 py-2.5 rounded-xl transition-all flex items-center gap-2 border shadow-sm text-emerald-600 bg-emerald-50 border-emerald-100 hover:bg-emerald-600 hover:text-white hover:border-emerald-600 hover:shadow-lg hover:shadow-emerald-200 hover:-translate-y-0.5 active:translate-y-0"
+                    >
+                        <Download className="w-4 h-4" /> Export to Excel
+                    </button>
+                )}
             </div>
+
+            {/* EXPORT SUCCESS TOAST */}
+            {exportFeedback && (
+                <div className="fixed top-6 right-6 z-50 bg-emerald-600 text-white px-5 py-3 rounded-xl shadow-lg shadow-emerald-200 flex items-center gap-2 text-sm font-semibold animate-in slide-in-from-top-2 fade-in duration-200">
+                    <CheckCircle2 className="w-4 h-4" /> Report exported successfully
+                </div>
+            )}
 
             {/* PROJECT SELECTOR */}
             <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-6">
@@ -193,39 +197,31 @@ export default function PlanVsActual() {
                     </div>
 
                     {/* KPI CARDS */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                        {kpiCards.map(card => (
-                            <div key={card.label} className={`rounded-3xl border p-6 ${card.color.bg} ${card.color.border}`}>
-                                <p className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">{card.label}</p>
-                                <p className={`text-2xl font-bold ${card.color.text} mt-1 whitespace-nowrap`}>{card.value}</p>
-                                <p className="text-xs text-slate-400 mt-1 leading-relaxed">{card.subtitle}</p>
-                                <span className={`mt-3 inline-block text-[10px] font-bold uppercase px-2.5 py-1 rounded-lg border ${card.color.bg} ${card.color.border} ${card.color.text}`}>
-                                    {card.color.label}
-                                </span>
-                            </div>
-                        ))}
-                    </div>
-
-                    {/* REFERENCE VALUES */}
-                    <div className="flex flex-wrap gap-3">
-                        {refValues.map(item => (
-                            <div key={item.label} className="bg-white border border-slate-200 rounded-2xl px-4 py-3">
-                                <p className="text-xs text-slate-400 font-semibold">{item.label}</p>
-                                <p className="text-slate-800 font-bold text-sm mt-0.5">{item.value}</p>
-                            </div>
-                        ))}
-                    </div>
-
-                    {/* FORECAST VALUES */}
-                    <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-6">
-                        <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4">Forecast</h3>
-                        <div className="flex flex-wrap gap-3">
-                            {forecastValues.map(item => (
-                                <div key={item.label} className="bg-slate-50 border border-slate-100 rounded-2xl px-4 py-3">
-                                    <p className="text-xs text-slate-400 font-semibold">{item.label}</p>
-                                    <p className={`font-bold text-sm mt-0.5 ${item.textClass}`}>{item.value}</p>
+                    <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-6 space-y-6">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                            {kpiCards.map(card => (
+                                <div key={card.label} className={`rounded-2xl border p-5 ${card.color.bg} ${card.color.border}`}>
+                                    <p className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">{card.label}</p>
+                                    <p className={`text-2xl font-bold ${card.color.text} mt-1 whitespace-nowrap`}>{card.value}</p>
+                                    <p className="text-xs text-slate-400 mt-1 leading-relaxed">{card.subtitle}</p>
+                                    <span className={`mt-3 inline-block text-[10px] font-bold uppercase px-2.5 py-1 rounded-lg border ${card.color.bg} ${card.color.border} ${card.color.text}`}>
+                                        {card.color.label}
+                                    </span>
                                 </div>
                             ))}
+                        </div>
+
+                        {/* REFERENCE & FORECAST */}
+                        <div className="border-t border-slate-100 pt-5">
+                            <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Reference & Forecast</h4>
+                            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4">
+                                {[...refValues, ...forecastValues].map(item => (
+                                    <div key={item.label} className="min-w-0">
+                                        <p className="text-[10px] text-slate-400 font-semibold truncate">{item.label}</p>
+                                        <p className={`font-bold text-sm mt-0.5 ${item.textClass || 'text-slate-800'}`}>{item.value}</p>
+                                    </div>
+                                ))}
+                            </div>
                         </div>
                     </div>
 
@@ -264,8 +260,9 @@ export default function PlanVsActual() {
                                         const earnedHours = Math.round(task.planned_hours * (task.pct_complete / 100));
                                         const taskHV = task.actual_hours > 0 ? earnedHours - task.actual_hours : null;
                                         const taskHVColor = taskHV !== null ? varianceColor(taskHV) : null;
+                                        const rowBg = taskCV < 0 ? 'bg-red-50/60' : task.pct_complete === 100 ? 'bg-emerald-50/50' : task.pct_complete === 0 ? 'bg-slate-50/60' : '';
                                         return (
-                                            <tr key={task.id} className="hover:bg-slate-50/50 transition-colors">
+                                            <tr key={task.id} className={`${rowBg} hover:bg-slate-100/50 transition-colors`}>
                                                 <td className="px-4 py-3.5 font-semibold text-slate-700">{task.task_name}</td>
                                                 <td className="px-4 py-3.5 font-mono text-xs text-slate-400">{task.wbs_code}</td>
                                                 <td className="px-4 py-3.5 text-slate-500">{formatCurrency(task.planned_cost)}</td>
@@ -295,7 +292,7 @@ export default function PlanVsActual() {
                                         <td className="px-4 py-3.5" colSpan="2">Total</td>
                                         <td className="px-4 py-3.5">{formatCurrency(BAC)}</td>
                                         <td className="px-4 py-3.5">{formatCurrency(AC)}</td>
-                                        <td className={`px-4 py-3.5 font-bold whitespace-nowrap ${cvColor.text}`}>{formatCurrency(CV)}</td>
+                                        <td className={`px-4 py-3.5 font-bold whitespace-nowrap ${varianceColor(CV).text}`}>{formatCurrency(CV)}</td>
                                         <td className="px-4 py-3.5">{tasks.reduce((s, t) => s + t.planned_hours, 0)}</td>
                                         <td className="px-4 py-3.5">{tasks.reduce((s, t) => s + t.actual_hours, 0)}</td>
                                         <td className={`px-4 py-3.5 font-bold ${varianceColor(totalHV).text}`}>

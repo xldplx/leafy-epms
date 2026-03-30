@@ -1,25 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { ArrowLeft, Lock, Plus, ChevronRight, ChevronDown, ListTodo, X, Calendar, DollarSign, Clock } from 'lucide-react';
+import { dummyWbs, dummyPlanTasks } from '../../../data/dummyData';
+import { formatCurrency, formatDate } from '../../../utils/evmHelpers';
+import { STATUS_STYLES, INPUT_CLASS } from '../../../utils/uiConstants';
 
-// Dummy WBS and task data — will be replaced with API calls later
-const dummyWbs = [
-    { id: 1, parent_id: null, wbs_code: '1.0',   name: 'Civil Works',        level: 1 },
-    { id: 2, parent_id: 1,    wbs_code: '1.1',   name: 'Foundation',          level: 2 },
-    { id: 3, parent_id: 2,    wbs_code: '1.1.1', name: 'Piling Works',        level: 3 },
-    { id: 4, parent_id: 2,    wbs_code: '1.1.2', name: 'Pile Cap',            level: 3 },
-    { id: 5, parent_id: 1,    wbs_code: '1.2',   name: 'Structural Frame',    level: 2 },
-    { id: 6, parent_id: null, wbs_code: '2.0',   name: 'MEP Works',           level: 1 },
-    { id: 7, parent_id: 6,    wbs_code: '2.1',   name: 'Electrical',          level: 2 },
-    { id: 8, parent_id: 6,    wbs_code: '2.2',   name: 'Plumbing',            level: 2 },
-];
-
-const dummyTasks = [
-    { id: 1, wbs_id: 3, wbs_code: '1.1.1', task_name: 'Bored Pile 600mm Dia.',   planned_start: '2026-01-15', planned_end: '2026-02-28', planned_duration: 44, planned_cost: 450000000, planned_hours: 320, weight: 0.23 },
-    { id: 2, wbs_id: 4, wbs_code: '1.1.2', task_name: 'Pile Cap Type PC-1',      planned_start: '2026-03-01', planned_end: '2026-03-20', planned_duration: 19, planned_cost: 180000000, planned_hours: 140, weight: 0.17 },
-    { id: 3, wbs_id: 5, wbs_code: '1.2',   task_name: 'Column & Beam Erection',  planned_start: '2026-03-21', planned_end: '2026-05-31', planned_duration: 71, planned_cost: 920000000, planned_hours: 580, weight: 0.32 },
-    { id: 4, wbs_id: 7, wbs_code: '2.1',   task_name: 'Main Distribution Board', planned_start: '2026-04-01', planned_end: '2026-04-30', planned_duration: 29, planned_cost: 210000000, planned_hours: 160, weight: 0.16 },
-    { id: 5, wbs_id: 8, wbs_code: '2.2',   task_name: 'Fire Suppression System', planned_start: '2026-04-15', planned_end: '2026-05-15', planned_duration: 30, planned_cost: 175000000, planned_hours: 120, weight: 0.12 },
-];
+const dummyTasks = dummyPlanTasks;
 
 // Recursive WBS node component
 function WbsNode({ node, allNodes, expandedNodes, toggleExpand, selectedWbsId, setSelectedWbsId }) {
@@ -31,19 +16,22 @@ function WbsNode({ node, allNodes, expandedNodes, toggleExpand, selectedWbsId, s
 
     return (
         <div>
-            <div
-                role="button"
-                tabIndex={0}
+            <button
+                type="button"
                 style={{ paddingLeft: `${indent + 8}px` }}
                 onClick={() => setSelectedWbsId(node.id)}
-                onKeyDown={(e) => e.key === 'Enter' && setSelectedWbsId(node.id)}
+                aria-expanded={hasChildren ? isExpanded : undefined}
                 className={`w-full flex items-center gap-2 py-2 pr-2 rounded-lg text-sm transition-colors cursor-pointer ${
                     isSelected ? 'bg-emerald-50 text-emerald-700 font-semibold' : 'text-slate-600 hover:bg-slate-50'
                 }`}
             >
                 {hasChildren ? (
                     <span
+                        role="button"
+                        tabIndex={-1}
                         onClick={(e) => { e.stopPropagation(); toggleExpand(node.id); }}
+                        onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); toggleExpand(node.id); } }}
+                        aria-label={isExpanded ? 'Collapse' : 'Expand'}
                         className="w-3.5 h-3.5 shrink-0 text-slate-400 hover:text-emerald-600 transition-colors cursor-pointer"
                     >
                         {isExpanded
@@ -55,7 +43,7 @@ function WbsNode({ node, allNodes, expandedNodes, toggleExpand, selectedWbsId, s
                 )}
                 <span className="font-mono text-[10px] text-slate-400 shrink-0">{node.wbs_code}</span>
                 <span className="truncate text-left">{node.name}</span>
-            </div>
+            </button>
             {hasChildren && isExpanded && children.map(child => (
                 <WbsNode
                     key={child.id}
@@ -114,12 +102,6 @@ export default function ProjectDetail({ project, onBack }) {
     const totalHours = filteredTasks.reduce((s, t) => s + t.planned_hours, 0);
     const totalWeight = filteredTasks.reduce((s, t) => s + t.weight, 0);
 
-    const formatCurrency = (v) =>
-        new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(v);
-
-    const formatDate = (d) =>
-        new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
-
     const durationDays = Math.round(
         (new Date(project.planned_end) - new Date(project.planned_start)) / (1000 * 60 * 60 * 24)
     );
@@ -134,12 +116,17 @@ export default function ProjectDetail({ project, onBack }) {
 
     const currentStatus = isLocked ? 'active' : (project.status || 'planning');
 
-    const statusStyles = {
-        active:    'bg-emerald-50 text-emerald-600 border-emerald-100',
-        planning:  'bg-blue-50 text-blue-600 border-blue-100',
-        completed: 'bg-slate-50 text-slate-500 border-slate-100',
-        on_hold:   'bg-amber-50 text-amber-600 border-amber-100',
-    };
+    // Close modals on Escape key
+    useEffect(() => {
+        const handler = (e) => {
+            if (e.key === 'Escape') {
+                if (isTaskModalOpen) setIsTaskModalOpen(false);
+                if (isLockModalOpen) setIsLockModalOpen(false);
+            }
+        };
+        if (isTaskModalOpen || isLockModalOpen) document.addEventListener('keydown', handler);
+        return () => document.removeEventListener('keydown', handler);
+    }, [isTaskModalOpen, isLockModalOpen]);
 
     const handleAddTask = (e) => {
         e.preventDefault();
@@ -202,6 +189,7 @@ export default function ProjectDetail({ project, onBack }) {
                     <div className="flex items-start gap-4">
                         <button
                             onClick={onBack}
+                            aria-label="Go back to projects"
                             className="mt-1 p-2 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
                         >
                             <ArrowLeft className="w-5 h-5" />
@@ -209,7 +197,7 @@ export default function ProjectDetail({ project, onBack }) {
                         <div>
                             <div className="flex items-center gap-3 flex-wrap">
                                 <h2 className="text-3xl font-bold text-slate-800 tracking-tight">{project.project_name}</h2>
-                                <span className={`text-[10px] font-bold uppercase px-2.5 py-1 rounded-lg border ${statusStyles[currentStatus] || statusStyles.planning}`}>
+                                <span className={`text-[10px] font-bold uppercase px-2.5 py-1 rounded-lg border ${STATUS_STYLES[currentStatus] || STATUS_STYLES.planning}`}>
                                     {currentStatus.replace('_', ' ')}
                                 </span>
                             </div>
@@ -235,7 +223,7 @@ export default function ProjectDetail({ project, onBack }) {
                                 }`}
                             >
                                 <Lock className="w-4 h-4" />
-                                Lock Baseline
+                                {tasks.length > 0 ? 'Lock Baseline' : 'Add tasks first'}
                             </button>
                         )
                     )}
@@ -273,11 +261,6 @@ export default function ProjectDetail({ project, onBack }) {
                 <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-6 w-72 shrink-0">
                     <div className="flex items-center justify-between mb-4">
                         <h3 className="text-sm font-bold text-slate-700 uppercase tracking-wider">WBS</h3>
-                        {canEdit && (
-                            <button className="p-1 rounded-lg text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors" title="Add WBS node (coming soon)">
-                                <Plus className="w-4 h-4" />
-                            </button>
-                        )}
                     </div>
 
                     <div className="space-y-0.5">
@@ -401,11 +384,11 @@ export default function ProjectDetail({ project, onBack }) {
             {/* ADD TASK MODAL */}
             {isTaskModalOpen && (
                 <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50" onClick={() => setIsTaskModalOpen(false)}>
-                    <div className="bg-white rounded-3xl p-8 w-full max-w-lg shadow-2xl border border-slate-100 animate-in fade-in duration-200" onClick={e => e.stopPropagation()}>
+                    <div role="dialog" aria-label="Add new task" className="bg-white rounded-3xl p-8 w-full max-w-lg shadow-2xl border border-slate-100 animate-in fade-in duration-200" onClick={e => e.stopPropagation()}>
 
                         <div className="flex items-center justify-between mb-6">
                             <h3 className="text-xl font-bold text-slate-800">Add New Task</h3>
-                            <button onClick={() => setIsTaskModalOpen(false)} className="text-slate-400 hover:text-slate-600 transition-colors">
+                            <button onClick={() => setIsTaskModalOpen(false)} aria-label="Close" className="text-slate-400 hover:text-slate-600 transition-colors">
                                 <X className="w-5 h-5" />
                             </button>
                         </div>
@@ -503,7 +486,7 @@ export default function ProjectDetail({ project, onBack }) {
             {/* LOCK BASELINE MODAL */}
             {isLockModalOpen && (
                 <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50" onClick={() => setIsLockModalOpen(false)}>
-                    <div className="bg-white rounded-3xl p-8 w-full max-w-md shadow-2xl border border-slate-100 animate-in fade-in duration-200" onClick={e => e.stopPropagation()}>
+                    <div role="dialog" aria-label="Lock baseline" className="bg-white rounded-3xl p-8 w-full max-w-md shadow-2xl border border-slate-100 animate-in fade-in duration-200" onClick={e => e.stopPropagation()}>
 
                         <div className="flex items-center gap-3 mb-2">
                             <div className="p-2.5 bg-amber-50 rounded-xl text-amber-600">
@@ -524,7 +507,7 @@ export default function ProjectDetail({ project, onBack }) {
                                 value={baselineName}
                                 onChange={e => setBaselineName(e.target.value)}
                                 placeholder="Baseline Rev.0"
-                                className="w-full px-4 py-3 bg-white/50 border border-slate-200 rounded-lg outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 transition-all text-slate-700 text-sm"
+                                className={INPUT_CLASS}
                             />
                         </div>
 

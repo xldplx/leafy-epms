@@ -1,26 +1,11 @@
 import { useState } from 'react';
 import { ClipboardList, CheckCircle2 } from 'lucide-react';
+import { dummyProjectsEvm, dummyTaskData } from '../../../data/dummyData';
+import { formatCurrency, formatDate } from '../../../utils/evmHelpers';
+import { INPUT_CLASS, INLINE_INPUT_CLASS } from '../../../utils/uiConstants';
 
-// Dummy data — will be replaced with API calls in a later sprint
-const dummyProjects = [
-    { id: 1, project_name: 'Industrial Complex Phase 2',  project_code: 'PRJ-2026-001' },
-    { id: 2, project_name: 'Office Tower Renovation',     project_code: 'PRJ-2026-002' },
-    { id: 3, project_name: 'Warehouse Expansion Block C', project_code: 'PRJ-2026-003' },
-];
-
-const dummyTasks = [
-    { id: 1,  project_id: 1, wbs_code: '1.1.1', task_name: 'Bored Pile 600mm Dia.',       planned_cost: 450000000, planned_hours: 320 },
-    { id: 2,  project_id: 1, wbs_code: '1.1.2', task_name: 'Pile Cap Type PC-1',          planned_cost: 180000000, planned_hours: 140 },
-    { id: 3,  project_id: 1, wbs_code: '1.2',   task_name: 'Column & Beam Erection',      planned_cost: 920000000, planned_hours: 580 },
-    { id: 4,  project_id: 1, wbs_code: '2.1',   task_name: 'Main Distribution Board',     planned_cost: 210000000, planned_hours: 160 },
-    { id: 5,  project_id: 1, wbs_code: '2.2',   task_name: 'Fire Suppression System',     planned_cost: 175000000, planned_hours: 120 },
-    { id: 6,  project_id: 2, wbs_code: '1.0',   task_name: 'Structural Assessment',       planned_cost:  95000000, planned_hours:  80 },
-    { id: 7,  project_id: 2, wbs_code: '2.0',   task_name: 'Interior Fit-Out',            planned_cost: 340000000, planned_hours: 260 },
-    { id: 8,  project_id: 3, wbs_code: '1.0',   task_name: 'Site Preparation & Earthworks', planned_cost:  95000000, planned_hours: 120 },
-    { id: 9,  project_id: 3, wbs_code: '2.0',   task_name: 'Foundation & Pile Works',     planned_cost: 280000000, planned_hours: 240 },
-    { id: 10, project_id: 3, wbs_code: '3.0',   task_name: 'Structural Steel Frame',      planned_cost: 320000000, planned_hours: 280 },
-    { id: 11, project_id: 3, wbs_code: '4.0',   task_name: 'Electrical Installation',     planned_cost: 175000000, planned_hours: 160 },
-];
+const dummyProjects = dummyProjectsEvm;
+const dummyTasks = dummyTaskData;
 
 export default function DailyActuals() {
     const [selectedProjectId, setSelectedProjectId] = useState('');
@@ -68,14 +53,8 @@ export default function DailyActuals() {
         setTimeout(() => setIsSubmitted(false), 3000);
     };
 
-    const formatCurrency = (v) =>
-        new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(v);
-
-    const formatDate = (d) =>
-        new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
-
-    const inputClass = 'w-full px-4 py-3 bg-white/50 border border-slate-200 rounded-lg outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all text-slate-700 text-sm';
-    const inlineInputClass = 'w-full px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-700 outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/20 transition-all';
+    const inputClass = INPUT_CLASS;
+    const inlineInputClass = INLINE_INPUT_CLASS;
 
     return (
         <div className="space-y-8">
@@ -88,11 +67,10 @@ export default function DailyActuals() {
                 </div>
             </div>
 
-            {/* SUCCESS BANNER */}
+            {/* SUCCESS TOAST */}
             {isSubmitted && (
-                <div className="flex items-center gap-3 px-5 py-3.5 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-2xl text-sm font-semibold animate-in fade-in duration-200">
-                    <CheckCircle2 className="w-5 h-5" />
-                    Daily entry submitted successfully.
+                <div className="fixed top-6 right-6 z-50 bg-emerald-600 text-white px-5 py-3 rounded-xl shadow-lg shadow-emerald-200 flex items-center gap-2 text-sm font-semibold animate-in slide-in-from-top-2 fade-in duration-200">
+                    <CheckCircle2 className="w-4 h-4" /> Daily entry submitted successfully
                 </div>
             )}
 
@@ -144,7 +122,7 @@ export default function DailyActuals() {
                                 disabled={!hasAnyActuals}
                                 className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-xl font-semibold text-sm shadow-lg shadow-emerald-200 transition-all flex items-center gap-2 shrink-0 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
                             >
-                                <CheckCircle2 className="w-4 h-4" /> Submit Daily Entry
+                                <CheckCircle2 className="w-4 h-4" /> {hasAnyActuals ? 'Submit Daily Entry' : 'Enter actuals to submit'}
                             </button>
                         )}
                     </div>
