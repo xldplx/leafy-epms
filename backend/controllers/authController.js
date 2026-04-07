@@ -1,35 +1,58 @@
-const jwt = require('jsonwebtoken');
-const { findUserByCredentials } = require('../models/userModel');
+const jwt      = require('jsonwebtoken');
+const supabase = require('../config/db');
 const { JWT_SECRET, JWT_EXPIRES_IN } = require('../config/constants');
 
-const login = (req, res) => {
+const login = async (req, res) => {
     const { username, password } = req.body;
 
-    // 1. Check User in "Database"
-    const user = findUserByCredentials(username, password);
-
-    // 2. Handle Invalid Login
-    if (!user) {
-        return res.status(401).json({
-            success: false,
-            message: 'Invalid credentials.'
-        });
+    if (!username || !password) {
+        return res.status(400).json({ success: false, message: 'Username and password are required.' });
     }
 
-    // 3. Generate Token
-    const token = jwt.sign(
-        { id: user.id, role: user.role, username: user.username },
-        JWT_SECRET,
-        { expiresIn: JWT_EXPIRES_IN }
-    );
+    try {
+        const { data, error } = await supabase
+            .from('users')
+            .select('id, username, role, password')
+            .eq('username', username)
+            .single();
 
-    // 4. Send Success Response
-    res.status(200).json({
-        success: true,
-        token: token,
-        role: user.role,
-        username: user.username
-    });
+        if (error || !data || data.password !== password) {
+            return res.status(401).json({ success: false, message: 'Invalid credentials.' });
+        }
+
+        const token = jwt.sign(
+            { id: data.id, username: data.username, role: data.role },
+            JWT_SECRET,
+            { expiresIn: JWT_EXPIRES_IN }
+        );
+
+        return res.status(200).json({
+            success:  true,
+            token,
+            role:     data.role,
+            username: data.username,
+        });
+
+    } catch (err) {
+        console.error('[Login Error]', err.message);
+        return res.status(500).json({ success: false, message: 'Server error during login.' });
+    }
 };
 
-module.exports = { login };
+const getMe = async (req, res) => {
+    try {
+        const { data, error } = await supabase
+            .from('users')
+            .select('id, username, role, created_at')
+            .eq('id', req.user.id)
+            .single();
+
+        if (error || !data) return res.status(404).json({ success: false, message: 'User not found.' });
+        return res.status(200).json({ success: true, data });
+    } catch (err) {
+        console.error('[GetMe Error]', err.message);
+        return res.status(500).json({ success: false, message: 'Server error.' });
+    }
+};
+
+module.exports = { login, getMe };
