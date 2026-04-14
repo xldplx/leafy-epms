@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { Loader2, Eye, EyeOff, User, Lock, ArrowRight } from 'lucide-react';
-import { useNavigate, Link } from 'react-router-dom';
-import { ArrowLeft, Loader2, LayoutGrid } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { ArrowLeft, LayoutGrid } from 'lucide-react';
 import { authApi } from '../utils/api';
 
 export default function Dashboard() {
@@ -23,7 +22,7 @@ export default function Dashboard() {
                 localStorage.setItem('token', data.token);
                 localStorage.setItem('userRole', data.role);
                 localStorage.setItem('userName', data.username);
-                navigate('/dashboard/main');
+                navigate('/dashboard/overview');
             } else {
                 setError(data.message || 'Login failed. Please try again.');
             }
