@@ -1,10 +1,8 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
-import Home from './pages/Home';
 import Login from './pages/Dashboard';
 import DashboardLayout from './pages/dashboard/DashboardLayout';
-import Layout from './layout/Layout';
 
-// a fucntion to indicate the correct user/role 
+// Protected route — redirects to login if no token, or wrong role
 const ProtectedRoute = ({ children, allowedRoles }) => {
   const token = localStorage.getItem('token');
   const userRole = localStorage.getItem('userRole');
@@ -19,15 +17,13 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
 function App() {
   return (
     <Routes>
-      {/* homepage/public routes */}
-      <Route path="/" element={<Layout />}>
-        <Route index element={<Home />} />
-      </Route>
+      {/* Root redirects to login */}
+      <Route path="/" element={<Navigate to="/dashboard" replace />} />
 
-      {/* separate login page(dashboard) */}
+      {/* Login page */}
       <Route path="/dashboard" element={<Login />} />
 
-      {/* dashboard and its subroutes handling */}
+      {/* Dashboard and its subroutes */}
       <Route
         path="/dashboard/*"
         element={
@@ -37,8 +33,8 @@ function App() {
         }
       />
 
-      {/* catch all pages */}
-      <Route path="*" element={<Navigate to="/" replace />} />
+      {/* Catch-all */}
+      <Route path="*" element={<Navigate to="/dashboard" replace />} />
     </Routes>
   );
 }

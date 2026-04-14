@@ -131,12 +131,12 @@ export default function DashboardLayout() {
             <aside className="w-72 bg-white border-r border-slate-200 flex flex-col fixed h-full z-20 shadow-sm transition-all duration-300">
                 <div className="h-24 flex items-center px-8 border-b border-slate-100">
                     <div className="flex flex-col">
-                        <h1 className="text-xl font-bold text-slate-800">Capstone</h1>
+                        <h1 className="text-xl font-bold text-slate-800">Leafy</h1>
                         <span className="text-[10px] font-bold uppercase text-emerald-600 tracking-widest">Enterprise System</span>
                     </div>
                 </div>
 
-                <nav className="flex-1 px-4 py-8 space-y-1 overflow-y-auto">
+                <nav className="flex-1 px-4 py-8 space-y-1 overflow-y-auto [scrollbar-width:thin] [scrollbar-color:#6ee7b7_transparent] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-emerald-200 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb:hover]:bg-emerald-400">
                     {navItems.map((item) => (
                         <button
                             key={item.name}
