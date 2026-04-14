@@ -21,7 +21,7 @@ export default function DashboardLayout() {
     const navItems = [
         {
             name: 'Overview',
-            path: '/dashboard/main',
+            path: '/dashboard/overview',
             icon: <LayoutDashboard className="w-5 h-5" />,
             allowedRoles: ['Project Manager', 'Planner', 'Cost Engineer', 'Site Engineer', 'Management']
         },
