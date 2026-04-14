@@ -1,71 +1,134 @@
-import React from 'react';
-import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
+import React, { useState, useRef, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
-    LayoutDashboard, Users, Truck, Fuel, Package, Wrench, Banknote, LogOut
+    LayoutDashboard, Users, LogOut, ChevronUp, User, Settings, FolderKanban, ClipboardList, BarChart3, Bell, Upload,
+    Wrench, Package, Hammer, Wallet
 } from 'lucide-react';
 
+// imported files to show on the page components
+import Overview from './features/Overview';
+import Manpower from './features/Manpower';
+import Projects from './features/Projects';
+import DailyActuals from './features/DailyActuals';
+import PlanVsActual from './features/PlanVsActual';
+import Alerts from './features/Alerts';
+import ExcelImport from './features/ExcelImport';
+import Empty from './features/Empty';
+
+// page components to showcase, the format goes like "theNameOnTheNavItems: TheNameOfTheFile,"
+const pageComponents = {
+    'Overview': Overview,
+    'Projects': Projects,
+    'Manpower': Manpower,
+    'Daily Actuals': DailyActuals,
+    'Plan vs Actual': PlanVsActual,
+    'Alerts': Alerts,
+    'Excel Import': ExcelImport,
+};
+
 export default function DashboardLayout() {
-    const location = useLocation();
     const navigate = useNavigate();
-    
+
+    // State for Active Page (Default to Overview)
+    const [activePage, setActivePage] = useState('Overview');
+
+    // State for User Menu (Popup)
+    const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+    const menuRef = useRef(null);
+
     const userRole = localStorage.getItem('userRole') || 'Guest';
     const userName = localStorage.getItem('userName') || 'User';
 
     const handleLogout = () => {
         localStorage.clear();
-        navigate('/dashboard');
+        navigate('/');
     };
 
-    const isActive = (path) => location.pathname === path;
+    // Close menu when clicking outside
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (menuRef.current && !menuRef.current.contains(event.target)) {
+                setIsUserMenuOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
 
+    // Navigation Configuration
     const navItems = [
         {
             name: 'Overview',
-            path: '/dashboard/overview',
             icon: <LayoutDashboard className="w-5 h-5" />,
             allowedRoles: ['Project Manager', 'Planner', 'Cost Engineer', 'Site Engineer', 'Management']
         },
         {
+            name: 'Projects',
+            icon: <FolderKanban className="w-5 h-5" />,
+            allowedRoles: ['Project Manager', 'Planner', 'Cost Engineer', 'Site Engineer', 'Management']
+        },
+        {
             name: 'Manpower',
-            path: '/dashboard/manpower',
             icon: <Users className="w-5 h-5" />,
             allowedRoles: ['Project Manager', 'Planner', 'Site Engineer']
         },
         {
+            name: 'Daily Actuals',
+            icon: <ClipboardList className="w-5 h-5" />,
+            allowedRoles: ['Project Manager', 'Planner', 'Site Engineer']
+        },
+        {
+            name: 'Plan vs Actual',
+            icon: <BarChart3 className="w-5 h-5" />,
+            allowedRoles: ['Project Manager', 'Planner', 'Cost Engineer', 'Management']
+        },
+        {
+            name: 'Alerts',
+            icon: <Bell className="w-5 h-5" />,
+            allowedRoles: ['Project Manager', 'Planner', 'Cost Engineer', 'Management']
+        },
+        {
+            name: 'Excel Import',
+            icon: <Upload className="w-5 h-5" />,
+            allowedRoles: ['Project Manager', 'Planner', 'Cost Engineer', 'Site Engineer', 'Management']
+        },
+        {
             name: 'Equipment',
-            path: '/dashboard/empty', 
-            icon: <Truck className="w-5 h-5" />,
+            icon: <Wrench className="w-5 h-5" />,
             allowedRoles: ['Project Manager', 'Planner', 'Site Engineer']
         },
         {
             name: 'Consumables',
-            path: '/dashboard/empty',
-            icon: <Fuel className="w-5 h-5" />,
+            icon: <Package className="w-5 h-5" />,
             allowedRoles: ['Project Manager', 'Planner', 'Site Engineer']
         },
         {
             name: 'Materials',
-            path: '/dashboard/empty',
             icon: <Package className="w-5 h-5" />,
             allowedRoles: ['Project Manager', 'Planner', 'Site Engineer']
         },
         {
             name: 'Tools',
-            path: '/dashboard/empty',
-            icon: <Wrench className="w-5 h-5" />,
+            icon: <Hammer className="w-5 h-5" />,
             allowedRoles: ['Project Manager', 'Planner', 'Site Engineer']
         },
         {
             name: 'Budget',
-            path: '/dashboard/empty',
-            icon: <Banknote className="w-5 h-5" />,
+            icon: <Wallet className="w-5 h-5" />,
             allowedRoles: ['Project Manager', 'Cost Engineer']
         },
-    ].filter(item => item.allowedRoles.includes(userRole)); 
+    ].filter(item => item.allowedRoles.includes(userRole));
+
+
+    const currentNavItem = navItems.find(item => item.name === activePage) || navItems[0];
+
+    // if the feature page has its own page, show it, if not, show the Empty.jsx instead
+    const ActiveComponent = pageComponents[activePage] || (() => <Empty />);
 
     return (
-        <div className="min-h-screen bg-slate-50 flex font-sans text-slate-600">
-            <aside className="w-72 bg-white border-r border-slate-200 flex flex-col fixed h-full z-20 shadow-sm">
+        <div className="min-h-screen bg-slate-50 flex font-sans text-slate-600 selection:bg-emerald-100 selection:text-emerald-700">
+            {/* SIDEBAR */}
+            <aside className="w-72 bg-white border-r border-slate-200 flex flex-col fixed h-full z-20 shadow-sm transition-all duration-300">
                 <div className="h-24 flex items-center px-8 border-b border-slate-100">
                     <div className="flex flex-col">
                         <h1 className="text-xl font-bold text-slate-800">Leafy</h1>
@@ -75,37 +138,81 @@ export default function DashboardLayout() {
 
                 <nav className="flex-1 px-4 py-8 space-y-1 overflow-y-auto [scrollbar-width:thin] [scrollbar-color:#6ee7b7_transparent] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-emerald-200 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb:hover]:bg-emerald-400">
                     {navItems.map((item) => (
-                        <Link
+                        <button
                             key={item.name}
-                            to={item.path}
-                            className={`flex items-center gap-3 px-4 py-3.5 rounded-xl text-sm font-medium transition-all ${
-                                isActive(item.path) ? 'bg-emerald-50 text-emerald-700 shadow-sm' : 'text-slate-500 hover:bg-slate-50'
-                            }`}
+                            onClick={() => setActivePage(item.name)}
+                            className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-sm font-medium transition-all duration-200 group ${activePage === item.name
+                                ? 'bg-emerald-50 text-emerald-700 shadow-sm translate-x-1'
+                                : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'
+                                }`}
                         >
-                            {item.icon}
+                            <span className={activePage === item.name ? 'text-emerald-600' : 'text-slate-400 group-hover:text-slate-600'}>
+                                {item.icon}
+                            </span>
                             {item.name}
-                        </Link>
+
+                            {/* Chevron for active state */}
+                            {activePage === item.name && (
+                                <div className="ml-auto w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                            )}
+                        </button>
                     ))}
                 </nav>
 
-                <div className="p-4 border-t border-slate-100">
-                    <div className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 border border-slate-100">
-                        <div className="w-10 h-10 rounded-full bg-emerald-600 flex items-center justify-center text-white font-bold uppercase">
+                {/* USER PROFILE & LOGOUT SECTION */}
+                <div className="p-4 border-t border-slate-100 relative" ref={menuRef}>
+
+                    {/* POPUP MENU (Displays when isUserMenuOpen is true) */}
+                    {isUserMenuOpen && (
+                        <div className="absolute bottom-[calc(100%-10px)] left-4 right-4 bg-white border border-slate-200 shadow-xl shadow-slate-200/50 rounded-xl overflow-hidden animate-in slide-in-from-bottom-2 fade-in duration-200 z-50">
+                            <div className="p-2 space-y-1">
+                                <button className="w-full flex items-center gap-3 px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 rounded-lg transition-colors text-left">
+                                    <User className="w-4 h-4 text-slate-400" />
+                                    My Profile
+                                </button>
+                                <button className="w-full flex items-center gap-3 px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 rounded-lg transition-colors text-left">
+                                    <Settings className="w-4 h-4 text-slate-400" />
+                                    Settings
+                                </button>
+                                <div className="h-px bg-slate-100 my-1 mx-2" />
+                                <button
+                                    onClick={handleLogout}
+                                    className="w-full flex items-center gap-3 px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors text-left"
+                                >
+                                    <LogOut className="w-4 h-4" />
+                                    Sign Out
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* MAIN TRIGGER BUTTON (Replaces the old static div) */}
+                    <button
+                        onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
+                        className={`w-full flex items-center gap-3 p-3 rounded-xl border transition-all duration-200 ${isUserMenuOpen
+                            ? 'bg-slate-50 border-emerald-200 ring-2 ring-emerald-100'
+                            : 'bg-white border-slate-100 hover:border-emerald-200 hover:shadow-sm'
+                            }`}
+                    >
+                        <div className="w-10 h-10 rounded-full bg-emerald-600 flex items-center justify-center text-white font-bold uppercase shadow-md shadow-emerald-200 shrink-0">
                             {userName.charAt(0)}
                         </div>
-                        <div className="flex-1 min-w-0">
+                        <div className="flex-1 min-w-0 text-left">
                             <p className="text-sm font-bold text-slate-800 truncate">{userName}</p>
-                            <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-tighter">{userRole}</p>
+                            <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-tighter truncate">{userRole}</p>
                         </div>
-                        <button onClick={handleLogout} className="text-slate-400 hover:text-red-500 transition-colors">
-                            <LogOut className="w-5 h-5" />
-                        </button>
-                    </div>
+                        {/* Rotating Chevron */}
+                        <ChevronUp className={`w-4 h-4 text-slate-400 transition-transform duration-300 ${isUserMenuOpen ? 'rotate-180' : ''}`} />
+                    </button>
                 </div>
             </aside>
 
-            <main className="flex-1 ml-72 p-8 lg:p-12">
-                <Outlet />
+            {/* the main component  */}
+            <main className="flex-1 ml-72 p-8 lg:p-12 transition-all">
+                {/* to handle what's inside the main component */}
+                <div className="animate-in fade-in h-full duration-300">
+                    <ActiveComponent />
+                </div>
             </main>
         </div>
     );
