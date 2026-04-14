@@ -1,6 +1,9 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Loader2, Eye, EyeOff, User, Lock, ArrowRight } from 'lucide-react';
+import { useNavigate, Link } from 'react-router-dom';
+import { ArrowLeft, Loader2, LayoutGrid } from 'lucide-react';
+import { authApi } from '../utils/api';
 
 export default function Dashboard() {
     const [credentials, setCredentials] = useState({ username: '', password: '' });
@@ -15,13 +18,8 @@ export default function Dashboard() {
         setError('');
 
         try {
-            const response = await fetch('http://localhost:5000/api/login', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(credentials),
-            });
-            const data = await response.json();
-            if (response.ok && data.success) {
+            const data = await authApi.login(credentials.username, credentials.password);
+            if (data.success) {
                 localStorage.setItem('token', data.token);
                 localStorage.setItem('userRole', data.role);
                 localStorage.setItem('userName', data.username);
