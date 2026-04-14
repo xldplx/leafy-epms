@@ -1,50 +1,39 @@
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo } from 'react';
 import { Activity, TrendingUp, AlertTriangle, BarChart3 } from 'lucide-react';
-import { evmApi, alertsApi } from '../../../utils/api';
-import { indexColor, formatCurrency } from '../../../utils/evmHelpers';
+import { dummyProjects, dummyProjectsEvm, dummyTaskData } from '../../../data/dummyData';
+import { computeEvm, computeAlerts, indexColor, formatCurrency } from '../../../utils/evmHelpers';
 import { STATUS_STYLES } from '../../../utils/uiConstants';
 
+// --- MAIN OVERVIEW COMPONENT ---
 export default function Overview() {
-    const [portfolioData, setPortfolioData] = useState(null);
-    const [alerts, setAlerts] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState('');
+    // Per-project EVM (memoized)
+    const projectMetrics = useMemo(() => dummyProjectsEvm.map(proj => {
+        const tasks = dummyTaskData.filter(t => t.project_id === proj.id);
+        const evm = computeEvm(tasks, proj.schedule_pct);
+        const full = dummyProjects.find(p => p.id === proj.id);
+        return { ...proj, ...evm, status: full?.status || 'planning', total_budget: full?.total_budget || evm.BAC, planned_start: full?.planned_start, planned_end: full?.planned_end };
+    }), []);
 
-    useEffect(() => {
-        const fetchData = async () => {
-            try {
-                const [evmRes, alertsRes] = await Promise.all([
-                    evmApi.getOverview(),
-                    alertsApi.getAlerts(),
-                ]);
-                setPortfolioData(evmRes.data);
-                setAlerts(alertsRes.data || []);
-            } catch (err) {
-                setError(err.message);
-            } finally {
-                setLoading(false);
-            }
+    // Portfolio aggregates (memoized)
+    const { totalAC, totalBAC, portfolioCPI, portfolioSPI } = useMemo(() => {
+        const tEV = projectMetrics.reduce((s, p) => s + p.EV, 0);
+        const tAC = projectMetrics.reduce((s, p) => s + p.AC, 0);
+        const tPV = projectMetrics.reduce((s, p) => s + p.PV, 0);
+        const tBAC = projectMetrics.reduce((s, p) => s + p.BAC, 0);
+        return {
+            totalAC: tAC, totalBAC: tBAC,
+            portfolioCPI: tAC > 0 ? tEV / tAC : null,
+            portfolioSPI: tPV > 0 ? tEV / tPV : null,
         };
-        fetchData();
+    }, [projectMetrics]);
+
+    // Alerts (memoized)
+    const { alerts, criticalCount, warningCount } = useMemo(() => {
+        const defaultThresholds = { cpi_amber: 1.00, cpi_red: 0.90, spi_amber: 1.00, spi_red: 0.90 };
+        const a = computeAlerts(dummyProjectsEvm, dummyTaskData, defaultThresholds);
+        return { alerts: a, criticalCount: a.filter(x => x.severity === 'critical').length, warningCount: a.filter(x => x.severity === 'warning').length };
     }, []);
 
-    if (loading) return (
-        <div className="flex items-center justify-center h-64">
-            <div className="w-8 h-8 border-4 border-emerald-200 border-t-emerald-600 rounded-full animate-spin" />
-        </div>
-    );
-
-    if (error) return (
-        <div className="bg-red-50 border border-red-100 rounded-2xl p-6 text-red-600 text-sm font-semibold">
-            ❌ Failed to load data: {error}
-        </div>
-    );
-
-    const { projects = [], portfolio = {} } = portfolioData || {};
-    const { totalBAC = 0, totalAC = 0, portfolioCPI = null, portfolioSPI = null } = portfolio;
-
-    const criticalCount = alerts.filter(a => a.severity === 'critical').length;
-    const warningCount  = alerts.filter(a => a.severity === 'warning').length;
     const cpiColor = indexColor(portfolioCPI);
     const spiColor = indexColor(portfolioSPI);
 
@@ -58,7 +47,7 @@ export default function Overview() {
                 </div>
             </div>
 
-            {/* KPI CARDS */}
+            {/* KPI CARDS — with target context */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 {/* SPI */}
                 <div className="group bg-white p-6 rounded-3xl border border-slate-100 shadow-[0_2px_10px_-3px_rgba(6,182,212,0.1)] hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
@@ -128,7 +117,9 @@ export default function Overview() {
                             {warningCount > 0 && <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-amber-50 text-amber-600 border border-amber-100">{warningCount} Warning</span>}
                         </div>
                     )}
-                    {alerts.length === 0 && <p className="mt-2 text-xs text-slate-400">All projects within thresholds</p>}
+                    {alerts.length === 0 && (
+                        <p className="mt-2 text-xs text-slate-400">All projects within thresholds</p>
+                    )}
                 </div>
             </div>
 
@@ -155,11 +146,7 @@ export default function Overview() {
                             </tr>
                         </thead>
                         <tbody className="text-sm font-medium text-slate-600 divide-y divide-slate-50">
-                            {projects.length === 0 ? (
-                                <tr>
-                                    <td colSpan="7" className="px-6 py-12 text-center text-slate-400">No projects found.</td>
-                                </tr>
-                            ) : projects.map(proj => {
+                            {projectMetrics.map(proj => {
                                 const cpi = indexColor(proj.CPI);
                                 const spi = indexColor(proj.SPI);
                                 return (
@@ -170,25 +157,25 @@ export default function Overview() {
                                         </td>
                                         <td className="px-4 py-4">
                                             <span className={`text-[10px] font-bold uppercase px-2.5 py-1 rounded-lg border ${STATUS_STYLES[proj.status] || STATUS_STYLES.planning}`}>
-                                                {proj.status?.replace('_', ' ')}
+                                                {proj.status.replace('_', ' ')}
                                             </span>
                                         </td>
                                         <td className="px-4 py-4">
                                             <span className={`text-xs font-bold px-2.5 py-1 rounded-lg border ${cpi.bg} ${cpi.border} ${cpi.text}`}>
-                                                {proj.CPI !== null ? proj.CPI.toFixed(2) : '—'}
+                                                {proj.CPI !== null ? proj.CPI.toFixed(2) : '\u2014'}
                                             </span>
                                         </td>
                                         <td className="px-4 py-4">
                                             <span className={`text-xs font-bold px-2.5 py-1 rounded-lg border ${spi.bg} ${spi.border} ${spi.text}`}>
-                                                {proj.SPI !== null ? proj.SPI.toFixed(2) : '—'}
+                                                {proj.SPI !== null ? proj.SPI.toFixed(2) : '\u2014'}
                                             </span>
                                         </td>
                                         <td className="px-4 py-4">
                                             <div className="flex items-center gap-3">
                                                 <div className="flex-1 bg-slate-100 rounded-full h-2">
-                                                    <div className="h-2 rounded-full bg-emerald-500 transition-all duration-500" style={{ width: `${Math.min(proj.overallPct || 0, 100)}%` }} />
+                                                    <div className="h-2 rounded-full bg-emerald-500 transition-all duration-500" style={{ width: `${Math.min(proj.overallPct, 100)}%` }} />
                                                 </div>
-                                                <span className="text-xs font-bold text-slate-600 shrink-0 w-12 text-right">{(proj.overallPct || 0).toFixed(1)}%</span>
+                                                <span className="text-xs font-bold text-slate-600 shrink-0 w-12 text-right">{proj.overallPct.toFixed(1)}%</span>
                                             </div>
                                         </td>
                                         <td className="px-4 py-4 text-slate-500 whitespace-nowrap">{formatCurrency(proj.BAC)}</td>
@@ -212,7 +199,7 @@ export default function Overview() {
             <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-6">
                 <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-5">Budget Overview — BAC vs Actual Spend</h3>
                 <div className="space-y-5">
-                    {projects.map(proj => {
+                    {projectMetrics.map(proj => {
                         const spendPct = proj.BAC > 0 ? (proj.AC / proj.BAC) * 100 : 0;
                         const barColor = spendPct > 100 ? 'bg-red-500' : spendPct > 80 ? 'bg-amber-500' : 'bg-emerald-500';
                         return (
@@ -230,11 +217,9 @@ export default function Overview() {
                             </div>
                         );
                     })}
-                    {projects.length === 0 && (
-                        <p className="text-center text-slate-400 text-sm py-4">No project data available.</p>
-                    )}
                 </div>
             </div>
+
         </div>
     );
 }
