@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, LayoutGrid } from 'lucide-react';
 import { authApi } from '../utils/api';
 
-export default function Dashboard() {
+export default function Login() {
     const [credentials, setCredentials] = useState({ username: '', password: '' });
     const [error, setError] = useState('');
     const [isLoading, setIsLoading] = useState(false);

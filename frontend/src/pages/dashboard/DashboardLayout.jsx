@@ -41,7 +41,7 @@ export default function DashboardLayout() {
 
     const handleLogout = () => {
         localStorage.clear();
-        navigate('/');
+        navigate('/login');
     };
 
     // Close menu when clicking outside
