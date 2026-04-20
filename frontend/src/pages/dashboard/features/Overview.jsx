@@ -1,11 +1,36 @@
 import React, { useMemo } from 'react';
-import { Activity, TrendingUp, AlertTriangle, BarChart3 } from 'lucide-react';
-import { dummyProjects, dummyProjectsEvm, dummyTaskData } from '../../../data/dummyData';
+import { Activity, TrendingUp, AlertTriangle, BarChart3, LineChart as ChartIcon } from 'lucide-react';
+import { 
+    LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, 
+    Legend, ResponsiveContainer 
+} from 'recharts';
+import { dummyProjects, dummyProjectsEvm, dummyTaskData, dummyPlanTasks } from '../../../data/dummyData';
 import { computeEvm, computeAlerts, indexColor, formatCurrency } from '../../../utils/evmHelpers';
+import { generateSCurveData } from '../../../utils/cpmHelpers';
 import { STATUS_STYLES } from '../../../utils/uiConstants';
+
+// --- CUSTOM TOOLTIP FOR OVERVIEW ---
+function OverviewTooltip({ active, payload, label }) {
+    if (!active || !payload?.length) return null;
+    return (
+        <div className="bg-white/95 backdrop-blur-sm border border-slate-200 rounded-xl shadow-xl p-3 text-[10px] min-w-40 ring-1 ring-slate-900/5">
+            <p className="font-bold text-slate-800 mb-2">{label}</p>
+            <div className="space-y-1">
+                {payload.map(p => (
+                    <div key={p.dataKey} className="flex justify-between items-center gap-4">
+                        <span style={{ color: p.color }} className="font-bold uppercase tracking-wider">{p.name}</span>
+                        <span className="text-slate-700 font-mono font-bold">{formatCurrency(p.value)}</span>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+}
 
 // --- MAIN OVERVIEW COMPONENT ---
 export default function Overview() {
+    const project = dummyProjects[0]; // For S-Curve reference
+
     // Per-project EVM (memoized)
     const projectMetrics = useMemo(() => dummyProjectsEvm.map(proj => {
         const tasks = dummyTaskData.filter(t => t.project_id === proj.id);
@@ -26,6 +51,9 @@ export default function Overview() {
             portfolioSPI: tPV > 0 ? tEV / tPV : null,
         };
     }, [projectMetrics]);
+
+    // S-Curve Data for Portfolio
+    const sCurveData = useMemo(() => generateSCurveData(dummyPlanTasks, project.planned_start, project.planned_end), []);
 
     // Alerts (memoized)
     const { alerts, criticalCount, warningCount } = useMemo(() => {
@@ -120,6 +148,54 @@ export default function Overview() {
                     {alerts.length === 0 && (
                         <p className="mt-2 text-xs text-slate-400">All projects within thresholds</p>
                     )}
+                </div>
+            </div>
+
+            {/* PORTFOLIO S-CURVE */}
+            <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden p-6">
+                <div className="flex items-center justify-between mb-6">
+                    <div className="flex items-center gap-3">
+                        <div className="p-2.5 bg-emerald-50 rounded-xl text-emerald-600"><ChartIcon className="w-5 h-5" /></div>
+                        <div>
+                            <h3 className="font-bold text-slate-700">Portfolio Triple S-Curve</h3>
+                            <p className="text-xs text-slate-400 mt-0.5">Cumulative PV vs EV vs AC projection</p>
+                        </div>
+                    </div>
+                    <div className="flex gap-4">
+                        <div className="flex items-center gap-2">
+                            <div className="w-2.5 h-2.5 rounded-full bg-slate-300" />
+                            <span className="text-[10px] font-bold text-slate-400 uppercase">PV</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <div className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+                            <span className="text-[10px] font-bold text-slate-400 uppercase">EV</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <div className="w-2.5 h-2.5 rounded-full bg-amber-400" />
+                            <span className="text-[10px] font-bold text-slate-400 uppercase">AC</span>
+                        </div>
+                    </div>
+                </div>
+                <div className="h-[280px] w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={sCurveData}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                            <XAxis 
+                                dataKey="date" 
+                                hide={true}
+                            />
+                            <YAxis 
+                                tick={{ fontSize: 10, fill: '#94a3b8' }} 
+                                tickLine={false} 
+                                axisLine={false}
+                                tickFormatter={v => `${(v / 1e6).toFixed(0)}M`}
+                            />
+                            <Tooltip content={<OverviewTooltip />} />
+                            <Line type="monotone" dataKey="PV" name="Planned" stroke="#cbd5e1" strokeWidth={2} dot={false} strokeDasharray="5 5" />
+                            <Line type="monotone" dataKey="EV" name="Earned" stroke="#10b981" strokeWidth={3} dot={false} />
+                            <Line type="monotone" dataKey="AC" name="Actual" stroke="#f59e0b" strokeWidth={2} dot={false} />
+                        </LineChart>
+                    </ResponsiveContainer>
                 </div>
             </div>
 
