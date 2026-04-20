@@ -7,6 +7,7 @@ import {
 
 // imported files to show on the page components
 import Overview from './features/Overview';
+import Analytics from './features/Analytics';
 import Manpower from './features/Manpower';
 import Projects from './features/Projects';
 import DailyActuals from './features/DailyActuals';
@@ -18,6 +19,7 @@ import Empty from './features/Empty';
 // page components to showcase, the format goes like "theNameOnTheNavItems: TheNameOfTheFile,"
 const pageComponents = {
     'Overview': Overview,
+    'Analytics': Analytics,
     'Projects': Projects,
     'Manpower': Manpower,
     'Daily Actuals': DailyActuals,
@@ -61,6 +63,11 @@ export default function DashboardLayout() {
             name: 'Overview',
             icon: <LayoutDashboard className="w-5 h-5" />,
             allowedRoles: ['Project Manager', 'Planner', 'Cost Engineer', 'Site Engineer', 'Management']
+        },
+        {
+            name: 'Analytics',
+            icon: <BarChart3 className="w-5 h-5" />,
+            allowedRoles: ['Project Manager', 'Planner', 'Cost Engineer', 'Management']
         },
         {
             name: 'Projects',
@@ -126,10 +133,10 @@ export default function DashboardLayout() {
     const ActiveComponent = pageComponents[activePage] || (() => <Empty />);
 
     return (
-        <div className="min-h-screen bg-slate-50 flex font-sans text-slate-600 selection:bg-emerald-100 selection:text-emerald-700">
+        <div className="h-screen bg-slate-50 flex font-sans text-slate-600 selection:bg-emerald-100 selection:text-emerald-700 overflow-hidden">
             {/* SIDEBAR */}
-            <aside className="w-72 bg-white border-r border-slate-200 flex flex-col fixed h-full z-20 shadow-sm transition-all duration-300">
-                <div className="h-24 flex items-center px-8 border-b border-slate-100">
+            <aside className="w-72 bg-white border-r border-slate-200 flex flex-col h-full z-20 shadow-sm transition-all duration-300 shrink-0">
+                <div className="h-24 flex items-center px-8 border-b border-slate-100 shrink-0">
                     <div className="flex flex-col">
                         <h1 className="text-xl font-bold text-slate-800">Leafy</h1>
                         <span className="text-[10px] font-bold uppercase text-emerald-600 tracking-widest">Enterprise System</span>
@@ -160,7 +167,7 @@ export default function DashboardLayout() {
                 </nav>
 
                 {/* USER PROFILE & LOGOUT SECTION */}
-                <div className="p-4 border-t border-slate-100 relative" ref={menuRef}>
+                <div className="p-4 border-t border-slate-100 relative shrink-0" ref={menuRef}>
 
                     {/* POPUP MENU (Displays when isUserMenuOpen is true) */}
                     {isUserMenuOpen && (
@@ -208,9 +215,9 @@ export default function DashboardLayout() {
             </aside>
 
             {/* the main component  */}
-            <main className="flex-1 ml-72 p-8 lg:p-12 transition-all">
+            <main className="flex-1 h-full overflow-y-auto p-8 lg:p-12 scroll-smooth">
                 {/* to handle what's inside the main component */}
-                <div className="animate-in fade-in h-full duration-300">
+                <div className="animate-in fade-in duration-300 max-w-7xl mx-auto">
                     <ActiveComponent />
                 </div>
             </main>
