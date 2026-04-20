@@ -80,11 +80,19 @@ export const dummyWbs = [
 
 // Planning tasks with dates and weights (used by ProjectDetail, Analytics/Gantt/CPM)
 export const dummyPlanTasks = [
-    { id: 1, wbs_code: '1.1.1', task_name: 'Bored Pile 600mm Dia.',   planned_start: '2026-01-15', planned_end: '2026-02-28', planned_duration: 44, planned_cost: 450000000, planned_hours: 320, actual_hours: 340, pct_complete: 100, weight: 0.23, predecessors: [] },
-    { id: 2, wbs_code: '1.1.2', task_name: 'Pile Cap Type PC-1',      planned_start: '2026-03-01', planned_end: '2026-03-20', planned_duration: 19, planned_cost: 180000000, planned_hours: 140, actual_hours: 135, pct_complete: 100, weight: 0.17, predecessors: [1] },
-    { id: 3, wbs_code: '1.2',   task_name: 'Column & Beam Erection',  planned_start: '2026-03-21', planned_end: '2026-05-31', planned_duration: 71, planned_cost: 920000000, planned_hours: 580, actual_hours: 360, pct_complete:  60, weight: 0.32, predecessors: [2] },
-    { id: 4, wbs_code: '2.1',   task_name: 'Main Distribution Board', planned_start: '2026-04-01', planned_end: '2026-04-30', planned_duration: 29, planned_cost: 210000000, planned_hours: 160, actual_hours:  50, pct_complete:  30, weight: 0.16, predecessors: [2] },
-    { id: 5, wbs_code: '2.2',   task_name: 'Fire Suppression System', planned_start: '2026-04-15', planned_end: '2026-05-15', planned_duration: 30, planned_cost: 175000000, planned_hours: 120, actual_hours:   0, pct_complete:   0, weight: 0.12, predecessors: [4] },
+    // Project 1: Industrial Complex Phase 2
+    { id: 1, project_id: 1, wbs_code: '1.1.1', task_name: 'Bored Pile 600mm Dia.',   planned_start: '2026-01-15', planned_end: '2026-02-28', planned_duration: 44, planned_cost: 450000000, planned_hours: 320, actual_hours: 340, actual_cost: 480000000, pct_complete: 100, weight: 0.23, predecessors: [] },
+    { id: 2, project_id: 1, wbs_code: '1.1.2', task_name: 'Pile Cap Type PC-1',      planned_start: '2026-03-01', planned_end: '2026-03-20', planned_duration: 19, planned_cost: 180000000, planned_hours: 140, actual_hours: 135, actual_cost: 175000000, pct_complete: 100, weight: 0.17, predecessors: [1] },
+    { id: 3, project_id: 1, wbs_code: '1.2.1', task_name: 'Steel Column Erection',   planned_start: '2026-03-21', planned_end: '2026-04-15', planned_duration: 25, planned_cost: 520000000, planned_hours: 320, actual_hours: 300, actual_cost: 320000000, pct_complete:  80, weight: 0.20, predecessors: [2] },
+    { id: 4, project_id: 1, wbs_code: '1.2.2', task_name: 'Roof Truss Installation', planned_start: '2026-04-16', planned_end: '2026-05-10', planned_duration: 24, planned_cost: 400000000, planned_hours: 260, actual_hours: 60,  actual_cost: 260000000, pct_complete:  20, weight: 0.12, predecessors: [3] },
+    { id: 5, project_id: 1, wbs_code: '2.1.1', task_name: 'Main Switchboard (MSB)',  planned_start: '2026-04-01', planned_end: '2026-04-20', planned_duration: 19, planned_cost: 210000000, planned_hours: 160, actual_hours: 50,  actual_cost: 65000000,  pct_complete:  30, weight: 0.11, predecessors: [2] },
+    { id: 6, project_id: 1, wbs_code: '2.2.1', task_name: 'Piping & Fire Pump',      planned_start: '2026-04-21', planned_end: '2026-05-15', planned_duration: 24, planned_cost: 175000000, planned_hours: 120, actual_hours: 0,   actual_cost: 0,         pct_complete:   0, weight: 0.10, predecessors: [5, 4] },
+    { id: 7, project_id: 1, wbs_code: '3.0.0', task_name: 'Finishing & Cleanup',     planned_start: '2026-05-16', planned_end: '2026-05-31', planned_duration: 15, planned_cost: 75000000,  planned_hours: 80,  actual_hours: 0,   actual_cost: 0,         pct_complete:   0, weight: 0.07, predecessors: [6] },
+
+    // Project 2: High-Rise Residential Block A
+    { id: 8, project_id: 2, wbs_code: '1.1.1', task_name: 'Site Clearance',          planned_start: '2026-02-01', planned_end: '2026-02-15', planned_duration: 14, planned_cost: 50000000,  planned_hours: 100, actual_hours: 110, actual_cost: 55000000,  pct_complete: 100, weight: 0.05, predecessors: [] },
+    { id: 9, project_id: 2, wbs_code: '1.2.1', task_name: 'Earthwork & Excavation',  planned_start: '2026-02-16', planned_end: '2026-03-31', planned_duration: 43, planned_cost: 300000000, planned_hours: 400, actual_hours: 380, actual_cost: 290000000, pct_complete:  70, weight: 0.15, predecessors: [8] },
+    { id: 10, project_id: 2, wbs_code: '2.1.1', task_name: 'Retaining Wall',         planned_start: '2026-04-01', planned_end: '2026-05-15', planned_duration: 44, planned_cost: 600000000, planned_hours: 600, actual_hours: 0,   actual_cost: 0,         pct_complete:   0, weight: 0.30, predecessors: [9] },
 ];
 
 // ─── Equipment ───────────────────────────────────────────────────────────────
