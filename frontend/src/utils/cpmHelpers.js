@@ -15,7 +15,7 @@ export function calculateCPM(tasks) {
     tasks.forEach(t => {
         taskMap[t.id] = {
             ...t,
-            duration: t.planned_duration || 0,
+            duration: Number(t.planned_duration) || 0,
             predecessors: t.predecessors || [],
             successors: [],
             es: 0,
@@ -38,10 +38,13 @@ export function calculateCPM(tasks) {
     const taskList = Object.values(taskMap);
 
     // 3. Forward Pass (ES, EF)
-    // We need to process tasks in topological order or iteratively
     let changed = true;
-    while (changed) {
+    let iterations = 0;
+    const maxIterations = tasks.length * 2; // Safety break for circular dependencies
+
+    while (changed && iterations < maxIterations) {
         changed = false;
+        iterations++;
         taskList.forEach(t => {
             let maxEF = 0;
             t.predecessors.forEach(predId => {
@@ -60,15 +63,17 @@ export function calculateCPM(tasks) {
     }
 
     // 4. Backward Pass (LS, LF)
-    const maxProjectEF = Math.max(...taskList.map(t => t.ef));
+    const maxProjectEF = taskList.length > 0 ? Math.max(...taskList.map(t => t.ef)) : 0;
     taskList.forEach(t => {
         t.lf = maxProjectEF;
         t.ls = t.lf - t.duration;
     });
 
     changed = true;
-    while (changed) {
+    iterations = 0;
+    while (changed && iterations < maxIterations) {
         changed = false;
+        iterations++;
         taskList.forEach(t => {
             if (t.successors.length > 0) {
                 let minLS = maxProjectEF;
@@ -127,11 +132,15 @@ export function generateSCurveData(tasks, startDate, endDate) {
     tasks.forEach(task => {
         const taskStart = new Date(task.planned_start);
         const taskEnd = new Date(task.planned_end);
+        
+        // Safety check for invalid dates
+        if (isNaN(taskStart.getTime()) || isNaN(taskEnd.getTime())) return;
+
         const taskDuration = Math.max(1, Math.ceil((taskEnd - taskStart) / (1000 * 60 * 60 * 24)));
         
-        const dailyPV = (task.planned_cost || 0) / taskDuration;
-        const dailyEV = ((task.planned_cost || 0) * (task.pct_complete / 100)) / taskDuration;
-        const dailyAC = (task.actual_cost || 0) / taskDuration;
+        const dailyPV = (Number(task.planned_cost) || 0) / taskDuration;
+        const dailyEV = ((Number(task.planned_cost) || 0) * (Number(task.pct_complete || 0) / 100)) / taskDuration;
+        const dailyAC = (Number(task.actual_cost) || 0) / taskDuration;
 
         days.forEach(day => {
             const dayDate = new Date(day.date);
