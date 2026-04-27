@@ -2,6 +2,10 @@ const jwt      = require('jsonwebtoken');
 const supabase = require('../config/db');
 const { JWT_SECRET, JWT_EXPIRES_IN } = require('../config/constants');
 
+/**
+ * POST /api/login
+ * Authenticates a user and returns a JWT token.
+ */
 const login = async (req, res) => {
     const { username, password } = req.body;
 
@@ -39,6 +43,10 @@ const login = async (req, res) => {
     }
 };
 
+/**
+ * GET /api/me
+ * Returns the currently authenticated user's profile.
+ */
 const getMe = async (req, res) => {
     try {
         const { data, error } = await supabase
@@ -47,7 +55,10 @@ const getMe = async (req, res) => {
             .eq('id', req.user.id)
             .single();
 
-        if (error || !data) return res.status(404).json({ success: false, message: 'User not found.' });
+        if (error || !data) {
+            return res.status(404).json({ success: false, message: 'User not found.' });
+        }
+
         return res.status(200).json({ success: true, data });
     } catch (err) {
         console.error('[GetMe Error]', err.message);
