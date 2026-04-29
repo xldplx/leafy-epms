@@ -1,15 +1,20 @@
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import {
     LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
     Legend, ResponsiveContainer, AreaChart, Area, ComposedChart
 } from 'recharts';
-import { dummyProjects, dummyPlanTasks } from '../../../data/dummyData';
 import { calculateCPM, generateSCurveData } from '../../../utils/cpmHelpers';
+import { computeEvm, indexColor } from '../../../utils/evmHelpers';
 import { 
     ZoomIn, ZoomOut, MoveHorizontal, ChevronRight, 
     Filter, Calendar, Target, 
-    Info, AlertCircle, CheckCircle2, Clock
+    Info, AlertCircle, CheckCircle2, Clock, Loader2
 } from 'lucide-react';
+
+const BASE_URL = 'http://localhost:5000/api';
+const apiFetch = (path) => fetch(`${BASE_URL}${path}`, {
+    headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+}).then(r => r.json());
 
 // ─── TABS ────────────────────────────────────────────────────────────────────
 const TABS = ['Cost S-Curve', 'Manpower S-Curve', 'Progress S-Curve', 'Gantt Chart', 'CPM Analysis'];
@@ -51,7 +56,7 @@ function CurveTooltip({ active, payload, label, mode }) {
 function GanttChart({ tasks = [], cpmResults = [] }) {
     const [zoom, setZoom] = useState(1.5);
     const containerRef = useRef(null);
-    const today = new Date('2026-04-07');
+    const today = new Date();
 
     if (!tasks || tasks.length === 0) return (
         <div className="h-full flex flex-col items-center justify-center text-slate-400 gap-4 bg-slate-50/50 rounded-3xl border-2 border-dashed border-slate-200">
@@ -220,17 +225,41 @@ function GanttChart({ tasks = [], cpmResults = [] }) {
 // ─── MAIN COMPONENT ──────────────────────────────────────────────────────────
 export default function Analytics() {
     const [activeTab, setActiveTab] = useState('Cost S-Curve');
-    const [selectedProjectId, setSelectedProjectId] = useState(dummyProjects?.[0]?.id || 1);
-    
-    const project = useMemo(() => {
-        if (!dummyProjects || dummyProjects.length === 0) return null;
-        return dummyProjects.find(p => p.id === selectedProjectId) || dummyProjects[0];
+
+    // Real data from API — replaces dummyProjects and dummyPlanTasks
+    const [projects, setProjects]         = useState([]);
+    const [projectTasks, setProjectTasks] = useState([]);
+    const [loadingProjects, setLoadingProjects] = useState(true);
+    const [loadingTasks, setLoadingTasks]       = useState(false);
+
+    const [selectedProjectId, setSelectedProjectId] = useState(null);
+
+    // Fetch all projects on mount
+    useEffect(() => {
+        apiFetch('/projects')
+            .then(res => {
+                const list = res.data || [];
+                setProjects(list);
+                if (list.length > 0) setSelectedProjectId(list[0].id);
+            })
+            .catch(console.error)
+            .finally(() => setLoadingProjects(false));
+    }, []);
+
+    // Fetch tasks whenever selected project changes
+    useEffect(() => {
+        if (!selectedProjectId) return;
+        setLoadingTasks(true);
+        apiFetch(`/projects/${selectedProjectId}/tasks`)
+            .then(res => setProjectTasks(res.data || []))
+            .catch(console.error)
+            .finally(() => setLoadingTasks(false));
     }, [selectedProjectId]);
 
-    const projectTasks = useMemo(() => {
-        if (!project || !dummyPlanTasks) return [];
-        return dummyPlanTasks.filter(t => t.project_id === project.id);
-    }, [project]);
+    const project = useMemo(() => {
+        if (!projects || projects.length === 0) return null;
+        return projects.find(p => p.id === selectedProjectId) || projects[0];
+    }, [selectedProjectId, projects]);
 
     const cpmResults = useMemo(() => {
         try {
@@ -266,6 +295,18 @@ export default function Analytics() {
         return generateSCurveData(tasksWithWeights, project.planned_start, project.planned_end);
     }, [projectTasks, project]);
 
+    // Compute live CPI from real tasks for Performance Index sidebar
+    const evmMetrics = useMemo(() => {
+        if (!projectTasks.length || !project) return null;
+        return computeEvm(projectTasks, project.schedule_pct);
+    }, [projectTasks, project]);
+
+    const perfIndex = evmMetrics?.CPI ?? null;
+    const perfColor = perfIndex === null ? { bg: 'bg-slate-100', text: 'text-slate-700', border: 'border-slate-200', label: 'N/A' }
+        : perfIndex >= 1   ? { bg: 'bg-emerald-100', text: 'text-emerald-700', border: 'border-emerald-200', label: 'ON TRACK' }
+        : perfIndex >= 0.9 ? { bg: 'bg-amber-100',   text: 'text-amber-700',   border: 'border-amber-200',   label: 'AT RISK'  }
+        :                    { bg: 'bg-red-100',      text: 'text-red-700',     border: 'border-red-200',     label: 'CRITICAL' };
+
     const curveConfig = {
         'Cost S-Curve': { 
             data: costData, mode: 'cost', yLabel: 'Currency (IDR)', 
@@ -288,6 +329,12 @@ export default function Analytics() {
     const isCurveTab = !!activeConfig;
     const criticalPath = cpmResults.filter(t => t.isCritical);
 
+    if (loadingProjects) return (
+        <div className="h-screen flex items-center justify-center gap-3 text-slate-400">
+            <Loader2 className="w-6 h-6 animate-spin" /> Loading projects...
+        </div>
+    );
+
     if (!project) return (
         <div className="h-screen flex items-center justify-center text-slate-500">
             <AlertCircle className="w-6 h-6 mr-2" />
@@ -308,11 +355,11 @@ export default function Analytics() {
                     <div className="bg-white px-4 py-2 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3">
                         <Filter className="w-4 h-4 text-slate-400" />
                         <select 
-                            value={selectedProjectId}
+                            value={selectedProjectId || ''}
                             onChange={(e) => setSelectedProjectId(Number(e.target.value))}
                             className="bg-transparent text-slate-700 text-sm font-bold outline-none cursor-pointer min-w-[240px]"
                         >
-                            {dummyProjects.map(p => (
+                            {projects.map(p => (
                                 <option key={p.id} value={p.id}>{p.project_code} — {p.project_name}</option>
                             ))}
                         </select>
@@ -337,6 +384,13 @@ export default function Analytics() {
                 ))}
             </div>
 
+            {/* Loading tasks indicator */}
+            {loadingTasks && (
+                <div className="flex items-center gap-2 text-slate-400 text-sm">
+                    <Loader2 className="w-4 h-4 animate-spin" /> Loading task data...
+                </div>
+            )}
+
             {/* CONTENT AREA */}
             <div className="animate-in fade-in slide-in-from-bottom-4 duration-700">
                 {isCurveTab && (
@@ -352,8 +406,12 @@ export default function Analytics() {
                                     <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
                                         <p className="text-[10px] font-bold text-slate-400 uppercase mb-2">Performance Index</p>
                                         <div className="flex items-center justify-between">
-                                            <span className="text-2xl font-bold text-slate-800">1.04</span>
-                                            <span className="px-2.5 py-1 bg-emerald-100 text-emerald-700 text-[10px] font-bold rounded-lg border border-emerald-200">ON TRACK</span>
+                                            <span className="text-2xl font-bold text-slate-800">
+                                                {perfIndex !== null ? perfIndex.toFixed(2) : '—'}
+                                            </span>
+                                            <span className={`px-2.5 py-1 text-[10px] font-bold rounded-lg border ${perfColor.bg} ${perfColor.text} ${perfColor.border}`}>
+                                                {perfColor.label}
+                                            </span>
                                         </div>
                                     </div>
                                     <div className="space-y-4">
@@ -474,7 +532,9 @@ export default function Analytics() {
                                         </p>
                                     </div>
                                     <div className="flex flex-wrap gap-3">
-                                        {criticalPath.map((t, i) => (
+                                        {criticalPath.length === 0 ? (
+                                            <p className="text-slate-400 text-sm">No critical path identified — add tasks with predecessors and durations.</p>
+                                        ) : criticalPath.map((t, i) => (
                                             <div key={t.id} className="flex items-center gap-2">
                                                 <div className="px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl flex items-center gap-3 group hover:border-red-200 transition-colors cursor-default">
                                                     <span className="text-[10px] font-mono font-bold text-red-600 opacity-60">{t.wbs_code}</span>
@@ -519,7 +579,13 @@ export default function Analytics() {
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-slate-50">
-                                        {cpmResults.map(t => (
+                                        {cpmResults.length === 0 ? (
+                                            <tr>
+                                                <td colSpan="6" className="px-10 py-16 text-center text-slate-400">
+                                                    No CPM data — add tasks with planned durations and predecessor links.
+                                                </td>
+                                            </tr>
+                                        ) : cpmResults.map(t => (
                                             <tr key={t.id} className={`group transition-all hover:bg-slate-50/50 ${t.isCritical ? 'bg-red-50/20' : ''}`}>
                                                 <td className="px-10 py-5">
                                                     <div className="flex items-center gap-4">
