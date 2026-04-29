@@ -1,8 +1,13 @@
-import { useState, useRef } from 'react';
-import { Upload, CheckCircle2, AlertTriangle, FileSpreadsheet, X, ArrowRight, Download } from 'lucide-react';
+import { useState, useRef, useEffect } from 'react';
+import { Upload, CheckCircle2, AlertTriangle, FileSpreadsheet, X, ArrowRight, Download, Loader2 } from 'lucide-react';
 import * as XLSX from 'xlsx';
-import { dummyProjectsEvm } from '../../../data/dummyData';
 import { INPUT_CLASS } from '../../../utils/uiConstants';
+
+const BASE_URL = 'http://localhost:5000/api';
+const apiFetch = (path, options = {}) => fetch(`${BASE_URL}${path}`, {
+    ...options,
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token')}`, ...(options.headers || {}) },
+}).then(r => r.json());
 
 const TASK_FIELDS = [
     { key: 'task_name',     label: 'Task Name',       required: true,  type: 'string' },
@@ -75,31 +80,39 @@ function parseTask(row, mapping) {
     };
 
     return {
-        id: Date.now() + Math.random(),
-        task_name: getValue('task_name')?.toString().trim() || '',
-        wbs_code: getValue('wbs_code')?.toString().trim() || '',
-        planned_cost: parseFloat(getValue('planned_cost')) || 0,
+        task_name:     getValue('task_name')?.toString().trim() || '',
+        wbs_code:      getValue('wbs_code')?.toString().trim()  || '',
+        planned_cost:  parseFloat(getValue('planned_cost'))  || 0,
         planned_hours: parseFloat(getValue('planned_hours')) || 0,
         planned_start: getValue('planned_start')?.toString() || '',
-        planned_end: getValue('planned_end')?.toString() || '',
-        weight: parseFloat(getValue('weight')) || 0,
+        planned_end:   getValue('planned_end')?.toString()   || '',
+        weight:        parseFloat(getValue('weight'))        || 0,
     };
 }
 
 export default function ExcelImport() {
-    const userRole = localStorage.getItem('userRole');
+    const userRole  = localStorage.getItem('userRole');
     const canImport = ['Project Manager', 'Planner'].includes(userRole);
 
     const [selectedProjectId, setSelectedProjectId] = useState('');
-    const [fileName, setFileName] = useState('');
-    const [headers, setHeaders] = useState([]);
-    const [dataRows, setDataRows] = useState([]);
-    const [mapping, setMapping] = useState({});
-    const [step, setStep] = useState('upload'); // 'upload' | 'mapping' | 'validation' | 'done'
+    const [fileName, setFileName]                   = useState('');
+    const [headers, setHeaders]                     = useState([]);
+    const [dataRows, setDataRows]                   = useState([]);
+    const [mapping, setMapping]                     = useState({});
+    const [step, setStep]                           = useState('upload'); // 'upload' | 'mapping' | 'validation' | 'done'
     const [validationResults, setValidationResults] = useState([]);
-    const [importedCount, setImportedCount] = useState(0);
-    const [isDragging, setIsDragging] = useState(false);
+    const [importedCount, setImportedCount]         = useState(0);
+    const [isDragging, setIsDragging]               = useState(false);
+    const [isImporting, setIsImporting]             = useState(false);
+    const [importError, setImportError]             = useState('');
     const fileInputRef = useRef(null);
+
+    // Real data from API — replaces dummyProjectsEvm
+    const [projects, setProjects] = useState([]);
+
+    useEffect(() => {
+        apiFetch('/projects').then(r => setProjects(r.data || [])).catch(console.error);
+    }, []);
 
     const handleFile = (file) => {
         if (!file) return;
@@ -116,9 +129,9 @@ export default function ExcelImport() {
         const reader = new FileReader();
         reader.onload = (e) => {
             const data = new Uint8Array(e.target.result);
-            const wb = XLSX.read(data, { type: 'array' });
+            const wb   = XLSX.read(data, { type: 'array' });
             const sheet = wb.Sheets[wb.SheetNames[0]];
-            const raw = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+            const raw   = XLSX.utils.sheet_to_json(sheet, { header: 1 });
 
             if (raw.length < 2) {
                 alert('Spreadsheet must have at least a header row and one data row.');
@@ -146,14 +159,14 @@ export default function ExcelImport() {
     const handleValidate = () => {
         const results = dataRows.map((row, idx) => ({
             rowIndex: idx,
-            errors: validateRow(row, mapping),
-            data: row,
+            errors:   validateRow(row, mapping),
+            data:     row,
         }));
         setValidationResults(results);
         setStep('validation');
     };
 
-    const validRows = validationResults.filter(r => r.errors.length === 0);
+    const validRows   = validationResults.filter(r => r.errors.length === 0);
     const invalidRows = validationResults.filter(r => r.errors.length > 0);
 
     const handleDownloadTemplate = () => {
@@ -168,12 +181,25 @@ export default function ExcelImport() {
         XLSX.writeFile(wb, 'Task_Import_Template.xlsx');
     };
 
-    const handleImport = () => {
-        const tasks = validRows.map(r => parseTask(r.data, mapping));
-        // For now, append to console — will wire to API in Task 10
-        console.log(`[ExcelImport] Imported ${tasks.length} tasks for project ${selectedProjectId}:`, tasks);
-        setImportedCount(tasks.length);
-        setStep('done');
+    // Wire to real API — POST /api/projects/:id/tasks/import
+    const handleImport = async () => {
+        if (validRows.length === 0 || !selectedProjectId) return;
+        setIsImporting(true);
+        setImportError('');
+        try {
+            const tasks = validRows.map(r => parseTask(r.data, mapping));
+            const res   = await apiFetch(`/projects/${selectedProjectId}/tasks/import`, {
+                method: 'POST',
+                body:   JSON.stringify({ tasks }),
+            });
+            if (!res.success) throw new Error(res.message || 'Import failed.');
+            setImportedCount(res.imported || tasks.length);
+            setStep('done');
+        } catch (e) {
+            setImportError(e.message);
+        } finally {
+            setIsImporting(false);
+        }
     };
 
     const handleReset = () => {
@@ -183,6 +209,7 @@ export default function ExcelImport() {
         setMapping({});
         setValidationResults([]);
         setImportedCount(0);
+        setImportError('');
         setStep('upload');
         if (fileInputRef.current) fileInputRef.current.value = '';
     };
@@ -225,17 +252,17 @@ export default function ExcelImport() {
             {/* STEP INDICATOR */}
             <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider">
                 {['Upload', 'Map Columns', 'Validate', 'Import'].map((label, i) => {
-                    const stepMap = ['upload', 'mapping', 'validation', 'done'];
+                    const stepMap    = ['upload', 'mapping', 'validation', 'done'];
                     const currentIdx = stepMap.indexOf(step);
-                    const isActive = i === currentIdx;
-                    const isDone = i < currentIdx;
+                    const isActive   = i === currentIdx;
+                    const isDone     = i < currentIdx;
                     return (
                         <div key={label} className="flex items-center gap-2">
                             {i > 0 && <ArrowRight className="w-3 h-3 text-slate-300" />}
                             <span className={`px-3 py-1.5 rounded-lg border ${
                                 isActive ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
-                                isDone ? 'bg-emerald-500 text-white border-emerald-500' :
-                                'bg-slate-50 text-slate-400 border-slate-200'
+                                isDone   ? 'bg-emerald-500 text-white border-emerald-500' :
+                                           'bg-slate-50 text-slate-400 border-slate-200'
                             }`}>
                                 {isDone ? '✓' : ''} {label}
                             </span>
@@ -255,7 +282,7 @@ export default function ExcelImport() {
                         className={inputClass}
                     >
                         <option value="">Select a project...</option>
-                        {dummyProjectsEvm.map(p => (
+                        {projects.map(p => (
                             <option key={p.id} value={p.id}>{p.project_code} — {p.project_name}</option>
                         ))}
                     </select>
@@ -393,6 +420,13 @@ export default function ExcelImport() {
                         )}
                     </div>
 
+                    {/* Import error */}
+                    {importError && (
+                        <div className="flex items-center gap-3 px-5 py-4 bg-red-50 border border-red-100 rounded-2xl text-red-700 text-sm font-semibold">
+                            <AlertTriangle className="w-4 h-4 shrink-0" /> {importError}
+                        </div>
+                    )}
+
                     {/* Validation table */}
                     <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
                         <div className="p-6 border-b border-slate-50 flex items-center justify-between gap-4">
@@ -402,10 +436,13 @@ export default function ExcelImport() {
                             </div>
                             <button
                                 onClick={handleImport}
-                                disabled={validRows.length === 0 || !selectedProjectId}
+                                disabled={validRows.length === 0 || !selectedProjectId || isImporting}
                                 className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-xl font-semibold text-sm shadow-lg shadow-emerald-200 transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
                             >
-                                <Upload className="w-4 h-4" /> Import {validRows.length} Tasks
+                                {isImporting
+                                    ? <><Loader2 className="w-4 h-4 animate-spin" /> Importing...</>
+                                    : <><Upload className="w-4 h-4" /> Import {validRows.length} Tasks</>
+                                }
                             </button>
                         </div>
 
@@ -422,9 +459,9 @@ export default function ExcelImport() {
                                 </thead>
                                 <tbody className="text-sm font-medium text-slate-600 divide-y divide-slate-50">
                                     {validationResults.map(r => {
-                                        const isValid = r.errors.length === 0;
+                                        const isValid     = r.errors.length === 0;
                                         const taskNameIdx = mapping.task_name;
-                                        const wbsIdx = mapping.wbs_code;
+                                        const wbsIdx      = mapping.wbs_code;
                                         return (
                                             <tr key={r.rowIndex} className={`${isValid ? 'hover:bg-slate-50/50' : 'bg-red-50/30'} transition-colors`}>
                                                 <td className="px-4 py-3 text-slate-400">{r.rowIndex + 1}</td>
