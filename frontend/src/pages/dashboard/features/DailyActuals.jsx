@@ -1,24 +1,38 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { ClipboardList, CheckCircle2 } from 'lucide-react';
-import { dummyProjectsEvm, dummyTaskData } from '../../../data/dummyData';
 import { formatCurrency, formatDate } from '../../../utils/evmHelpers';
 import { INPUT_CLASS, INLINE_INPUT_CLASS } from '../../../utils/uiConstants';
 
-const dummyProjects = dummyProjectsEvm;
-const dummyTasks = dummyTaskData;
+const BASE_URL = 'http://localhost:5000/api';
+const apiFetch = (path, options = {}) => fetch(`${BASE_URL}${path}`, {
+    ...options,
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token')}`, ...(options.headers || {}) },
+}).then(r => r.json());
 
 export default function DailyActuals() {
     const [selectedProjectId, setSelectedProjectId] = useState('');
-    const [entryDate, setEntryDate] = useState('');
-    const [actuals, setActuals] = useState({});
-    const [submittedEntries, setSubmittedEntries] = useState([]);
-    const [isSubmitted, setIsSubmitted] = useState(false);
+    const [entryDate, setEntryDate]                 = useState('');
+    const [actuals, setActuals]                     = useState({});
+    const [submittedEntries, setSubmittedEntries]   = useState([]);
+    const [isSubmitted, setIsSubmitted]             = useState(false);
 
-    const userRole = localStorage.getItem('userRole');
+    // Real data from API — replaces dummyProjectsEvm and dummyTaskData
+    const [projects, setProjects]         = useState([]);
+    const [projectTasks, setProjectTasks] = useState([]);
+
+    const userRole  = localStorage.getItem('userRole');
     const canSubmit = ['Project Manager', 'Site Engineer'].includes(userRole);
 
-    const selectedProject = dummyProjects.find(p => p.id === parseInt(selectedProjectId));
-    const projectTasks = dummyTasks.filter(t => t.project_id === parseInt(selectedProjectId));
+    useEffect(() => {
+        apiFetch('/projects').then(r => setProjects(r.data || [])).catch(console.error);
+    }, []);
+
+    useEffect(() => {
+        if (!selectedProjectId) { setProjectTasks([]); return; }
+        apiFetch(`/projects/${selectedProjectId}/tasks`).then(r => setProjectTasks(r.data || [])).catch(console.error);
+    }, [selectedProjectId]);
+
+    const selectedProject = projects.find(p => p.id === parseInt(selectedProjectId));
     const isReady = selectedProjectId && entryDate;
 
     const updateActual = (taskId, field, value) => {
@@ -37,13 +51,29 @@ export default function DailyActuals() {
     const totalActualHours = projectTasks.reduce((s, t) => s + (parseFloat(actuals[t.id]?.actual_hours) || 0), 0);
     const totalActualCost  = projectTasks.reduce((s, t) => s + (parseFloat(actuals[t.id]?.actual_cost)  || 0), 0);
 
-    const handleSubmit = () => {
+    const handleSubmit = async () => {
+        const entries = projectTasks
+            .filter(t => actuals[t.id]?.actual_hours > 0 || actuals[t.id]?.actual_cost > 0 || actuals[t.id]?.pct_complete > 0)
+            .map(t => ({
+                task_id:      t.id,
+                actual_hours: actuals[t.id]?.actual_hours || 0,
+                actual_cost:  actuals[t.id]?.actual_cost  || 0,
+                pct_complete: actuals[t.id]?.pct_complete || 0,
+            }));
+
+        try {
+            await apiFetch(`/projects/${selectedProjectId}/daily-actuals`, {
+                method: 'POST',
+                body: JSON.stringify({ entry_date: entryDate, entries }),
+            });
+        } catch (e) { console.error(e); }
+
         const entry = {
-            id: Date.now(),
+            id:           Date.now(),
             project_name: selectedProject.project_name,
             project_code: selectedProject.project_code,
-            date: entryDate,
-            task_count: projectTasks.length,
+            date:         entryDate,
+            task_count:   projectTasks.length,
         };
         setSubmittedEntries([entry, ...submittedEntries]);
         setIsSubmitted(true);
@@ -53,7 +83,7 @@ export default function DailyActuals() {
         setTimeout(() => setIsSubmitted(false), 3000);
     };
 
-    const inputClass = INPUT_CLASS;
+    const inputClass       = INPUT_CLASS;
     const inlineInputClass = INLINE_INPUT_CLASS;
 
     return (
@@ -86,7 +116,7 @@ export default function DailyActuals() {
                             className={inputClass}
                         >
                             <option value="">Select a project...</option>
-                            {dummyProjects.map(p => (
+                            {projects.map(p => (
                                 <option key={p.id} value={p.id}>{p.project_code} — {p.project_name}</option>
                             ))}
                         </select>
@@ -113,7 +143,7 @@ export default function DailyActuals() {
                         <div>
                             <h3 className="font-bold text-slate-700">Task Actuals</h3>
                             <p className="text-xs text-slate-400 mt-0.5">
-                                {selectedProject.project_name} &mdash; {formatDate(entryDate)}
+                                {selectedProject?.project_name} &mdash; {formatDate(entryDate)}
                             </p>
                         </div>
                         {canSubmit && (

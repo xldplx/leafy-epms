@@ -1,90 +1,72 @@
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '.env') });
+
 const express = require('express');
 const cors    = require('cors');
-require('dotenv').config();
-
-const { PORT }                   = require('./config/constants');
+const { PORT } = require('./config/constants');
 const { authenticate, authorize } = require('./middleware/auth');
 
-const authCtrl      = require('./controllers/authController');
-const projectCtrl   = require('./controllers/projectsController');
-const taskCtrl      = require('./controllers/tasksController');
-const wbsCtrl       = require('./controllers/wbsController');
-const daCtrl        = require('./controllers/dailyActualsController');
-const personnelCtrl = require('./controllers/personnelController');
-const {
-    getAlerts, getThresholds, updateThresholds,
-    getPortfolioOverview, getProjectEvm
-} = require('./controllers/alertsEvmController');
+const auth      = require('./controllers/authController');
+const projects  = require('./controllers/projectsController');
+const tasks     = require('./controllers/tasksController');
+const wbs       = require('./controllers/wbsController');
+const daily     = require('./controllers/dailyActualsController');
+const personnel = require('./controllers/personnelController');
+const alertsEvm = require('./controllers/alertsEvmController');
 
 const app = express();
-
-// ─── Middleware ───────────────────────────────────────────────────────────────
-app.use(cors({
-    origin: ['http://localhost:5173', 'http://localhost:3000'],
-    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
-}));
+app.use(cors());
 app.use(express.json());
 
-// ─── Health Check ─────────────────────────────────────────────────────────────
-app.get('/', (req, res) => res.json({
-    status: 'OK',
-    message: 'EPMS Enterprise System API is running.',
-    timestamp: new Date().toISOString()
-}));
+// ── Health ────────────────────────────────────────────────────────────────────
+app.get('/api/health', (_, res) => res.json({ ok: true, ts: new Date().toISOString() }));
 
-// ─── Auth ─────────────────────────────────────────────────────────────────────
-app.post('/api/login', authCtrl.login);
-app.get('/api/me',     authenticate, authCtrl.getMe);
+// ── Auth ──────────────────────────────────────────────────────────────────────
+app.post('/api/login', auth.login);
+app.get ('/api/me',    authenticate, auth.getMe);
 
-// ─── Projects ─────────────────────────────────────────────────────────────────
-app.get('/api/projects',        authenticate, projectCtrl.getAllProjects);
-app.get('/api/projects/:id',    authenticate, projectCtrl.getProjectById);
-app.post('/api/projects',       authenticate, authorize('Project Manager'), projectCtrl.createProject);
-app.put('/api/projects/:id',    authenticate, authorize('Project Manager'), projectCtrl.updateProject);
-app.delete('/api/projects/:id', authenticate, authorize('Project Manager'), projectCtrl.deleteProject);
+// ── Projects ──────────────────────────────────────────────────────────────────
+app.get   ('/api/projects',     authenticate, projects.getAllProjects);
+app.get   ('/api/projects/:id', authenticate, projects.getProjectById);
+app.post  ('/api/projects',     authenticate, authorize('Project Manager'), projects.createProject);
+app.put   ('/api/projects/:id', authenticate, authorize('Project Manager'), projects.updateProject);
+app.delete('/api/projects/:id', authenticate, authorize('Project Manager'), projects.deleteProject);
 
-// ─── Tasks ────────────────────────────────────────────────────────────────────
-app.get('/api/projects/:projectId/tasks',            authenticate, taskCtrl.getTasksByProject);
-app.post('/api/projects/:projectId/tasks',           authenticate, authorize('Project Manager', 'Planner'), taskCtrl.createTask);
-app.post('/api/projects/:projectId/tasks/import',    authenticate, authorize('Project Manager', 'Planner'), taskCtrl.bulkImportTasks);
-app.post('/api/projects/:projectId/tasks/baseline',  authenticate, authorize('Project Manager'), taskCtrl.lockBaseline);
-app.put('/api/tasks/:id',    authenticate, authorize('Project Manager', 'Planner'), taskCtrl.updateTask);
-app.delete('/api/tasks/:id', authenticate, authorize('Project Manager', 'Planner'), taskCtrl.deleteTask);
+// ── WBS ───────────────────────────────────────────────────────────────────────
+app.get   ('/api/projects/:projectId/wbs',     authenticate, wbs.getWbsByProject);
+app.post  ('/api/projects/:projectId/wbs',     authenticate, authorize('Project Manager','Planner'), wbs.createWbsNode);
+app.delete('/api/projects/:projectId/wbs/:id', authenticate, authorize('Project Manager'), wbs.deleteWbsNode);
 
-// ─── WBS ──────────────────────────────────────────────────────────────────────
-app.get('/api/projects/:projectId/wbs',        authenticate, wbsCtrl.getWbsByProject);
-app.post('/api/projects/:projectId/wbs',       authenticate, authorize('Project Manager', 'Planner'), wbsCtrl.createWbsNode);
-app.delete('/api/projects/:projectId/wbs/:id', authenticate, authorize('Project Manager'), wbsCtrl.deleteWbsNode);
+// ── Tasks ─────────────────────────────────────────────────────────────────────
+app.get   ('/api/projects/:projectId/tasks',          authenticate, tasks.getTasksByProject);
+app.post  ('/api/projects/:projectId/tasks',          authenticate, authorize('Project Manager','Planner'), tasks.createTask);
+app.post  ('/api/projects/:projectId/tasks/import',   authenticate, authorize('Project Manager','Planner'), tasks.bulkImportTasks);
+app.post  ('/api/projects/:projectId/tasks/baseline', authenticate, authorize('Project Manager'), tasks.lockBaseline);
+app.put   ('/api/tasks/:id',                          authenticate, authorize('Project Manager','Planner','Cost Engineer'), tasks.updateTask);
+app.delete('/api/tasks/:id',                          authenticate, authorize('Project Manager'), tasks.deleteTask);
 
-// ─── Daily Actuals ────────────────────────────────────────────────────────────
-app.get('/api/projects/:projectId/daily-actuals',  authenticate, daCtrl.getDailyActuals);
-app.post('/api/projects/:projectId/daily-actuals', authenticate, authorize('Project Manager', 'Site Engineer'), daCtrl.submitDailyActuals);
+// ── Daily Actuals ─────────────────────────────────────────────────────────────
+app.get ('/api/projects/:projectId/daily-actuals', authenticate, daily.getDailyActuals);
+app.post('/api/projects/:projectId/daily-actuals', authenticate, authorize('Project Manager','Site Engineer'), daily.submitDailyActuals);
 
-// ─── Personnel ────────────────────────────────────────────────────────────────
-app.get('/api/personnel',        authenticate, personnelCtrl.getAllPersonnel);
-app.post('/api/personnel',       authenticate, authorize('Project Manager', 'Planner', 'Site Engineer'), personnelCtrl.createPersonnel);
-app.put('/api/personnel/:id',    authenticate, authorize('Project Manager', 'Planner', 'Site Engineer'), personnelCtrl.updatePersonnel);
-app.delete('/api/personnel/:id', authenticate, authorize('Project Manager'), personnelCtrl.deletePersonnel);
+// ── Personnel ─────────────────────────────────────────────────────────────────
+app.get   ('/api/personnel',     authenticate, personnel.getAllPersonnel);
+app.post  ('/api/personnel',     authenticate, authorize('Project Manager','Planner','Site Engineer'), personnel.createPersonnel);
+app.put   ('/api/personnel/:id', authenticate, authorize('Project Manager','Planner','Site Engineer'), personnel.updatePersonnel);
+app.delete('/api/personnel/:id', authenticate, authorize('Project Manager'), personnel.deletePersonnel);
 
-// ─── Alerts ───────────────────────────────────────────────────────────────────
-app.get('/api/alerts',            authenticate, getAlerts);
-app.get('/api/alerts/thresholds', authenticate, getThresholds);
-app.put('/api/alerts/thresholds', authenticate, authorize('Project Manager'), updateThresholds);
+// ── Alerts & EVM ─────────────────────────────────────────────────────────────
+// NOTE: specific routes BEFORE generic ones to avoid Express mis-matching
+app.get('/api/alerts/raw',        authenticate, alertsEvm.getAlertsRaw);
+app.get('/api/alerts/thresholds', authenticate, alertsEvm.getThresholds);
+app.put('/api/alerts/thresholds', authenticate, authorize('Project Manager'), alertsEvm.updateThresholds);
+app.get('/api/alerts',            authenticate, alertsEvm.getAlerts);
+app.get('/api/evm/overview',      authenticate, alertsEvm.getPortfolioOverview);
+app.get('/api/evm/:projectId',    authenticate, alertsEvm.getProjectEvm);
 
-// ─── EVM ──────────────────────────────────────────────────────────────────────
-app.get('/api/evm/overview',   authenticate, getPortfolioOverview);
-app.get('/api/evm/:projectId', authenticate, getProjectEvm);
+// ── 404 & Error ───────────────────────────────────────────────────────────────
+app.use((req, res) => res.status(404).json({ success: false, message: `${req.method} ${req.path} not found.` }));
+app.use((err, req, res, next) => { console.error(err.stack); res.status(500).json({ success: false, message: 'Server error.' }); });
 
-// ─── 404 ──────────────────────────────────────────────────────────────────────
-app.use((req, res) => res.status(404).json({ success: false, message: `Route ${req.method} ${req.path} not found.` }));
-app.use((err, req, res, next) => {
-    console.error('[Error]', err.stack);
-    res.status(500).json({ success: false, message: 'Internal server error.' });
-});
-
-// ─── Start ────────────────────────────────────────────────────────────────────
-app.listen(PORT, () => {
-    console.log(`\n🚀 EPMS Server running on http://localhost:${PORT}`);
-    console.log(`📋 API ready at http://localhost:${PORT}/api\n`);
-});
+app.listen(PORT, () => console.log(`🚀 EPMS backend on http://localhost:${PORT}`));
+module.exports = app;

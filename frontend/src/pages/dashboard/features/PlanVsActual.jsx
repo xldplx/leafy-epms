@@ -1,28 +1,42 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { BarChart3, Download, CheckCircle2 } from 'lucide-react';
 import * as XLSX from 'xlsx';
-import { dummyProjectsEvm, dummyTaskData } from '../../../data/dummyData';
 import { computeEvm, computeAlerts, indexColor, varianceColor, formatCurrency } from '../../../utils/evmHelpers';
 import { INPUT_CLASS } from '../../../utils/uiConstants';
 
-const dummyProjects = dummyProjectsEvm;
+const BASE_URL = 'http://localhost:5000/api';
+const apiFetch = (path) => fetch(`${BASE_URL}${path}`, {
+    headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+}).then(r => r.json());
 
 export default function PlanVsActual() {
     const [selectedProjectId, setSelectedProjectId] = useState('');
     const [exportFeedback, setExportFeedback] = useState(false);
 
-    const selectedProject = dummyProjects.find(p => p.id === parseInt(selectedProjectId));
-    const tasks = dummyTaskData.filter(t => t.project_id === parseInt(selectedProjectId));
+    // Real data from API — replaces dummyProjectsEvm and dummyTaskData
+    const [projects, setProjects] = useState([]);
+    const [tasks, setTasks]       = useState([]);
+
+    useEffect(() => {
+        apiFetch('/projects').then(r => setProjects(r.data || [])).catch(console.error);
+    }, []);
+
+    useEffect(() => {
+        if (!selectedProjectId) { setTasks([]); return; }
+        apiFetch(`/projects/${selectedProjectId}/tasks`).then(r => setTasks(r.data || [])).catch(console.error);
+    }, [selectedProjectId]);
+
+    const selectedProject = projects.find(p => p.id === parseInt(selectedProjectId));
 
     // EVM calculations via shared helper (memoized)
     const { evm, kpiCards, refValues, forecastValues } = useMemo(() => {
         const e = computeEvm(tasks, selectedProject?.schedule_pct || 0);
         const { BAC, EV, AC, PV, CPI, SPI, CV, SV, EAC, ETC, VAC, TCPI } = e;
 
-        const cpiC = indexColor(CPI);
-        const spiC = indexColor(SPI);
-        const cvC  = varianceColor(CV);
-        const svC  = varianceColor(SV);
+        const cpiC  = indexColor(CPI);
+        const spiC  = indexColor(SPI);
+        const cvC   = varianceColor(CV);
+        const svC   = varianceColor(SV);
         const tcpiC = indexColor(TCPI);
         const vacC  = VAC !== null ? varianceColor(VAC) : null;
 
@@ -42,9 +56,9 @@ export default function PlanVsActual() {
             ],
             forecastValues: [
                 { label: 'EAC (Est. at Completion)', value: EAC !== null ? formatCurrency(EAC) : '—', textClass: 'text-slate-800' },
-                { label: 'ETC (Est. to Complete)', value: ETC !== null ? formatCurrency(ETC) : '—', textClass: 'text-slate-800' },
-                { label: 'VAC (Variance at Comp.)', value: VAC !== null ? formatCurrency(VAC) : '—', textClass: vacC ? vacC.text : 'text-slate-800' },
-                { label: 'TCPI (To-Complete PI)', value: TCPI !== null ? TCPI.toFixed(2) : '—', textClass: tcpiC.text },
+                { label: 'ETC (Est. to Complete)',   value: ETC !== null ? formatCurrency(ETC) : '—', textClass: 'text-slate-800' },
+                { label: 'VAC (Variance at Comp.)',  value: VAC !== null ? formatCurrency(VAC) : '—', textClass: vacC ? vacC.text : 'text-slate-800' },
+                { label: 'TCPI (To-Complete PI)',    value: TCPI !== null ? TCPI.toFixed(2) : '—',    textClass: tcpiC.text },
             ],
         };
     }, [tasks, selectedProject?.schedule_pct]);
@@ -78,18 +92,18 @@ export default function PlanVsActual() {
 
         // Sheet 2: Task Details — formatted currency columns
         const taskRows = tasks.map(t => {
-            const taskEV = t.planned_cost * (t.pct_complete / 100);
-            const earnedHrs = Math.round((t.planned_hours || 0) * (t.pct_complete / 100));
+            const taskEV    = parseFloat(t.planned_cost) * (parseFloat(t.pct_complete) / 100);
+            const earnedHrs = Math.round((parseFloat(t.planned_hours) || 0) * (parseFloat(t.pct_complete) / 100));
             return {
-                'Task Name': t.task_name,
-                'WBS': t.wbs_code,
-                'Planned Cost': fmtIDR(t.planned_cost),
-                'Actual Cost': fmtIDR(t.actual_cost),
-                'Cost Variance': fmtIDR(taskEV - t.actual_cost),
-                'Planned Hours': t.planned_hours,
-                'Actual Hours': t.actual_hours,
-                'Hours Variance': t.actual_hours > 0 ? earnedHrs - t.actual_hours : 0,
-                '% Complete': `${t.pct_complete}%`,
+                'Task Name':      t.task_name,
+                'WBS':            t.wbs_code,
+                'Planned Cost':   fmtIDR(t.planned_cost),
+                'Actual Cost':    fmtIDR(t.actual_cost),
+                'Cost Variance':  fmtIDR(taskEV - parseFloat(t.actual_cost)),
+                'Planned Hours':  t.planned_hours,
+                'Actual Hours':   t.actual_hours,
+                'Hours Variance': parseFloat(t.actual_hours) > 0 ? earnedHrs - parseFloat(t.actual_hours) : 0,
+                '% Complete':     `${t.pct_complete}%`,
             };
         });
         const ws2 = XLSX.utils.json_to_sheet(taskRows);
@@ -104,10 +118,10 @@ export default function PlanVsActual() {
         );
         const alertRows = projectAlerts.length > 0
             ? projectAlerts.map(a => ({
-                'Metric': a.metric,
-                'Value': a.value.toFixed(2),
-                'Threshold': a.threshold.toFixed(2),
-                'Severity': a.severity === 'critical' ? 'CRITICAL' : 'WARNING',
+                'Metric':         a.metric,
+                'Value':          a.value.toFixed(2),
+                'Threshold':      a.threshold.toFixed(2),
+                'Severity':       a.severity === 'critical' ? 'CRITICAL' : 'WARNING',
                 'Recommendation': a.recommendation,
             }))
             : [{ 'Metric': '-', 'Value': '-', 'Threshold': '-', 'Severity': 'No Alerts', 'Recommendation': 'All metrics are within configured thresholds.' }];
@@ -160,7 +174,7 @@ export default function PlanVsActual() {
                             className={inputClass}
                         >
                             <option value="">Select a project...</option>
-                            {dummyProjects.map(p => (
+                            {projects.map(p => (
                                 <option key={p.id} value={p.id}>{p.project_code} — {p.project_name}</option>
                             ))}
                         </select>
@@ -254,13 +268,13 @@ export default function PlanVsActual() {
                                 </thead>
                                 <tbody className="text-sm font-medium text-slate-600 divide-y divide-slate-50">
                                     {tasks.map(task => {
-                                        const taskEV = task.planned_cost * (task.pct_complete / 100);
-                                        const taskCV = taskEV - task.actual_cost;
-                                        const taskCVColor = varianceColor(taskCV);
-                                        const earnedHours = Math.round(task.planned_hours * (task.pct_complete / 100));
-                                        const taskHV = task.actual_hours > 0 ? earnedHours - task.actual_hours : null;
-                                        const taskHVColor = taskHV !== null ? varianceColor(taskHV) : null;
-                                        const rowBg = taskCV < 0 ? 'bg-red-50/60' : task.pct_complete === 100 ? 'bg-emerald-50/50' : task.pct_complete === 0 ? 'bg-slate-50/60' : '';
+                                        const taskEV       = parseFloat(task.planned_cost) * (parseFloat(task.pct_complete) / 100);
+                                        const taskCV       = taskEV - parseFloat(task.actual_cost);
+                                        const taskCVColor  = varianceColor(taskCV);
+                                        const earnedHours  = Math.round(parseFloat(task.planned_hours) * (parseFloat(task.pct_complete) / 100));
+                                        const taskHV       = parseFloat(task.actual_hours) > 0 ? earnedHours - parseFloat(task.actual_hours) : null;
+                                        const taskHVColor  = taskHV !== null ? varianceColor(taskHV) : null;
+                                        const rowBg = taskCV < 0 ? 'bg-red-50/60' : parseFloat(task.pct_complete) === 100 ? 'bg-emerald-50/50' : parseFloat(task.pct_complete) === 0 ? 'bg-slate-50/60' : '';
                                         return (
                                             <tr key={task.id} className={`${rowBg} hover:bg-slate-100/50 transition-colors`}>
                                                 <td className="px-4 py-3.5 font-semibold text-slate-700">{task.task_name}</td>
@@ -293,8 +307,8 @@ export default function PlanVsActual() {
                                         <td className="px-4 py-3.5">{formatCurrency(BAC)}</td>
                                         <td className="px-4 py-3.5">{formatCurrency(AC)}</td>
                                         <td className={`px-4 py-3.5 font-bold whitespace-nowrap ${varianceColor(CV).text}`}>{formatCurrency(CV)}</td>
-                                        <td className="px-4 py-3.5">{tasks.reduce((s, t) => s + t.planned_hours, 0)}</td>
-                                        <td className="px-4 py-3.5">{tasks.reduce((s, t) => s + t.actual_hours, 0)}</td>
+                                        <td className="px-4 py-3.5">{tasks.reduce((s, t) => s + parseFloat(t.planned_hours || 0), 0)}</td>
+                                        <td className="px-4 py-3.5">{tasks.reduce((s, t) => s + parseFloat(t.actual_hours || 0), 0)}</td>
                                         <td className={`px-4 py-3.5 font-bold ${varianceColor(totalHV).text}`}>
                                             {totalHV >= 0 ? `+${totalHV}` : totalHV}
                                         </td>

@@ -1,23 +1,11 @@
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '../.env') });
 const { createClient } = require('@supabase/supabase-js');
-require('dotenv').config();
 
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_SERVICE_KEY;
-
-if (!supabaseUrl || !supabaseKey) {
-    console.error('❌ Missing SUPABASE_URL or SUPABASE_SERVICE_KEY in .env');
-    process.exit(1);
-}
-
-const supabase = createClient(supabaseUrl, supabaseKey, {
-    auth: { persistSession: false }
-});
-
-// Test connection
-supabase.from('users').select('id').limit(1)
-    .then(({ error }) => {
-        if (error) console.error('❌ Database connection error:', error.message);
-        else console.log('✅ Connected to Supabase');
-    });
+const supabase = createClient(
+    process.env.SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_ROLE_KEY,
+    { auth: { persistSession: false } }
+);
 
 module.exports = supabase;

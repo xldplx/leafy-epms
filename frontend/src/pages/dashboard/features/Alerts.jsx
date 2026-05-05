@@ -1,8 +1,13 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Bell, AlertTriangle, CheckCircle2, Settings } from 'lucide-react';
-import { dummyProjectsEvm, dummyTaskData } from '../../../data/dummyData';
 import { computeAlerts } from '../../../utils/evmHelpers';
 import { INPUT_CLASS } from '../../../utils/uiConstants';
+
+const BASE_URL = 'http://localhost:5000/api';
+const apiFetch = (path, options = {}) => fetch(`${BASE_URL}${path}`, {
+    ...options,
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token')}`, ...(options.headers || {}) },
+}).then(r => r.json());
 
 export default function Alerts() {
     const [thresholds, setThresholds] = useState({
@@ -15,6 +20,32 @@ export default function Alerts() {
     const [thresholdToast, setThresholdToast] = useState(false);
     const userRole = localStorage.getItem('userRole');
 
+    // Real data from API — replaces dummyProjectsEvm and dummyTaskData
+    const [projects, setProjects] = useState([]);
+    const [allTasks, setAllTasks] = useState([]);
+
+    useEffect(() => {
+        // Fetch projects + tasks with same shape as dummyProjectsEvm + dummyTaskData
+        apiFetch('/alerts/raw').then(r => {
+            if (r.success) {
+                setProjects(r.projects || []);
+                setAllTasks(r.tasks || []);
+            }
+        }).catch(console.error);
+
+        // Fetch saved thresholds from DB
+        apiFetch('/alerts/thresholds').then(r => {
+            if (r.success && r.data) {
+                setThresholds({
+                    cpi_amber: String(r.data.cpi_amber),
+                    cpi_red:   String(r.data.cpi_red),
+                    spi_amber: String(r.data.spi_amber),
+                    spi_red:   String(r.data.spi_red),
+                });
+            }
+        }).catch(console.error);
+    }, []);
+
     // Parse threshold strings to floats for computation — fallback to 0 if empty/invalid
     const t = {
         cpi_amber: parseFloat(thresholds.cpi_amber) || 0,
@@ -23,8 +54,8 @@ export default function Alerts() {
         spi_red:   parseFloat(thresholds.spi_red)   || 0,
     };
 
-    // Compute alerts from EVM metrics + thresholds — recalculated on every render
-    const alerts = computeAlerts(dummyProjectsEvm, dummyTaskData, t);
+    // Compute alerts from real API data + thresholds — same computeAlerts function, no dummy data
+    const alerts = computeAlerts(projects, allTasks, t);
 
     const criticalCount = alerts.filter(a => a.severity === 'critical').length;
     const warningCount  = alerts.filter(a => a.severity === 'warning').length;
@@ -41,6 +72,29 @@ export default function Alerts() {
         { key: 'spi_amber', label: 'SPI — At Risk below' },
         { key: 'spi_red',   label: 'SPI — Critical below' },
     ];
+
+    const handleThresholdBlur = async (e, key) => {
+        const num     = parseFloat(e.target.value);
+        const clamped = isNaN(num) ? 0 : Math.min(1.5, Math.max(0, num));
+        const updated = { ...thresholds, [key]: clamped.toFixed(2) };
+        setThresholds(updated);
+
+        // Save to backend
+        try {
+            await apiFetch('/alerts/thresholds', {
+                method: 'PUT',
+                body: JSON.stringify({
+                    cpi_amber: parseFloat(updated.cpi_amber),
+                    cpi_red:   parseFloat(updated.cpi_red),
+                    spi_amber: parseFloat(updated.spi_amber),
+                    spi_red:   parseFloat(updated.spi_red),
+                }),
+            });
+        } catch (e) { console.error(e); }
+
+        setThresholdToast(true);
+        setTimeout(() => setThresholdToast(false), 2000);
+    };
 
     return (
         <div className="space-y-8">
@@ -110,13 +164,7 @@ export default function Alerts() {
                                     max="1.5"
                                     value={thresholds[field.key]}
                                     onChange={e => setThresholds({ ...thresholds, [field.key]: e.target.value })}
-                                    onBlur={e => {
-                                        const num = parseFloat(e.target.value);
-                                        const clamped = isNaN(num) ? 0 : Math.min(1.5, Math.max(0, num));
-                                        setThresholds({ ...thresholds, [field.key]: clamped.toFixed(2) });
-                                        setThresholdToast(true);
-                                        setTimeout(() => setThresholdToast(false), 2000);
-                                    }}
+                                    onBlur={e => handleThresholdBlur(e, field.key)}
                                     className={inputClass}
                                 />
                             </div>
