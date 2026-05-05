@@ -5,36 +5,39 @@ import {
     Wrench, Package, Hammer, Wallet
 } from 'lucide-react';
 
-// imported files to show on the page components
-import Overview from './features/Overview';
-import Analytics from './features/Analytics';
-import Manpower from './features/Manpower';
-import Projects from './features/Projects';
+import Overview     from './features/Overview';
+import Analytics    from './features/Analytics';
+import Manpower     from './features/Manpower';
+import Projects     from './features/Projects';
 import DailyActuals from './features/DailyActuals';
 import PlanVsActual from './features/PlanVsActual';
-import Alerts from './features/Alerts';
-import ExcelImport from './features/ExcelImport';
-import Empty from './features/Empty';
+import Alerts       from './features/Alerts';
+import ExcelImport  from './features/ExcelImport';
+import Equipment    from './features/Equipment';
+import Consumables  from './features/Consumables';
+import Materials    from './features/Materials';
+import Tools        from './features/Tools';
+import Budget       from './features/Budget';
 
-// page components to showcase, the format goes like "theNameOnTheNavItems: TheNameOfTheFile,"
 const pageComponents = {
-    'Overview': Overview,
-    'Analytics': Analytics,
-    'Projects': Projects,
-    'Manpower': Manpower,
+    'Overview':      Overview,
+    'Analytics':     Analytics,
+    'Projects':      Projects,
+    'Manpower':      Manpower,
     'Daily Actuals': DailyActuals,
-    'Plan vs Actual': PlanVsActual,
-    'Alerts': Alerts,
-    'Excel Import': ExcelImport,
+    'Plan vs Actual':PlanVsActual,
+    'Alerts':        Alerts,
+    'Excel Import':  ExcelImport,
+    'Equipment':     Equipment,
+    'Consumables':   Consumables,
+    'Materials':     Materials,
+    'Tools':         Tools,
+    'Budget':        Budget,
 };
 
 export default function DashboardLayout() {
     const navigate = useNavigate();
-
-    // State for Active Page (Default to Overview)
     const [activePage, setActivePage] = useState('Overview');
-
-    // State for User Menu (Popup)
     const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
     const menuRef = useRef(null);
 
@@ -46,7 +49,6 @@ export default function DashboardLayout() {
         navigate('/login');
     };
 
-    // Close menu when clicking outside
     useEffect(() => {
         const handleClickOutside = (event) => {
             if (menuRef.current && !menuRef.current.contains(event.target)) {
@@ -57,80 +59,23 @@ export default function DashboardLayout() {
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
-    // Navigation Configuration
     const navItems = [
-        {
-            name: 'Overview',
-            icon: <LayoutDashboard className="w-5 h-5" />,
-            allowedRoles: ['Project Manager', 'Planner', 'Cost Engineer', 'Site Engineer', 'Management']
-        },
-        {
-            name: 'Analytics',
-            icon: <BarChart3 className="w-5 h-5" />,
-            allowedRoles: ['Project Manager', 'Planner', 'Cost Engineer', 'Management']
-        },
-        {
-            name: 'Projects',
-            icon: <FolderKanban className="w-5 h-5" />,
-            allowedRoles: ['Project Manager', 'Planner', 'Cost Engineer', 'Site Engineer', 'Management']
-        },
-        {
-            name: 'Manpower',
-            icon: <Users className="w-5 h-5" />,
-            allowedRoles: ['Project Manager', 'Planner', 'Site Engineer']
-        },
-        {
-            name: 'Daily Actuals',
-            icon: <ClipboardList className="w-5 h-5" />,
-            allowedRoles: ['Project Manager', 'Planner', 'Site Engineer']
-        },
-        {
-            name: 'Plan vs Actual',
-            icon: <BarChart3 className="w-5 h-5" />,
-            allowedRoles: ['Project Manager', 'Planner', 'Cost Engineer', 'Management']
-        },
-        {
-            name: 'Alerts',
-            icon: <Bell className="w-5 h-5" />,
-            allowedRoles: ['Project Manager', 'Planner', 'Cost Engineer', 'Management']
-        },
-        {
-            name: 'Excel Import',
-            icon: <Upload className="w-5 h-5" />,
-            allowedRoles: ['Project Manager', 'Planner', 'Cost Engineer', 'Site Engineer', 'Management']
-        },
-        {
-            name: 'Equipment',
-            icon: <Wrench className="w-5 h-5" />,
-            allowedRoles: ['Project Manager', 'Planner', 'Site Engineer']
-        },
-        {
-            name: 'Consumables',
-            icon: <Package className="w-5 h-5" />,
-            allowedRoles: ['Project Manager', 'Planner', 'Site Engineer']
-        },
-        {
-            name: 'Materials',
-            icon: <Package className="w-5 h-5" />,
-            allowedRoles: ['Project Manager', 'Planner', 'Site Engineer']
-        },
-        {
-            name: 'Tools',
-            icon: <Hammer className="w-5 h-5" />,
-            allowedRoles: ['Project Manager', 'Planner', 'Site Engineer']
-        },
-        {
-            name: 'Budget',
-            icon: <Wallet className="w-5 h-5" />,
-            allowedRoles: ['Project Manager', 'Cost Engineer']
-        },
+        { name: 'Overview',      icon: <LayoutDashboard className="w-5 h-5" />, allowedRoles: ['Project Manager','Planner','Cost Engineer','Site Engineer','Management'] },
+        { name: 'Analytics',     icon: <BarChart3 className="w-5 h-5" />,       allowedRoles: ['Project Manager','Planner','Cost Engineer','Management'] },
+        { name: 'Projects',      icon: <FolderKanban className="w-5 h-5" />,    allowedRoles: ['Project Manager','Planner','Cost Engineer','Site Engineer','Management'] },
+        { name: 'Manpower',      icon: <Users className="w-5 h-5" />,           allowedRoles: ['Project Manager','Planner','Site Engineer'] },
+        { name: 'Daily Actuals', icon: <ClipboardList className="w-5 h-5" />,   allowedRoles: ['Project Manager','Planner','Site Engineer'] },
+        { name: 'Plan vs Actual',icon: <BarChart3 className="w-5 h-5" />,       allowedRoles: ['Project Manager','Planner','Cost Engineer','Management'] },
+        { name: 'Alerts',        icon: <Bell className="w-5 h-5" />,            allowedRoles: ['Project Manager','Planner','Cost Engineer','Management'] },
+        { name: 'Excel Import',  icon: <Upload className="w-5 h-5" />,          allowedRoles: ['Project Manager','Planner','Cost Engineer','Site Engineer','Management'] },
+        { name: 'Equipment',     icon: <Wrench className="w-5 h-5" />,          allowedRoles: ['Project Manager','Planner','Site Engineer'] },
+        { name: 'Consumables',   icon: <Package className="w-5 h-5" />,         allowedRoles: ['Project Manager','Planner','Site Engineer'] },
+        { name: 'Materials',     icon: <Package className="w-5 h-5" />,         allowedRoles: ['Project Manager','Planner','Site Engineer'] },
+        { name: 'Tools',         icon: <Hammer className="w-5 h-5" />,          allowedRoles: ['Project Manager','Planner','Site Engineer'] },
+        { name: 'Budget',        icon: <Wallet className="w-5 h-5" />,          allowedRoles: ['Project Manager','Cost Engineer'] },
     ].filter(item => item.allowedRoles.includes(userRole));
 
-
-    const currentNavItem = navItems.find(item => item.name === activePage) || navItems[0];
-
-    // if the feature page has its own page, show it, if not, show the Empty.jsx instead
-    const ActiveComponent = pageComponents[activePage] || (() => <Empty />);
+    const ActiveComponent = pageComponents[activePage] || pageComponents['Overview'];
 
     return (
         <div className="h-screen bg-slate-50 flex font-sans text-slate-600 selection:bg-emerald-100 selection:text-emerald-700 overflow-hidden">
@@ -148,17 +93,16 @@ export default function DashboardLayout() {
                         <button
                             key={item.name}
                             onClick={() => setActivePage(item.name)}
-                            className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-sm font-medium transition-all duration-200 group ${activePage === item.name
-                                ? 'bg-emerald-50 text-emerald-700 shadow-sm translate-x-1'
-                                : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'
-                                }`}
+                            className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-sm font-medium transition-all duration-200 group ${
+                                activePage === item.name
+                                    ? 'bg-emerald-50 text-emerald-700 shadow-sm translate-x-1'
+                                    : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'
+                            }`}
                         >
                             <span className={activePage === item.name ? 'text-emerald-600' : 'text-slate-400 group-hover:text-slate-600'}>
                                 {item.icon}
                             </span>
                             {item.name}
-
-                            {/* Chevron for active state */}
                             {activePage === item.name && (
                                 <div className="ml-auto w-1.5 h-1.5 rounded-full bg-emerald-500" />
                             )}
@@ -166,40 +110,31 @@ export default function DashboardLayout() {
                     ))}
                 </nav>
 
-                {/* USER PROFILE & LOGOUT SECTION */}
+                {/* USER PROFILE */}
                 <div className="p-4 border-t border-slate-100 relative shrink-0" ref={menuRef}>
-
-                    {/* POPUP MENU (Displays when isUserMenuOpen is true) */}
                     {isUserMenuOpen && (
                         <div className="absolute bottom-[calc(100%-10px)] left-4 right-4 bg-white border border-slate-200 shadow-xl shadow-slate-200/50 rounded-xl overflow-hidden animate-in slide-in-from-bottom-2 fade-in duration-200 z-50">
                             <div className="p-2 space-y-1">
                                 <button className="w-full flex items-center gap-3 px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 rounded-lg transition-colors text-left">
-                                    <User className="w-4 h-4 text-slate-400" />
-                                    My Profile
+                                    <User className="w-4 h-4 text-slate-400" /> My Profile
                                 </button>
                                 <button className="w-full flex items-center gap-3 px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 rounded-lg transition-colors text-left">
-                                    <Settings className="w-4 h-4 text-slate-400" />
-                                    Settings
+                                    <Settings className="w-4 h-4 text-slate-400" /> Settings
                                 </button>
                                 <div className="h-px bg-slate-100 my-1 mx-2" />
-                                <button
-                                    onClick={handleLogout}
-                                    className="w-full flex items-center gap-3 px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors text-left"
-                                >
-                                    <LogOut className="w-4 h-4" />
-                                    Sign Out
+                                <button onClick={handleLogout} className="w-full flex items-center gap-3 px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors text-left">
+                                    <LogOut className="w-4 h-4" /> Sign Out
                                 </button>
                             </div>
                         </div>
                     )}
-
-                    {/* MAIN TRIGGER BUTTON (Replaces the old static div) */}
                     <button
                         onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
-                        className={`w-full flex items-center gap-3 p-3 rounded-xl border transition-all duration-200 ${isUserMenuOpen
-                            ? 'bg-slate-50 border-emerald-200 ring-2 ring-emerald-100'
-                            : 'bg-white border-slate-100 hover:border-emerald-200 hover:shadow-sm'
-                            }`}
+                        className={`w-full flex items-center gap-3 p-3 rounded-xl border transition-all duration-200 ${
+                            isUserMenuOpen
+                                ? 'bg-slate-50 border-emerald-200 ring-2 ring-emerald-100'
+                                : 'bg-white border-slate-100 hover:border-emerald-200 hover:shadow-sm'
+                        }`}
                     >
                         <div className="w-10 h-10 rounded-full bg-emerald-600 flex items-center justify-center text-white font-bold uppercase shadow-md shadow-emerald-200 shrink-0">
                             {userName.charAt(0)}
@@ -208,15 +143,13 @@ export default function DashboardLayout() {
                             <p className="text-sm font-bold text-slate-800 truncate">{userName}</p>
                             <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-tighter truncate">{userRole}</p>
                         </div>
-                        {/* Rotating Chevron */}
                         <ChevronUp className={`w-4 h-4 text-slate-400 transition-transform duration-300 ${isUserMenuOpen ? 'rotate-180' : ''}`} />
                     </button>
                 </div>
             </aside>
 
-            {/* the main component  */}
+            {/* MAIN */}
             <main className="flex-1 h-full overflow-y-auto p-8 lg:p-12 scroll-smooth">
-                {/* to handle what's inside the main component */}
                 <div className="animate-in fade-in duration-300 max-w-7xl mx-auto">
                     <ActiveComponent />
                 </div>

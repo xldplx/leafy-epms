@@ -1,14 +1,24 @@
 import { useState, useEffect } from 'react';
-import { Plus, FolderKanban, Calendar, DollarSign, ChevronRight, X, CheckCircle2 } from 'lucide-react';
+import { Plus, FolderKanban, Calendar, DollarSign, ChevronRight, X, CheckCircle2, Loader2 } from 'lucide-react';
 import ProjectDetail from './ProjectDetail';
-import { dummyProjects as seedProjects, dummyProjectsEvm, dummyTaskData } from '../../../data/dummyData';
 import { formatCurrency, formatDate, computeEvm, indexColor } from '../../../utils/evmHelpers';
 import { STATUS_STYLES } from '../../../utils/uiConstants';
 
+const BASE_URL = 'http://localhost:5000/api';
+const apiFetch = (path, options = {}) => fetch(`${BASE_URL}${path}`, {
+    ...options,
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token')}`, ...(options.headers || {}) },
+}).then(r => r.json());
+
 export default function Projects() {
-    const [projects, setProjects] = useState([...seedProjects]);
+    // Real data from API — replaces seedProjects, dummyProjectsEvm, dummyTaskData
+    const [projects, setProjects]     = useState([]);
+    const [projectEvm, setProjectEvm] = useState({});
+    const [loading, setLoading]       = useState(true);
+
     const [selectedProject, setSelectedProject] = useState(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [saving, setSaving] = useState(false);
     const [form, setForm] = useState({
         project_name: '',
         project_code: '',
@@ -17,12 +27,45 @@ export default function Projects() {
         planned_end: '',
         total_budget: '',
     });
-    const [error, setError] = useState('');
+    const [error, setError]             = useState('');
     const [successToast, setSuccessToast] = useState(false);
 
     const userRole = localStorage.getItem('userRole') || 'Guest';
 
-    const handleCreate = (e) => {
+    const fetchProjects = async () => {
+        setLoading(true);
+        try {
+            const res   = await apiFetch('/projects');
+            const projs = res.data || [];
+            setProjects(projs);
+
+            // Compute EVM per project using real tasks
+            const evmMap = {};
+            await Promise.all(projs.map(async (p) => {
+                try {
+                    const taskRes = await apiFetch(`/projects/${p.id}/tasks`);
+                    const tasks   = taskRes.data || [];
+                    evmMap[p.id]  = computeEvm(tasks, p.schedule_pct);
+                } catch { evmMap[p.id] = null; }
+            }));
+            setProjectEvm(evmMap);
+        } catch (e) {
+            console.error(e);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => { fetchProjects(); }, []);
+
+    // Close modal on Escape key
+    useEffect(() => {
+        const handler = (e) => { if (e.key === 'Escape') setIsModalOpen(false); };
+        if (isModalOpen) document.addEventListener('keydown', handler);
+        return () => document.removeEventListener('keydown', handler);
+    }, [isModalOpen]);
+
+    const handleCreate = async (e) => {
         e.preventDefault();
         setError('');
 
@@ -32,43 +75,40 @@ export default function Projects() {
         if (!trimmedName) { setError('Project name is required.'); return; }
         if (!trimmedCode) { setError('Project code is required.'); return; }
         if (parseFloat(form.total_budget) < 0) { setError('Budget cannot be negative.'); return; }
-        if (new Date(form.planned_end) < new Date(form.planned_start)) {
+        if (form.planned_end && form.planned_start && new Date(form.planned_end) < new Date(form.planned_start)) {
             setError('End date must be on or after start date.');
             return;
         }
 
-        const existing = projects.find(p => p.project_code === trimmedCode);
-        if (existing) {
-            setError('Project code already exists.');
-            return;
+        setSaving(true);
+        try {
+            const res = await apiFetch('/projects', {
+                method: 'POST',
+                body: JSON.stringify({
+                    ...form,
+                    project_name: trimmedName,
+                    project_code: trimmedCode,
+                    total_budget: parseFloat(form.total_budget) || 0,
+                }),
+            });
+            if (!res.success) {
+                setError(res.message || 'Failed to create project.');
+                return;
+            }
+            setIsModalOpen(false);
+            setForm({ project_name: '', project_code: '', description: '', planned_start: '', planned_end: '', total_budget: '' });
+            setSuccessToast(true);
+            setTimeout(() => setSuccessToast(false), 3000);
+            fetchProjects();
+        } catch (e) {
+            setError(e.message || 'Server error.');
+        } finally {
+            setSaving(false);
         }
-
-        const newProject = {
-            id: Date.now(),
-            ...form,
-            project_name: trimmedName,
-            project_code: trimmedCode,
-            total_budget: parseFloat(form.total_budget) || 0,
-            status: 'planning',
-            created_by: localStorage.getItem('userName') || 'Unknown',
-        };
-
-        setProjects([newProject, ...projects]);
-        setIsModalOpen(false);
-        setForm({ project_name: '', project_code: '', description: '', planned_start: '', planned_end: '', total_budget: '' });
-        setSuccessToast(true);
-        setTimeout(() => setSuccessToast(false), 3000);
     };
 
-    // Close modal on Escape key
-    useEffect(() => {
-        const handler = (e) => { if (e.key === 'Escape') setIsModalOpen(false); };
-        if (isModalOpen) document.addEventListener('keydown', handler);
-        return () => document.removeEventListener('keydown', handler);
-    }, [isModalOpen]);
-
     if (selectedProject) {
-        return <ProjectDetail project={selectedProject} onBack={() => setSelectedProject(null)} />;
+        return <ProjectDetail project={selectedProject} onBack={() => { setSelectedProject(null); fetchProjects(); }} />;
     }
 
     return (
@@ -99,12 +139,14 @@ export default function Projects() {
             </div>
 
             {/* PROJECT CARDS GRID */}
-            {projects.length > 0 ? (
+            {loading ? (
+                <div className="flex items-center justify-center h-48 gap-3 text-slate-400">
+                    <Loader2 className="w-6 h-6 animate-spin" /> Loading projects...
+                </div>
+            ) : projects.length > 0 ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {projects.map((project) => {
-                        const evmProj = dummyProjectsEvm.find(p => p.id === project.id);
-                        const evmTasks = dummyTaskData.filter(t => t.project_id === project.id);
-                        const evm = evmProj && evmTasks.length > 0 ? computeEvm(evmTasks, evmProj.schedule_pct) : null;
+                        const evm = projectEvm[project.id];
                         const cpi = evm ? indexColor(evm.CPI) : null;
                         const spi = evm ? indexColor(evm.SPI) : null;
 
@@ -136,33 +178,25 @@ export default function Projects() {
                                         <div className="flex-1 bg-slate-100 rounded-full h-1.5">
                                             <div className="h-1.5 rounded-full bg-emerald-500 transition-all" style={{ width: `${Math.min(evm.overallPct, 100)}%` }} />
                                         </div>
-                                        <span className="text-[10px] font-bold text-slate-500">{evm.overallPct.toFixed(0)}%</span>
+                                        <span className="text-xs font-bold text-slate-500 shrink-0">{evm.overallPct.toFixed(1)}%</span>
                                     </div>
-                                    <div className="flex gap-1.5">
-                                        {cpi && (
-                                            <span className={`text-[9px] font-bold px-2 py-0.5 rounded-md border ${cpi.bg} ${cpi.border} ${cpi.text}`}>
-                                                CPI {evm.CPI !== null ? evm.CPI.toFixed(2) : '\u2014'}
-                                            </span>
-                                        )}
-                                        {spi && (
-                                            <span className={`text-[9px] font-bold px-2 py-0.5 rounded-md border ${spi.bg} ${spi.border} ${spi.text}`}>
-                                                SPI {evm.SPI !== null ? evm.SPI.toFixed(2) : '\u2014'}
-                                            </span>
-                                        )}
+                                    <div className="flex gap-2">
+                                        {cpi && <span className={`text-[10px] font-bold px-2 py-0.5 rounded-lg border ${cpi.bg} ${cpi.border} ${cpi.text}`}>CPI {evm.CPI?.toFixed(2) ?? '—'}</span>}
+                                        {spi && <span className={`text-[10px] font-bold px-2 py-0.5 rounded-lg border ${spi.bg} ${spi.border} ${spi.text}`}>SPI {evm.SPI?.toFixed(2) ?? '—'}</span>}
                                     </div>
                                 </div>
                             )}
 
-                            {/* Footer: Dates + Budget */}
-                            <div className="pt-4 border-t border-slate-50 flex items-center justify-between text-xs text-slate-400">
-                                <span className="flex items-center gap-1.5">
-                                    <Calendar className="w-3.5 h-3.5" />
-                                    {formatDate(project.planned_start)}
-                                </span>
-                                <span className="flex items-center gap-1.5">
-                                    <DollarSign className="w-3.5 h-3.5" />
+                            {/* Footer: date + budget */}
+                            <div className="grid grid-cols-2 gap-3 text-xs text-slate-400 border-t border-slate-50 pt-3">
+                                <div className="flex items-center gap-1.5">
+                                    <Calendar className="w-3.5 h-3.5 shrink-0" />
+                                    {project.planned_start ? formatDate(project.planned_start) : '—'}
+                                </div>
+                                <div className="flex items-center gap-1.5">
+                                    <DollarSign className="w-3.5 h-3.5 shrink-0" />
                                     {formatCurrency(project.total_budget)}
-                                </span>
+                                </div>
                             </div>
 
                             {/* Hover Arrow */}
@@ -287,9 +321,10 @@ export default function Projects() {
                                 </button>
                                 <button
                                     type="submit"
-                                    className="flex-1 px-6 py-3 bg-emerald-600 text-white rounded-xl font-semibold shadow-lg shadow-emerald-200 hover:bg-emerald-700 transition-all"
+                                    disabled={saving}
+                                    className="flex-1 px-6 py-3 bg-emerald-600 text-white rounded-xl font-semibold shadow-lg shadow-emerald-200 hover:bg-emerald-700 transition-all flex items-center justify-center gap-2 disabled:opacity-60"
                                 >
-                                    Create Project
+                                    {saving ? <><Loader2 className="w-4 h-4 animate-spin" /> Saving...</> : 'Create Project'}
                                 </button>
                             </div>
                         </form>
