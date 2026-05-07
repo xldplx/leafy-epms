@@ -78,40 +78,49 @@ export default function DashboardLayout() {
     const ActiveComponent = pageComponents[activePage] || pageComponents['Overview'];
 
     return (
-        <div className="h-screen bg-slate-50 flex font-sans text-slate-600 selection:bg-emerald-100 selection:text-emerald-700 overflow-hidden">
+        <div className="h-screen bg-[#f8fafc] flex font-sans text-slate-600 selection:bg-emerald-100 selection:text-emerald-700 overflow-hidden relative">
+            {/* BACKGROUND DECORATION */}
+            <div className="absolute top-[-10%] left-[-5%] w-[40%] h-[40%] bg-emerald-100/30 blur-[120px] rounded-full z-0" />
+            <div className="absolute bottom-[-10%] right-[-5%] w-[40%] h-[40%] bg-blue-100/20 blur-[120px] rounded-full z-0" />
+
             {/* SIDEBAR */}
-            <aside className="w-72 bg-white border-r border-slate-200 flex flex-col h-full z-20 shadow-sm transition-all duration-300 shrink-0">
-                <div className="h-24 flex items-center px-8 border-b border-slate-100 shrink-0">
+            <aside className="w-72 bg-white/70 backdrop-blur-2xl border-r border-white/40 flex flex-col h-full z-20 shadow-[4px_0_24px_rgba(0,0,0,0.02)] transition-all duration-300 shrink-0">
+                <div className="h-24 flex items-center px-8 border-b border-slate-100/50 shrink-0">
                     <div className="flex flex-col">
-                        <h1 className="text-xl font-bold text-slate-800">Leafy</h1>
-                        <span className="text-[10px] font-bold uppercase text-emerald-600 tracking-widest">Enterprise System</span>
+                        <div className="flex items-center gap-2">
+                            <div className="w-8 h-8 bg-emerald-600 rounded-xl flex items-center justify-center shadow-lg shadow-emerald-200">
+                                <Hammer className="w-4 h-4 text-white" />
+                            </div>
+                            <h1 className="text-xl font-black text-slate-800 tracking-tight">Leafy</h1>
+                        </div>
+                        <span className="text-[10px] font-black uppercase text-emerald-600 tracking-[0.2em] mt-1 ml-0.5 opacity-80">Enterprise</span>
                     </div>
                 </div>
 
-                <nav className="flex-1 px-4 py-8 space-y-1 overflow-y-auto [scrollbar-width:thin] [scrollbar-color:#6ee7b7_transparent] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-emerald-200 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb:hover]:bg-emerald-400">
+                <nav className="flex-1 px-4 py-8 space-y-1.5 overflow-y-auto [scrollbar-width:thin] [scrollbar-color:#6ee7b7_transparent] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-emerald-200 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb:hover]:bg-emerald-400">
                     {navItems.map((item) => (
                         <button
                             key={item.name}
                             onClick={() => setActivePage(item.name)}
-                            className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-sm font-medium transition-all duration-200 group ${
+                            className={`w-full flex items-center gap-3.5 px-4 py-4 rounded-2xl text-sm font-bold transition-all duration-300 group ${
                                 activePage === item.name
-                                    ? 'bg-emerald-50 text-emerald-700 shadow-sm translate-x-1'
-                                    : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'
+                                    ? 'bg-emerald-600 text-white shadow-[0_8px_20px_-4px_rgba(16,185,129,0.3)] translate-x-1'
+                                    : 'text-slate-500 hover:bg-white hover:text-slate-800 hover:shadow-sm'
                             }`}
                         >
-                            <span className={activePage === item.name ? 'text-emerald-600' : 'text-slate-400 group-hover:text-slate-600'}>
+                            <span className={`transition-transform duration-300 group-hover:scale-110 ${activePage === item.name ? 'text-white' : 'text-slate-400 group-hover:text-emerald-500'}`}>
                                 {item.icon}
                             </span>
-                            {item.name}
+                            <span className="tracking-tight">{item.name}</span>
                             {activePage === item.name && (
-                                <div className="ml-auto w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                                <div className="ml-auto w-1.5 h-1.5 rounded-full bg-white/40 animate-pulse" />
                             )}
                         </button>
                     ))}
                 </nav>
 
                 {/* USER PROFILE */}
-                <div className="p-4 border-t border-slate-100 relative shrink-0" ref={menuRef}>
+                <div className="p-4 border-t border-slate-100/50 relative shrink-0" ref={menuRef}>
                     {isUserMenuOpen && (
                         <div className="absolute bottom-[calc(100%-10px)] left-4 right-4 bg-white border border-slate-200 shadow-xl shadow-slate-200/50 rounded-xl overflow-hidden animate-in slide-in-from-bottom-2 fade-in duration-200 z-50">
                             <div className="p-2 space-y-1">
