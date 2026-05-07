@@ -28,6 +28,7 @@ const submitDailyActuals = async (req, res) => {
             actual_hours: parseFloat(e.actual_hours) || 0,
             actual_cost:  parseFloat(e.actual_cost)  || 0,
             pct_complete: parseFloat(e.pct_complete) || 0,
+            photo_url:    e.photo_url || null,
             submitted_by: req.user.username,
         }));
         const { data, error } = await supabase.from('daily_actuals').insert(rows).select();
