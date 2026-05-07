@@ -1,13 +1,24 @@
-import React, { useMemo } from 'react';
-import { Activity, TrendingUp, AlertTriangle, BarChart3, LineChart as ChartIcon, ArrowUpRight, ArrowDownRight, Target } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { 
+    Activity, TrendingUp, AlertTriangle, BarChart3, 
+    LineChart as ChartIcon, ArrowUpRight, ArrowDownRight, 
+    Target, Loader2, Layers, Briefcase, CheckCircle2,
+    Calendar, Clock, DollarSign
+} from 'lucide-react';
 import { 
     LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, 
-    Legend, ResponsiveContainer, AreaChart, Area
+    Legend, ResponsiveContainer, AreaChart, Area, PieChart, Pie, Cell
 } from 'recharts';
-import { dummyProjects, dummyProjectsEvm, dummyTaskData, dummyPlanTasks } from '../../../data/dummyData';
 import { computeEvm, computeAlerts, indexColor, formatCurrency } from '../../../utils/evmHelpers';
 import { generateSCurveData } from '../../../utils/cpmHelpers';
 import { STATUS_STYLES, CARD_CLASS } from '../../../utils/uiConstants';
+
+const BASE_URL = 'http://localhost:5000/api';
+const apiFetch = (path) => fetch(`${BASE_URL}${path}`, {
+    headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+}).then(r => r.json());
+
+const COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444'];
 
 // --- CUSTOM TOOLTIP FOR OVERVIEW ---
 function OverviewTooltip({ active, payload, label }) {
@@ -35,15 +46,35 @@ function OverviewTooltip({ active, payload, label }) {
 
 // --- MAIN OVERVIEW COMPONENT ---
 export default function Overview() {
-    const project = dummyProjects[0]; // For S-Curve reference
+    const [loading, setLoading] = useState(true);
+    const [projects, setProjects] = useState([]);
+    const [allTasks, setAllTasks] = useState([]);
+    const [thresholds, setThresholds] = useState({ cpi_amber: 1.00, cpi_red: 0.90, spi_amber: 1.00, spi_red: 0.90 });
+
+    useEffect(() => {
+        setLoading(true);
+        Promise.all([
+            apiFetch('/alerts/raw'), // returns projects[] and tasks[]
+            apiFetch('/alerts/thresholds')
+        ]).then(([raw, thresh]) => {
+            if (raw.success) {
+                setProjects(raw.projects || []);
+                setAllTasks(raw.tasks || []);
+            }
+            if (thresh.success && thresh.data) {
+                setThresholds(thresh.data);
+            }
+        })
+        .catch(console.error)
+        .finally(() => setLoading(false));
+    }, []);
 
     // Per-project EVM (memoized)
-    const projectMetrics = useMemo(() => dummyProjectsEvm.map(proj => {
-        const tasks = dummyTaskData.filter(t => t.project_id === proj.id);
+    const projectMetrics = useMemo(() => projects.map(proj => {
+        const tasks = allTasks.filter(t => t.project_id === proj.id);
         const evm = computeEvm(tasks, proj.schedule_pct);
-        const full = dummyProjects.find(p => p.id === proj.id);
-        return { ...proj, ...evm, status: full?.status || 'planning', total_budget: full?.total_budget || evm.BAC, planned_start: full?.planned_start, planned_end: full?.planned_end };
-    }), []);
+        return { ...proj, ...evm };
+    }), [projects, allTasks]);
 
     // Portfolio aggregates (memoized)
     const { totalAC, totalBAC, totalEV, totalPV, portfolioCPI, portfolioSPI } = useMemo(() => {
@@ -58,20 +89,58 @@ export default function Overview() {
         };
     }, [projectMetrics]);
 
-    // S-Curve Data for Portfolio
-    const sCurveData = useMemo(() => generateSCurveData(dummyPlanTasks, project.planned_start, project.planned_end), []);
+    // S-Curve Data for Portfolio (Aggregated from all projects)
+    const rawSCurveData = useMemo(() => {
+        if (!projects.length || !allTasks.length) return [];
+        const minDate = new Date(Math.min(...projects.map(p => new Date(p.planned_start).getTime())));
+        const maxDate = new Date(Math.max(...projects.map(p => new Date(p.planned_end).getTime())));
+        return generateSCurveData(allTasks, minDate.toISOString(), maxDate.toISOString());
+    }, [projects, allTasks]);
+
+    const [viewMode, setViewMode] = useState('Daily'); // 'Daily', 'Weekly', 'Monthly'
+
+    const sCurveData = useMemo(() => {
+        if (!rawSCurveData.length) return [];
+        if (viewMode === 'Daily') return rawSCurveData;
+
+        const grouped = [];
+        const interval = viewMode === 'Weekly' ? 7 : 30;
+
+        for (let i = 0; i < rawSCurveData.length; i += interval) {
+            const chunk = rawSCurveData.slice(i, i + interval);
+            const last = chunk[chunk.length - 1];
+            grouped.push({
+                ...last,
+                date: last.date // Keep the last date of the period as label
+            });
+        }
+        return grouped;
+    }, [rawSCurveData, viewMode]);
+
+    // Project status distribution
+    const statusCounts = useMemo(() => {
+        const counts = { active: 0, planning: 0, completed: 0, on_hold: 0 };
+        projects.forEach(p => { if (counts[p.status] !== undefined) counts[p.status]++; });
+        return counts;
+    }, [projects]);
 
     // Alerts (memoized)
     const { alerts, criticalCount, warningCount } = useMemo(() => {
-        const defaultThresholds = { cpi_amber: 1.00, cpi_red: 0.90, spi_amber: 1.00, spi_red: 0.90 };
-        const a = computeAlerts(dummyProjectsEvm, dummyTaskData, defaultThresholds);
+        const a = computeAlerts(projects, allTasks, thresholds);
         return { alerts: a, criticalCount: a.filter(x => x.severity === 'critical').length, warningCount: a.filter(x => x.severity === 'warning').length };
-    }, []);
+    }, [projects, allTasks, thresholds]);
 
     const cpiColor = indexColor(portfolioCPI);
     const spiColor = indexColor(portfolioSPI);
 
     const cardClass = CARD_CLASS;
+
+    if (loading) return (
+        <div className="h-[60vh] flex flex-col items-center justify-center gap-4 text-slate-400">
+            <Loader2 className="w-10 h-10 animate-spin text-emerald-500" />
+            <p className="font-bold uppercase tracking-[0.2em] text-xs">Syncing Portfolio Data...</p>
+        </div>
+    );
 
     return (
         <div className="space-y-10 pb-12">
@@ -80,265 +149,285 @@ export default function Overview() {
                 <div>
                     <div className="flex items-center gap-2 mb-1">
                         <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-600/80">System Live</span>
+                        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-600/80">Portfolio Live</span>
                     </div>
                     <h2 className="text-4xl font-black text-slate-900 tracking-tight">Project Overview</h2>
-                    <p className="text-slate-500 mt-1 font-medium">Real-time performance metrics & portfolio summary</p>
+                    <p className="text-slate-500 mt-1 font-medium">Consolidated enterprise performance intelligence</p>
                 </div>
-                <div className="flex items-center gap-3 bg-white/50 backdrop-blur-sm p-1.5 rounded-2xl border border-slate-200/50 shadow-sm">
-                    <button className="px-4 py-2 text-xs font-bold bg-white text-slate-800 rounded-xl shadow-sm border border-slate-100">Daily</button>
-                    <button className="px-4 py-2 text-xs font-bold text-slate-500 hover:text-slate-800 transition-colors">Weekly</button>
-                    <button className="px-4 py-2 text-xs font-bold text-slate-500 hover:text-slate-800 transition-colors">Monthly</button>
+                <div className="flex items-center gap-2 bg-white/40 backdrop-blur-md p-1.5 rounded-2xl border border-slate-200/50 shadow-sm">
+                    {['Daily', 'Weekly', 'Monthly'].map(mode => (
+                        <button 
+                            key={mode}
+                            onClick={() => setViewMode(mode)}
+                            className={`px-5 py-2 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all ${
+                                viewMode === mode 
+                                ? 'bg-white text-emerald-700 shadow-md shadow-emerald-500/5 border border-emerald-100' 
+                                : 'text-slate-400 hover:text-slate-700'
+                            }`}
+                        >
+                            {mode}
+                        </button>
+                    ))}
                 </div>
             </div>
 
-            {/* KPI CARDS — with target context */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                {/* SPI */}
-                <div className={`${cardClass} p-8 group hover:scale-[1.02]`}>
-                    <div className="flex justify-between items-start mb-6">
-                        <div className="p-4 bg-blue-500/10 rounded-2xl text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-all duration-300 shadow-inner">
-                            <Activity className="w-6 h-6" />
+            {/* KPI CARDS */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                {/* Total BAC */}
+                <div className={`${cardClass} p-6 group hover:scale-[1.02]`}>
+                    <div className="flex justify-between items-start mb-4">
+                        <div className="p-3 bg-slate-100 rounded-xl text-slate-500 shadow-inner">
+                            <Briefcase className="w-5 h-5" />
                         </div>
-                        <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border font-black text-[10px] uppercase tracking-wider ${spiColor.bg} ${spiColor.border} ${spiColor.text}`}>
-                            {portfolioSPI >= 1 ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
+                    </div>
+                    <h3 className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Portfolio Budget</h3>
+                    <p className="text-2xl font-black text-slate-800 tracking-tight mt-1">{formatCurrency(totalBAC)}</p>
+                    <p className="text-[10px] text-slate-400 font-bold mt-2 uppercase tracking-tighter">Total BAC Across Projects</p>
+                </div>
+
+                {/* Total Projects */}
+                <div className={`${cardClass} p-6 group hover:scale-[1.02]`}>
+                    <div className="flex justify-between items-start mb-4">
+                        <div className="p-3 bg-emerald-50 rounded-xl text-emerald-600 shadow-inner">
+                            <Layers className="w-5 h-5" />
+                        </div>
+                    </div>
+                    <h3 className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Total Projects</h3>
+                    <p className="text-2xl font-black text-slate-800 tracking-tight mt-1">{projects.length}</p>
+                    <div className="flex gap-2 mt-2">
+                        <span className="text-[9px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded-md border border-emerald-100">{statusCounts.active} Active</span>
+                        <span className="text-[9px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded-md border border-blue-100">{statusCounts.planning} Planning</span>
+                    </div>
+                </div>
+
+                {/* SPI */}
+                <div className={`${cardClass} p-6 group hover:scale-[1.02]`}>
+                    <div className="flex justify-between items-start mb-4">
+                        <div className={`p-3 rounded-xl shadow-inner transition-colors ${portfolioSPI >= 1 ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>
+                            <Activity className="w-5 h-5" />
+                        </div>
+                        <div className={`px-2 py-1 rounded-lg border font-black text-[9px] uppercase tracking-wider ${spiColor.bg} ${spiColor.border} ${spiColor.text}`}>
                             {spiColor.label}
                         </div>
                     </div>
-                    <h3 className="text-slate-400 text-[11px] font-black uppercase tracking-[0.15em]">Schedule Performance</h3>
-                    <div className="flex items-baseline gap-2 mt-2">
-                        <p className={`text-4xl font-black tracking-tighter ${spiColor.text}`}>{portfolioSPI !== null ? portfolioSPI.toFixed(2) : '--'}</p>
-                        <span className="text-sm font-bold text-slate-400 uppercase tracking-widest">SPI</span>
-                    </div>
-                    <div className="mt-6">
-                        <div className="flex justify-between text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">
-                            <span>Progress</span>
-                            <span>Target 1.00</span>
-                        </div>
-                        <div className="bg-slate-100/50 rounded-full h-2.5 overflow-hidden p-0.5 border border-slate-200/50">
-                            <div className={`h-full rounded-full transition-all duration-1000 ease-out shadow-sm ${portfolioSPI >= 1 ? 'bg-emerald-500' : portfolioSPI >= 0.9 ? 'bg-amber-500' : 'bg-red-500'}`}
-                                style={{ width: `${Math.min((portfolioSPI || 0) * 100, 100)}%` }} />
-                        </div>
+                    <h3 className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Avg. Schedule (SPI)</h3>
+                    <p className={`text-2xl font-black tracking-tight mt-1 ${spiColor.text}`}>{portfolioSPI !== null ? portfolioSPI.toFixed(2) : '--'}</p>
+                    <div className="mt-3 bg-slate-100/50 rounded-full h-1 overflow-hidden">
+                        <div className={`h-full rounded-full transition-all duration-1000 ${portfolioSPI >= 1 ? 'bg-emerald-500' : 'bg-red-500'}`} style={{ width: `${Math.min((portfolioSPI || 0) * 100, 100)}%` }} />
                     </div>
                 </div>
 
                 {/* CPI */}
-                <div className={`${cardClass} p-8 group hover:scale-[1.02]`}>
-                    <div className="flex justify-between items-start mb-6">
-                        <div className="p-4 bg-emerald-500/10 rounded-2xl text-emerald-600 group-hover:bg-emerald-600 group-hover:text-white transition-all duration-300 shadow-inner">
-                            <TrendingUp className="w-6 h-6" />
+                <div className={`${cardClass} p-6 group hover:scale-[1.02]`}>
+                    <div className="flex justify-between items-start mb-4">
+                        <div className={`p-3 rounded-xl shadow-inner transition-colors ${portfolioCPI >= 1 ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>
+                            <TrendingUp className="w-5 h-5" />
                         </div>
-                        <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border font-black text-[10px] uppercase tracking-wider ${cpiColor.bg} ${cpiColor.border} ${cpiColor.text}`}>
-                            {portfolioCPI >= 1 ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
+                        <div className={`px-2 py-1 rounded-lg border font-black text-[9px] uppercase tracking-wider ${cpiColor.bg} ${cpiColor.border} ${cpiColor.text}`}>
                             {cpiColor.label}
                         </div>
                     </div>
-                    <h3 className="text-slate-400 text-[11px] font-black uppercase tracking-[0.15em]">Cost Performance</h3>
-                    <div className="flex items-baseline gap-2 mt-2">
-                        <p className={`text-4xl font-black tracking-tighter ${cpiColor.text}`}>{portfolioCPI !== null ? portfolioCPI.toFixed(2) : '--'}</p>
-                        <span className="text-sm font-bold text-slate-400 uppercase tracking-widest">CPI</span>
-                    </div>
-                    <div className="mt-6">
-                        <div className="flex justify-between text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">
-                            <span>Efficiency</span>
-                            <span>Target 1.00</span>
-                        </div>
-                        <div className="bg-slate-100/50 rounded-full h-2.5 overflow-hidden p-0.5 border border-slate-200/50">
-                            <div className={`h-full rounded-full transition-all duration-1000 ease-out shadow-sm ${portfolioCPI >= 1 ? 'bg-emerald-500' : portfolioCPI >= 0.9 ? 'bg-amber-500' : 'bg-red-500'}`}
-                                style={{ width: `${Math.min((portfolioCPI || 0) * 100, 100)}%` }} />
-                        </div>
-                    </div>
-                </div>
-
-                {/* Alerts */}
-                <div className={`${cardClass} p-8 group hover:scale-[1.02]`}>
-                    <div className="flex justify-between items-start mb-6">
-                        <div className={`p-4 rounded-2xl transition-all duration-300 shadow-inner ${alerts.length > 0 ? 'bg-red-500/10 text-red-600 group-hover:bg-red-600 group-hover:text-white' : 'bg-emerald-500/10 text-emerald-600 group-hover:bg-emerald-600 group-hover:text-white'}`}>
-                            <AlertTriangle className="w-6 h-6" />
-                        </div>
-                        {alerts.length === 0 && (
-                            <span className="text-[10px] font-black uppercase px-3 py-1.5 rounded-xl border bg-emerald-50 border-emerald-100 text-emerald-700 tracking-widest">All Clear</span>
-                        )}
-                    </div>
-                    <h3 className="text-slate-400 text-[11px] font-black uppercase tracking-[0.15em]">Active Alerts</h3>
-                    <div className="flex items-baseline gap-2 mt-2">
-                        <p className={`text-4xl font-black tracking-tighter ${alerts.length > 0 ? 'text-red-700' : 'text-emerald-700'}`}>{alerts.length}</p>
-                        <span className="text-sm font-bold text-slate-400 uppercase tracking-widest">Issues</span>
-                    </div>
-                    <div className="mt-6 flex flex-wrap gap-2">
-                        {criticalCount > 0 ? (
-                            <span className="flex items-center gap-1.5 text-[10px] font-black uppercase px-3 py-1.5 rounded-xl bg-red-50 text-red-600 border border-red-100 shadow-sm animate-pulse">
-                                <div className="w-1 h-1 rounded-full bg-red-600" />
-                                {criticalCount} Critical
-                            </span>
-                        ) : null}
-                        {warningCount > 0 ? (
-                            <span className="flex items-center gap-1.5 text-[10px] font-black uppercase px-3 py-1.5 rounded-xl bg-amber-50 text-amber-600 border border-amber-100 shadow-sm">
-                                <div className="w-1 h-1 rounded-full bg-amber-600" />
-                                {warningCount} Warning
-                            </span>
-                        ) : null}
-                        {alerts.length === 0 && (
-                            <p className="text-[11px] font-medium text-slate-400 italic">No anomalies detected</p>
-                        )}
+                    <h3 className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Avg. Cost (CPI)</h3>
+                    <p className={`text-2xl font-black tracking-tight mt-1 ${cpiColor.text}`}>{portfolioCPI !== null ? portfolioCPI.toFixed(2) : '--'}</p>
+                    <div className="mt-3 bg-slate-100/50 rounded-full h-1 overflow-hidden">
+                        <div className={`h-full rounded-full transition-all duration-1000 ${portfolioCPI >= 1 ? 'bg-emerald-500' : portfolioCPI >=- 0.9 ? 'bg-amber-500' : 'bg-red-500'}`} style={{ width: `${Math.min((portfolioCPI || 0) * 100, 100)}%` }} />
                     </div>
                 </div>
             </div>
 
-            {/* PORTFOLIO S-CURVE */}
-            <div className={`${cardClass} p-10`}>
-                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-8 mb-10">
-                    <div className="flex items-center gap-4">
-                        <div className="p-4 bg-emerald-500 text-white rounded-[1.25rem] shadow-lg shadow-emerald-200">
-                            <ChartIcon className="w-6 h-6" />
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                {/* PORTFOLIO S-CURVE */}
+                <div className={`${cardClass} p-8 lg:col-span-2`}>
+                    <div className="flex items-center justify-between mb-8">
+                        <div className="flex items-center gap-4">
+                            <div className="p-3 bg-emerald-500 text-white rounded-xl shadow-lg shadow-emerald-200">
+                                <ChartIcon className="w-5 h-5" />
+                            </div>
+                            <div>
+                                <h3 className="text-lg font-black text-slate-800 tracking-tight">Cumulative S-Curve</h3>
+                                <p className="text-xs text-slate-400 font-bold uppercase tracking-tighter mt-0.5">{viewMode} Trend Tracking</p>
+                            </div>
                         </div>
-                        <div>
-                            <h3 className="text-xl font-black text-slate-800 tracking-tight">Portfolio Performance Curve</h3>
-                            <p className="text-sm text-slate-400 font-medium mt-0.5">Cumulative PV vs EV vs AC tracking</p>
+                        <div className="hidden sm:flex items-center gap-4 bg-slate-50 p-3 rounded-xl border border-slate-100">
+                            <div className="flex items-center gap-2">
+                                <div className="w-2 h-2 rounded-full bg-slate-300" />
+                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">PV</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <div className="w-2 h-2 rounded-full bg-emerald-500" />
+                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">EV</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <div className="w-2 h-2 rounded-full bg-amber-400" />
+                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">AC</span>
+                            </div>
                         </div>
                     </div>
-                    <div className="flex flex-wrap items-center gap-6 bg-slate-50/80 backdrop-blur-sm p-4 rounded-2xl border border-slate-100 shadow-inner">
-                        <div className="flex items-center gap-2.5">
-                            <div className="w-3 h-3 rounded-full bg-slate-300 shadow-sm" />
-                            <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Planned (PV)</span>
-                        </div>
-                        <div className="flex items-center gap-2.5">
-                            <div className="w-3 h-3 rounded-full bg-emerald-500 shadow-md shadow-emerald-200" />
-                            <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Earned (EV)</span>
-                        </div>
-                        <div className="flex items-center gap-2.5">
-                            <div className="w-3 h-3 rounded-full bg-amber-400 shadow-md shadow-amber-200" />
-                            <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Actual (AC)</span>
-                        </div>
+                    <div className="h-[300px] w-full">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <AreaChart data={sCurveData}>
+                                <defs>
+                                    <linearGradient id="colorEV" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.1}/>
+                                        <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                                    </linearGradient>
+                                </defs>
+                                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                                <XAxis dataKey="date" hide={true} />
+                                <YAxis tick={{ fontSize: 10, fontWeight: 800, fill: '#94a3b8' }} tickLine={false} axisLine={false} tickFormatter={v => `${(v / 1e6).toFixed(0)}M`} />
+                                <Tooltip content={<OverviewTooltip />} />
+                                <Area type="monotone" dataKey="PV" name="Planned" stroke="#cbd5e1" strokeWidth={2} strokeDasharray="5 5" fill="transparent" />
+                                <Area type="monotone" dataKey="EV" name="Earned" stroke="#10b981" strokeWidth={3} fill="url(#colorEV)" />
+                                <Area type="monotone" dataKey="AC" name="Actual" stroke="#f59e0b" strokeWidth={2} fill="transparent" />
+                            </AreaChart>
+                        </ResponsiveContainer>
                     </div>
                 </div>
-                <div className="h-[350px] w-full">
-                    <ResponsiveContainer width="100%" height="100%">
-                        <AreaChart data={sCurveData}>
-                            <defs>
-                                <linearGradient id="colorEV" x1="0" y1="0" x2="0" y2="1">
-                                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.15}/>
-                                    <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
-                                </linearGradient>
-                                <linearGradient id="colorAC" x1="0" y1="0" x2="0" y2="1">
-                                    <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.1}/>
-                                    <stop offset="95%" stopColor="#f59e0b" stopOpacity={0}/>
-                                </linearGradient>
-                            </defs>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-                            <XAxis dataKey="date" hide={true} />
-                            <YAxis 
-                                tick={{ fontSize: 10, fontWeight: 800, fill: '#94a3b8' }} 
-                                tickLine={false} 
-                                axisLine={false}
-                                tickFormatter={v => `${(v / 1e6).toFixed(0)}M`}
-                            />
-                            <Tooltip content={<OverviewTooltip />} />
-                            <Area type="monotone" dataKey="PV" name="Planned" stroke="#cbd5e1" strokeWidth={2} strokeDasharray="6 6" fill="transparent" />
-                            <Area type="monotone" dataKey="EV" name="Earned" stroke="#10b981" strokeWidth={4} fillOpacity={1} fill="url(#colorEV)" />
-                            <Area type="monotone" dataKey="AC" name="Actual" stroke="#f59e0b" strokeWidth={3} fillOpacity={1} fill="url(#colorAC)" />
-                        </AreaChart>
-                    </ResponsiveContainer>
+
+                {/* DISTRIBUTION & ALERTS */}
+                <div className="space-y-6">
+                    {/* Status Distribution */}
+                    <div className={`${cardClass} p-6`}>
+                        <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-6">Status Breakdown</h4>
+                        <div className="h-[180px] w-full relative">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <PieChart>
+                                    <Pie 
+                                        data={[
+                                            { name: 'Active', value: statusCounts.active },
+                                            { name: 'Planning', value: statusCounts.planning },
+                                            { name: 'Completed', value: statusCounts.completed },
+                                            { name: 'On Hold', value: statusCounts.on_hold }
+                                        ]} 
+                                        innerRadius={50} outerRadius={70} paddingAngle={8} dataKey="value"
+                                    >
+                                        {COLORS.map((entry, index) => (
+                                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} strokeWidth={0} />
+                                        ))}
+                                    </Pie>
+                                </PieChart>
+                            </ResponsiveContainer>
+                            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                                <span className="text-2xl font-black text-slate-800">{projects.length}</span>
+                                <span className="text-[8px] font-black text-slate-400 uppercase tracking-tighter">Total</span>
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3 mt-4">
+                            <div className="flex items-center gap-2">
+                                <div className="w-1.5 h-1.5 rounded-full bg-[#10b981]" />
+                                <span className="text-[9px] font-bold text-slate-500 uppercase">{statusCounts.active} Active</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <div className="w-1.5 h-1.5 rounded-full bg-[#3b82f6]" />
+                                <span className="text-[9px] font-bold text-slate-500 uppercase">{statusCounts.planning} Planning</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Quick Alerts */}
+                    <div className={`${cardClass} p-6 bg-slate-900 text-white border-0`}>
+                        <div className="flex items-center justify-between mb-4">
+                            <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Active Alerts</h4>
+                            <AlertTriangle className={`w-4 h-4 ${alerts.length > 0 ? 'text-red-500 animate-pulse' : 'text-emerald-500'}`} />
+                        </div>
+                        <div className="space-y-4">
+                            {alerts.length > 0 ? (
+                                <>
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-3xl font-black text-white">{alerts.length}</span>
+                                        <div className="text-right">
+                                            <p className="text-[10px] font-black text-red-500 uppercase">{criticalCount} Critical</p>
+                                            <p className="text-[10px] font-black text-amber-500 uppercase">{warningCount} Warning</p>
+                                        </div>
+                                    </div>
+                                    <p className="text-[10px] text-slate-400 font-medium leading-relaxed">
+                                        System has detected {alerts.length} performance anomalies that require executive attention.
+                                    </p>
+                                </>
+                            ) : (
+                                <div className="flex flex-col items-center py-4 gap-2">
+                                    <CheckCircle2 className="w-8 h-8 text-emerald-500 opacity-50" />
+                                    <p className="text-[10px] font-black text-emerald-500 uppercase tracking-widest">Portfolio Healthy</p>
+                                </div>
+                            )}
+                        </div>
+                    </div>
                 </div>
             </div>
 
             {/* PROJECT HEALTH TABLE */}
-            <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
-                <div className="p-6 border-b border-slate-50 flex items-center gap-3">
-                    <div className="p-2.5 bg-slate-50 rounded-xl text-slate-500"><BarChart3 className="w-5 h-5" /></div>
-                    <div>
-                        <h3 className="font-bold text-slate-700">Project Health</h3>
-                        <p className="text-xs text-slate-400 mt-0.5">Per-project performance summary</p>
+            <div className={`${cardClass}`}>
+                <div className="p-8 border-b border-slate-50 bg-slate-50/30">
+                    <div className="flex items-center gap-4">
+                        <div className="p-3 bg-white rounded-xl shadow-sm text-slate-500">
+                            <Activity className="w-5 h-5" />
+                        </div>
+                        <div>
+                            <h3 className="text-lg font-black text-slate-800 tracking-tight">Project Health Monitor</h3>
+                            <p className="text-xs text-slate-400 font-bold uppercase tracking-tighter mt-0.5">Live performance breakdown per project</p>
+                        </div>
                     </div>
                 </div>
                 <div className="overflow-x-auto">
                     <table className="w-full text-left border-collapse">
                         <thead>
-                            <tr className="bg-slate-50/80 text-xs uppercase tracking-wider text-slate-500 font-bold">
-                                <th className="px-6 py-4">Project</th>
-                                <th className="px-4 py-4">Status</th>
-                                <th className="px-4 py-4">CPI</th>
-                                <th className="px-4 py-4">SPI</th>
-                                <th className="px-4 py-4 min-w-44">Progress</th>
-                                <th className="px-4 py-4">BAC</th>
-                                <th className="px-4 py-4">Actual Spend</th>
+                            <tr className="bg-slate-50/50 text-[10px] uppercase tracking-[0.2em] text-slate-400 font-black">
+                                <th className="px-8 py-5">Project Details</th>
+                                <th className="px-6 py-5">Performance</th>
+                                <th className="px-6 py-5">Schedule (SPI)</th>
+                                <th className="px-6 py-5">Cost (CPI)</th>
+                                <th className="px-8 py-5 text-right">Status</th>
                             </tr>
                         </thead>
-                        <tbody className="text-sm font-medium text-slate-600 divide-y divide-slate-50">
-                            {projectMetrics.map(proj => {
-                                const cpi = indexColor(proj.CPI);
-                                const spi = indexColor(proj.SPI);
+                        <tbody className="divide-y divide-slate-50">
+                            {projectMetrics.map(p => {
+                                const spiC = indexColor(p.SPI);
+                                const cpiC = indexColor(p.CPI);
                                 return (
-                                    <tr key={proj.id} className="hover:bg-slate-50/50 transition-colors">
-                                        <td className="px-6 py-4">
-                                            <p className="font-semibold text-slate-700">{proj.project_name}</p>
-                                            <p className="font-mono text-[10px] text-slate-400 mt-0.5">{proj.project_code}</p>
+                                    <tr key={p.id} className="hover:bg-emerald-50/20 transition-all duration-200 group">
+                                        <td className="px-8 py-6">
+                                            <p className="font-black text-slate-800 tracking-tight group-hover:text-emerald-700 transition-colors">{p.project_name}</p>
+                                            <p className="font-mono text-[10px] text-slate-400 mt-1 uppercase tracking-widest">{p.project_code}</p>
                                         </td>
-                                        <td className="px-4 py-4">
-                                            <span className={`text-[10px] font-bold uppercase px-2.5 py-1 rounded-lg border ${STATUS_STYLES[proj.status] || STATUS_STYLES.planning}`}>
-                                                {proj.status.replace('_', ' ')}
-                                            </span>
-                                        </td>
-                                        <td className="px-4 py-4">
-                                            <span className={`text-xs font-bold px-2.5 py-1 rounded-lg border ${cpi.bg} ${cpi.border} ${cpi.text}`}>
-                                                {proj.CPI !== null ? proj.CPI.toFixed(2) : '\u2014'}
-                                            </span>
-                                        </td>
-                                        <td className="px-4 py-4">
-                                            <span className={`text-xs font-bold px-2.5 py-1 rounded-lg border ${spi.bg} ${spi.border} ${spi.text}`}>
-                                                {proj.SPI !== null ? proj.SPI.toFixed(2) : '\u2014'}
-                                            </span>
-                                        </td>
-                                        <td className="px-4 py-4">
-                                            <div className="flex items-center gap-3">
-                                                <div className="flex-1 bg-slate-100 rounded-full h-2">
-                                                    <div className="h-2 rounded-full bg-emerald-500 transition-all duration-500" style={{ width: `${Math.min(proj.overallPct, 100)}%` }} />
+                                        <td className="px-6 py-6">
+                                            <div className="w-32">
+                                                <div className="flex justify-between text-[9px] font-black text-slate-400 uppercase mb-1.5">
+                                                    <span>Done</span>
+                                                    <span>{p.overallPct.toFixed(1)}%</span>
                                                 </div>
-                                                <span className="text-xs font-bold text-slate-600 shrink-0 w-12 text-right">{proj.overallPct.toFixed(1)}%</span>
+                                                <div className="h-1 bg-slate-100 rounded-full overflow-hidden">
+                                                    <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${Math.min(p.overallPct, 100)}%` }} />
+                                                </div>
                                             </div>
                                         </td>
-                                        <td className="px-4 py-4 text-slate-500 whitespace-nowrap">{formatCurrency(proj.BAC)}</td>
-                                        <td className="px-4 py-4 text-slate-500 whitespace-nowrap">{formatCurrency(proj.AC)}</td>
+                                        <td className="px-6 py-6">
+                                            <div className="flex items-center gap-3">
+                                                <span className={`text-sm font-black ${spiC.text}`}>{p.SPI !== null ? p.SPI.toFixed(2) : '--'}</span>
+                                                <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded border ${spiC.bg} ${spiC.border} ${spiC.text}`}>
+                                                    {spiC.label}
+                                                </span>
+                                            </div>
+                                        </td>
+                                        <td className="px-6 py-6">
+                                            <div className="flex items-center gap-3">
+                                                <span className={`text-sm font-black ${cpiC.text}`}>{p.CPI !== null ? p.CPI.toFixed(2) : '--'}</span>
+                                                <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded border ${cpiC.bg} ${cpiC.border} ${cpiC.text}`}>
+                                                    {cpiC.label}
+                                                </span>
+                                            </div>
+                                        </td>
+                                        <td className="px-8 py-6 text-right">
+                                            <span className={`text-[9px] font-black uppercase px-3 py-1.5 rounded-xl border ${STATUS_STYLES[p.status] || STATUS_STYLES.planning} tracking-widest shadow-sm`}>
+                                                {p.status}
+                                            </span>
+                                        </td>
                                     </tr>
                                 );
                             })}
                         </tbody>
-                        <tfoot>
-                            <tr className="bg-slate-50/50 text-sm font-bold text-slate-700 border-t border-slate-100">
-                                <td className="px-6 py-3.5" colSpan="5">Portfolio Total</td>
-                                <td className="px-4 py-3.5 whitespace-nowrap">{formatCurrency(totalBAC)}</td>
-                                <td className="px-4 py-3.5 whitespace-nowrap">{formatCurrency(totalAC)}</td>
-                            </tr>
-                        </tfoot>
                     </table>
                 </div>
             </div>
-
-            {/* BUDGET OVERVIEW */}
-            <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-6">
-                <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-5">Budget Overview — BAC vs Actual Spend</h3>
-                <div className="space-y-5">
-                    {projectMetrics.map(proj => {
-                        const spendPct = proj.BAC > 0 ? (proj.AC / proj.BAC) * 100 : 0;
-                        const barColor = spendPct > 100 ? 'bg-red-500' : spendPct > 80 ? 'bg-amber-500' : 'bg-emerald-500';
-                        return (
-                            <div key={proj.id}>
-                                <div className="flex items-center justify-between mb-1.5">
-                                    <span className="text-sm font-semibold text-slate-700">{proj.project_name}</span>
-                                    <span className="text-xs text-slate-400">
-                                        {formatCurrency(proj.AC)} / {formatCurrency(proj.BAC)}
-                                        <span className="ml-2 font-bold text-slate-600">{spendPct.toFixed(0)}%</span>
-                                    </span>
-                                </div>
-                                <div className="w-full bg-slate-100 rounded-full h-3">
-                                    <div className={`${barColor} h-3 rounded-full transition-all duration-500`} style={{ width: `${Math.min(spendPct, 100)}%` }} />
-                                </div>
-                            </div>
-                        );
-                    })}
-                </div>
-            </div>
-
         </div>
     );
 }
