@@ -98,6 +98,11 @@ export function computeAlerts(projects, allTasks, thresholds) {
 
         if (SPI !== null) {
             if (SPI < t.spi_red) {
+                const delayedTasks = tasks
+                    .filter(t => t.pct_complete < 100)
+                    .sort((a, b) => (b.planned_cost * (1 - b.pct_complete/100)) - (a.planned_cost * (1 - a.pct_complete/100)))
+                    .slice(0, 2);
+
                 alerts.push({
                     id: `${project.id}-spi-critical`,
                     project,
@@ -105,7 +110,8 @@ export function computeAlerts(projects, allTasks, thresholds) {
                     value: SPI,
                     threshold: t.spi_red,
                     severity: 'critical',
-                    recommendation: 'Project is critically behind schedule. Escalate to management and consider resource reallocation.',
+                    recommendation: `Project is critically behind schedule. High-impact delayed tasks: ${delayedTasks.map(t => t.task_name).join(', ')}. Escalate to management.`,
+                    affectedTasks: delayedTasks
                 });
             } else if (SPI < t.spi_amber) {
                 alerts.push({
