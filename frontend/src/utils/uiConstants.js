@@ -15,7 +15,7 @@ export const STATUS_STYLES = {
 export const NULL_DISPLAY = '\u2014'; // em dash "—"
 
 // Standard form input (emerald focus ring)
-export const INPUT_CLASS = 'w-full px-4 py-3 bg-white/40 backdrop-blur-md border border-slate-200/60 rounded-xl outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 transition-all text-slate-700 text-sm shadow-sm';
+export const INPUT_CLASS = 'w-full px-4 py-3 bg-white/40 backdrop-blur-md border border-slate-200/60 rounded-xl outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 transition-all text-slate-700 text-sm shadow-sm appearance-none cursor-pointer hover:bg-white/60';
 
 // Compact inline input for tables
 export const INLINE_INPUT_CLASS = 'w-full px-3 py-1.5 bg-slate-50/50 backdrop-blur-sm border border-slate-200/50 rounded-lg text-sm text-slate-700 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/10 transition-all shadow-sm';

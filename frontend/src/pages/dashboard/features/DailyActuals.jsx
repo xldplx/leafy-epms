@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { ClipboardList, CheckCircle2, Camera, X, Image as ImageIcon, Loader2 } from 'lucide-react';
+import { ClipboardList, CheckCircle2, Camera, X, Image as ImageIcon, Loader2, ChevronDown } from 'lucide-react';
 import { formatCurrency, formatDate } from '../../../utils/evmHelpers';
 import { INPUT_CLASS, INLINE_INPUT_CLASS, CARD_CLASS } from '../../../utils/uiConstants';
 
@@ -151,26 +151,33 @@ export default function DailyActuals() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                     <div className="space-y-2">
                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">Project</label>
-                        <select
-                            value={selectedProjectId}
-                            onChange={e => { setSelectedProjectId(e.target.value); setActuals({}); }}
-                            className={inputClass}
-                        >
-                            <option value="">Select an active project...</option>
-                            {projects.map(p => (
-                                <option key={p.id} value={p.id}>{p.project_code} — {p.project_name}</option>
-                            ))}
-                        </select>
+                        <div className="relative group">
+                            <select
+                                value={selectedProjectId}
+                                onChange={e => { setSelectedProjectId(e.target.value); setActuals({}); }}
+                                className={`${inputClass} pr-12`}
+                            >
+                                <option value="">Select an active project...</option>
+                                {projects.map(p => (
+                                    <option key={p.id} value={p.id} className="bg-white text-slate-700">{p.project_code} — {p.project_name}</option>
+                                ))}
+                            </select>
+                            <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 group-hover:text-emerald-500 transition-colors">
+                                <ChevronDown className="w-5 h-5" />
+                            </div>
+                        </div>
                     </div>
                     <div className="space-y-2">
                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">Reporting Date</label>
-                        <input
-                            type="date"
-                            value={entryDate}
-                            onChange={e => setEntryDate(e.target.value)}
-                            max={new Date().toISOString().split('T')[0]}
-                            className={inputClass}
-                        />
+                        <div className="relative group">
+                            <input
+                                type="date"
+                                value={entryDate}
+                                onChange={e => setEntryDate(e.target.value)}
+                                max={new Date().toISOString().split('T')[0]}
+                                className={inputClass}
+                            />
+                        </div>
                     </div>
                 </div>
             </div>
