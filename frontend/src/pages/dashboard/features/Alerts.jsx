@@ -213,8 +213,28 @@ export default function Alerts() {
                                         {alert.severity === 'critical' ? 'Critical' : 'At Risk'}
                                     </span>
                                 </div>
-                                <p className="text-sm text-slate-500 mt-2 leading-relaxed">{alert.recommendation}</p>
-                                <div className="flex flex-wrap items-center gap-4 mt-3 text-xs text-slate-400">
+                                <p className="text-sm text-slate-500 mt-2 leading-relaxed font-medium">{alert.recommendation}</p>
+                                
+                                {alert.affectedTasks && alert.affectedTasks.length > 0 && (
+                                    <div className="mt-4 p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">High Impact Tasks</p>
+                                        <div className="space-y-2">
+                                            {alert.affectedTasks.map(task => (
+                                                <div key={task.id} className="flex items-center justify-between gap-4">
+                                                    <span className="text-xs font-bold text-slate-700">{task.task_name}</span>
+                                                    <div className="flex items-center gap-2">
+                                                        <div className="w-24 bg-slate-200 rounded-full h-1 overflow-hidden">
+                                                            <div className="bg-emerald-500 h-full" style={{ width: `${task.pct_complete}%` }} />
+                                                        </div>
+                                                        <span className="text-[10px] font-black text-slate-400 w-8 text-right">{task.pct_complete}%</span>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                <div className="flex flex-wrap items-center gap-4 mt-4 text-[10px] font-black uppercase tracking-wider text-slate-400">
                                     <span>
                                         <strong className="text-slate-600">{alert.metric}:</strong> {alert.value.toFixed(2)}
                                     </span>
