@@ -11,6 +11,9 @@ export default function DailyActuals() {
     const [submittedEntries, setSubmittedEntries]   = useState([]);
     const [isSubmitted, setIsSubmitted]             = useState(false);
     const [isUploading, setIsUploading]             = useState({}); // taskId -> boolean
+    const [isLoadingProjects, setIsLoadingProjects] = useState(true);
+    const [isSubmitting, setIsSubmitting]           = useState(false);
+    const [submitError, setSubmitError]             = useState('');
 
     // Real data from API — replaces dummyProjectsEvm and dummyTaskData
     const [projects, setProjects]         = useState([]);
@@ -22,7 +25,11 @@ export default function DailyActuals() {
     const canSubmit = ['Project Manager', 'Site Engineer'].includes(userRole);
 
     useEffect(() => {
-        apiFetch('/projects').then(r => setProjects(r.data || [])).catch(console.error);
+        setIsLoadingProjects(true);
+        apiFetch('/projects')
+            .then(r => setProjects(r.data || []))
+            .catch(console.error)
+            .finally(() => setIsLoadingProjects(false));
     }, []);
 
     useEffect(() => {
@@ -75,6 +82,12 @@ export default function DailyActuals() {
     const totalActualCost  = projectTasks.reduce((s, t) => s + (parseFloat(actuals[t.id]?.actual_cost)  || 0), 0);
 
     const handleSubmit = async () => {
+        if (!selectedProjectId || !entryDate) {
+            setSubmitError('Please select a project and date before submitting.');
+            return;
+        }
+        setSubmitError('');
+
         const entries = projectTasks
             .filter(t => actuals[t.id]?.actual_hours > 0 || actuals[t.id]?.actual_cost > 0 || actuals[t.id]?.pct_complete > 0 || actuals[t.id]?.photo)
             .map(t => ({
@@ -85,31 +98,42 @@ export default function DailyActuals() {
                 photo_url:    actuals[t.id]?.photo?.url   || null,
             }));
 
+        setIsSubmitting(true);
         try {
             await apiFetch(`/projects/${selectedProjectId}/daily-actuals`, {
                 method: 'POST',
                 body: JSON.stringify({ entry_date: entryDate, entries }),
             });
-        } catch (e) { console.error(e); }
-
-        const entry = {
-            id:           Date.now(),
-            project_name: selectedProject.project_name,
-            project_code: selectedProject.project_code,
-            date:         entryDate,
-            task_count:   entries.length,
-        };
-        setSubmittedEntries([entry, ...submittedEntries]);
-        setIsSubmitted(true);
-        setActuals({});
-        setSelectedProjectId('');
-        setEntryDate('');
-        setTimeout(() => setIsSubmitted(false), 3000);
+            const entry = {
+                id:           Date.now(),
+                project_name: selectedProject.project_name,
+                project_code: selectedProject.project_code,
+                date:         entryDate,
+                task_count:   entries.length,
+            };
+            setSubmittedEntries([entry, ...submittedEntries]);
+            setIsSubmitted(true);
+            setActuals({});
+            setSelectedProjectId('');
+            setEntryDate('');
+            setTimeout(() => setIsSubmitted(false), 3000);
+        } catch (e) {
+            setSubmitError(e.message || 'Failed to submit daily actuals.');
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
     const inputClass       = INPUT_CLASS;
     const inlineInputClass = INLINE_INPUT_CLASS;
     const cardClass        = CARD_CLASS;
+
+    if (isLoadingProjects) return (
+        <div className="h-[60vh] flex flex-col items-center justify-center gap-4 text-slate-400">
+            <Loader2 className="w-10 h-10 animate-spin text-emerald-500" />
+            <p className="font-bold uppercase tracking-[0.2em] text-xs">Loading Projects...</p>
+        </div>
+    );
 
     return (
         <div className="space-y-10 pb-12">
@@ -186,13 +210,23 @@ export default function DailyActuals() {
                             </p>
                         </div>
                         {canSubmit && (
-                            <button
-                                onClick={handleSubmit}
-                                disabled={!hasAnyActuals}
-                                className="bg-emerald-600 hover:bg-emerald-700 text-white px-8 py-4 rounded-[1.25rem] font-black text-sm shadow-xl shadow-emerald-200/50 hover:shadow-emerald-300/50 transition-all active:scale-95 flex items-center justify-center gap-3 shrink-0 disabled:opacity-40 disabled:grayscale disabled:cursor-not-allowed disabled:shadow-none"
-                            >
-                                <CheckCircle2 className="w-5 h-5" /> {hasAnyActuals ? 'Submit Records' : 'Enter data to submit'}
-                            </button>
+                            <div className="flex flex-col items-stretch gap-2 shrink-0">
+                                <button
+                                    onClick={handleSubmit}
+                                    disabled={!hasAnyActuals || isSubmitting}
+                                    className="bg-emerald-600 hover:bg-emerald-700 text-white px-8 py-4 rounded-[1.25rem] font-black text-sm shadow-xl shadow-emerald-200/50 hover:shadow-emerald-300/50 transition-all active:scale-95 flex items-center justify-center gap-3 disabled:opacity-40 disabled:grayscale disabled:cursor-not-allowed disabled:shadow-none"
+                                >
+                                    {isSubmitting
+                                        ? <><Loader2 className="w-5 h-5 animate-spin" /> Submitting...</>
+                                        : <><CheckCircle2 className="w-5 h-5" /> {hasAnyActuals ? 'Submit Records' : 'Enter data to submit'}</>
+                                    }
+                                </button>
+                                {submitError && (
+                                    <div className="p-3 rounded-lg bg-red-50/80 border border-red-100 text-red-600 text-xs text-center font-bold uppercase">
+                                        {submitError}
+                                    </div>
+                                )}
+                            </div>
                         )}
                     </div>
 
