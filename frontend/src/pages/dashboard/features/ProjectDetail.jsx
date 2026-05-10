@@ -137,9 +137,11 @@ export default function ProjectDetail({ project, onBack }) {
     const leafNodes = wbsNodes.filter(n => !wbsNodes.some(m => m.parent_id === n.id));
     const rootNodes = wbsNodes.filter(n => n.parent_id === null);
 
-    const getDescendantIds = (nodeId) => {
+    const getDescendantIds = (nodeId, visited = new Set()) => {
+        if (visited.has(nodeId)) return [];
+        visited.add(nodeId);
         const children = wbsNodes.filter(n => n.parent_id === nodeId);
-        return [nodeId, ...children.flatMap(c => getDescendantIds(c.id))];
+        return [nodeId, ...children.flatMap(c => getDescendantIds(c.id, visited))];
     };
     const selectedIds   = selectedWbsId ? getDescendantIds(selectedWbsId) : null;
     const filteredTasks = selectedIds ? tasks.filter(t => selectedIds.includes(t.wbs_id)) : tasks;
@@ -197,8 +199,8 @@ export default function ProjectDetail({ project, onBack }) {
         e.preventDefault();
         setTaskError('');
         if (!taskForm.wbs_id) { setTaskError('Please select a WBS node.'); return; }
-        if (new Date(taskForm.planned_end) <= new Date(taskForm.planned_start)) {
-            setTaskError('End date must be after start date.'); return;
+        if (new Date(taskForm.planned_end) < new Date(taskForm.planned_start)) {
+            setTaskError('End date must be on or after start date.'); return;
         }
         if (parseFloat(taskForm.planned_cost) <= 0 || isNaN(parseFloat(taskForm.planned_cost))) {
             setTaskError('Planned cost must be greater than zero.'); return;
@@ -474,7 +476,7 @@ export default function ProjectDetail({ project, onBack }) {
                                         <td className="px-4 py-3.5" colSpan="5">Total</td>
                                         <td className="px-4 py-3.5">{formatCurrency(totalCost)}</td>
                                         <td className="px-4 py-3.5">{totalHours} hrs</td>
-                                        <td className="px-4 py-3.5">{(totalWeight * 100).toFixed(0)}%</td>
+                                        <td className={`px-4 py-3.5 ${totalWeight > 1.001 ? 'text-red-600 font-bold' : ''}`}>{(totalWeight * 100).toFixed(1)}%</td>
                                     </tr>
                                 </tfoot>
                             )}
