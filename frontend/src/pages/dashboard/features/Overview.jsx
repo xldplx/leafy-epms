@@ -91,9 +91,10 @@ export default function Overview() {
 
     // S-Curve Data for Portfolio (Aggregated from all projects)
     const rawSCurveData = useMemo(() => {
-        if (!projects.length || !allTasks.length) return [];
-        const minDate = new Date(Math.min(...projects.map(p => new Date(p.planned_start).getTime())));
-        const maxDate = new Date(Math.max(...projects.map(p => new Date(p.planned_end).getTime())));
+        const dated = projects.filter(p => p.planned_start && p.planned_end);
+        if (!dated.length || !allTasks.length) return [];
+        const minDate = new Date(Math.min(...dated.map(p => new Date(p.planned_start).getTime())));
+        const maxDate = new Date(Math.max(...dated.map(p => new Date(p.planned_end).getTime())));
         return generateSCurveData(allTasks, minDate.toISOString(), maxDate.toISOString());
     }, [projects, allTasks]);
 
@@ -230,7 +231,7 @@ export default function Overview() {
                     <h3 className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Avg. Cost (CPI)</h3>
                     <p className={`text-2xl font-black tracking-tight mt-1 ${cpiColor.text}`}>{portfolioCPI !== null ? portfolioCPI.toFixed(2) : '--'}</p>
                     <div className="mt-3 bg-slate-100/50 rounded-full h-1 overflow-hidden">
-                        <div className={`h-full rounded-full transition-all duration-1000 ${portfolioCPI >= 1 ? 'bg-emerald-500' : portfolioCPI >=- 0.9 ? 'bg-amber-500' : 'bg-red-500'}`} style={{ width: `${Math.min((portfolioCPI || 0) * 100, 100)}%` }} />
+                        <div className={`h-full rounded-full transition-all duration-1000 ${portfolioCPI >= 1 ? 'bg-emerald-500' : portfolioCPI >= 0.9 ? 'bg-amber-500' : 'bg-red-500'}`} style={{ width: `${Math.min((portfolioCPI || 0) * 100, 100)}%` }} />
                     </div>
                 </div>
             </div>
@@ -320,6 +321,14 @@ export default function Overview() {
                             <div className="flex items-center gap-2">
                                 <div className="w-1.5 h-1.5 rounded-full bg-[#3b82f6]" />
                                 <span className="text-[9px] font-bold text-slate-500 uppercase">{statusCounts.planning} Planning</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <div className="w-1.5 h-1.5 rounded-full bg-[#f59e0b]" />
+                                <span className="text-[9px] font-bold text-slate-500 uppercase">{statusCounts.completed} Completed</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <div className="w-1.5 h-1.5 rounded-full bg-[#ef4444]" />
+                                <span className="text-[9px] font-bold text-slate-500 uppercase">{statusCounts.on_hold} On Hold</span>
                             </div>
                         </div>
                     </div>
