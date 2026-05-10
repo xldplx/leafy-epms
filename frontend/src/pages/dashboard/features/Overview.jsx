@@ -12,11 +12,7 @@ import {
 import { computeEvm, computeAlerts, indexColor, formatCurrency } from '../../../utils/evmHelpers';
 import { generateSCurveData } from '../../../utils/cpmHelpers';
 import { STATUS_STYLES, CARD_CLASS } from '../../../utils/uiConstants';
-
-const BASE_URL = 'http://localhost:5000/api';
-const apiFetch = (path) => fetch(`${BASE_URL}${path}`, {
-    headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-}).then(r => r.json());
+import { apiFetch } from '../../../utils/api';
 
 const COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444'];
 
