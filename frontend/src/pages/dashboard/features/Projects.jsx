@@ -30,6 +30,11 @@ export default function Projects() {
     const [error, setError]             = useState('');
     const [successToast, setSuccessToast] = useState(false);
 
+    const resetForm = () => setForm({
+        project_name: '', project_code: '', description: '',
+        planned_start: '', planned_end: '', total_budget: '',
+    });
+
     const userRole = localStorage.getItem('userRole') || 'Guest';
 
     const fetchProjects = async () => {
@@ -96,7 +101,7 @@ export default function Projects() {
                 return;
             }
             setIsModalOpen(false);
-            setForm({ project_name: '', project_code: '', description: '', planned_start: '', planned_end: '', total_budget: '' });
+            resetForm();
             setSuccessToast(true);
             setTimeout(() => setSuccessToast(false), 3000);
             fetchProjects();
@@ -162,7 +167,7 @@ export default function Projects() {
                                     <FolderKanban className="w-6 h-6" />
                                 </div>
                                 <span className={`text-[10px] font-bold uppercase px-2.5 py-1 rounded-lg border ${STATUS_STYLES[project.status] || STATUS_STYLES.planning}`}>
-                                    {project.status.replace('_', ' ')}
+                                    {(project.status || 'planning').replace('_', ' ')}
                                 </span>
                             </div>
 
@@ -314,7 +319,7 @@ export default function Projects() {
                             <div className="flex gap-3 pt-4">
                                 <button
                                     type="button"
-                                    onClick={() => setIsModalOpen(false)}
+                                    onClick={() => { setIsModalOpen(false); resetForm(); }}
                                     className="flex-1 px-6 py-3 bg-slate-100 text-slate-600 rounded-xl font-semibold hover:bg-slate-200 transition-all"
                                 >
                                     Cancel
