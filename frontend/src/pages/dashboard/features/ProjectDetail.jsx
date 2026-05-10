@@ -89,6 +89,7 @@ export default function ProjectDetail({ project, onBack }) {
     const [baselineName, setBaselineName]      = useState('');
     const [baseline, setBaseline]              = useState(null);
     const [lockingBaseline, setLockingBaseline] = useState(false);
+    const [lockError, setLockError]             = useState('');
 
     const userRole = localStorage.getItem('userRole');
     const canEdit  = userRole === 'Project Manager' || userRole === 'Planner';
@@ -245,6 +246,7 @@ export default function ProjectDetail({ project, onBack }) {
 
     // ── Lock Baseline ─────────────────────────────────────────────────────────
     const handleLockBaseline = async () => {
+        setLockError('');
         setLockingBaseline(true);
         try {
             const name = baselineName.trim() || 'Baseline Rev.0';
@@ -252,14 +254,14 @@ export default function ProjectDetail({ project, onBack }) {
                 method: 'POST',
                 body: JSON.stringify({ baseline_name: name }),
             });
-            if (!res.success) { alert(res.message || 'Failed to lock baseline.'); return; }
+            if (!res.success) { setLockError(res.message || 'Failed to lock baseline.'); return; }
             setBaseline({ name, lockedAt: new Date() });
             setIsLocked(true);
             setIsLockModalOpen(false);
             setBaselineName('');
             fetchData();
         } catch (e) {
-            alert(e.message || 'Server error.');
+            setLockError(e.message || 'Server error.');
         } finally {
             setLockingBaseline(false);
         }
@@ -296,7 +298,7 @@ export default function ProjectDetail({ project, onBack }) {
                             </div>
                         ) : (
                             <button
-                                onClick={() => tasks.length > 0 && setIsLockModalOpen(true)}
+                                onClick={() => { if (tasks.length > 0) { setLockError(''); setIsLockModalOpen(true); } }}
                                 disabled={tasks.length === 0}
                                 className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-sm transition-all shadow-lg shadow-amber-100 ${tasks.length > 0 ? 'bg-amber-500 hover:bg-amber-600 text-white cursor-pointer' : 'bg-amber-500 text-white opacity-50 cursor-not-allowed'}`}
                             >
@@ -668,6 +670,12 @@ export default function ProjectDetail({ project, onBack }) {
                             This will freeze all <strong>{tasks.length} tasks</strong> and their planned values as the reference baseline.
                             You will not be able to add or edit tasks after locking.
                         </p>
+
+                        {lockError && (
+                            <div className="p-3 mb-4 rounded-lg bg-red-50/80 border border-red-100 text-red-600 text-xs text-center font-bold uppercase">
+                                {lockError}
+                            </div>
+                        )}
 
                         <div className="space-y-1 mb-6">
                             <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider ml-1">Baseline Name</label>
