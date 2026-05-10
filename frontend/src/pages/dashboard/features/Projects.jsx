@@ -292,6 +292,7 @@ export default function Projects() {
                                     <input
                                         type="date"
                                         required
+                                        min={form.planned_start || undefined}
                                         value={form.planned_end}
                                         onChange={(e) => setForm({ ...form, planned_end: e.target.value })}
                                         className="w-full px-4 py-3 bg-white/50 border border-slate-200 rounded-lg outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all text-slate-700 text-sm"

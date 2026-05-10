@@ -598,6 +598,8 @@ export default function ProjectDetail({ project, onBack }) {
                                 <div className="space-y-1">
                                     <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider ml-1">Start Date</label>
                                     <input type="date" required value={taskForm.planned_start}
+                                        min={project.planned_start || undefined}
+                                        max={project.planned_end || undefined}
                                         onChange={e => setTaskForm({ ...taskForm, planned_start: e.target.value })}
                                         className="w-full px-4 py-3 bg-white/50 border border-slate-200 rounded-lg outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all text-slate-700 text-sm"
                                     />
@@ -605,6 +607,8 @@ export default function ProjectDetail({ project, onBack }) {
                                 <div className="space-y-1">
                                     <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider ml-1">End Date</label>
                                     <input type="date" required value={taskForm.planned_end}
+                                        min={taskForm.planned_start || project.planned_start || undefined}
+                                        max={project.planned_end || undefined}
                                         onChange={e => setTaskForm({ ...taskForm, planned_end: e.target.value })}
                                         className="w-full px-4 py-3 bg-white/50 border border-slate-200 rounded-lg outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all text-slate-700 text-sm"
                                     />
