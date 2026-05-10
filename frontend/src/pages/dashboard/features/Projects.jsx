@@ -3,12 +3,7 @@ import { Plus, FolderKanban, Calendar, DollarSign, ChevronRight, X, CheckCircle2
 import ProjectDetail from './ProjectDetail';
 import { formatCurrency, formatDate, computeEvm, indexColor } from '../../../utils/evmHelpers';
 import { STATUS_STYLES } from '../../../utils/uiConstants';
-
-const BASE_URL = 'http://localhost:5000/api';
-const apiFetch = (path, options = {}) => fetch(`${BASE_URL}${path}`, {
-    ...options,
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token')}`, ...(options.headers || {}) },
-}).then(r => r.json());
+import { apiFetch } from '../../../utils/api';
 
 export default function Projects() {
     // Real data from API — replaces seedProjects, dummyProjectsEvm, dummyTaskData

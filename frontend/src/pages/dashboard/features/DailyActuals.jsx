@@ -2,12 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { ClipboardList, CheckCircle2, Camera, X, Image as ImageIcon, Loader2 } from 'lucide-react';
 import { formatCurrency, formatDate } from '../../../utils/evmHelpers';
 import { INPUT_CLASS, INLINE_INPUT_CLASS, CARD_CLASS } from '../../../utils/uiConstants';
-
-const BASE_URL = 'http://localhost:5000/api';
-const apiFetch = (path, options = {}) => fetch(`${BASE_URL}${path}`, {
-    ...options,
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token')}`, ...(options.headers || {}) },
-}).then(r => r.json());
+import { apiFetch } from '../../../utils/api';
 
 export default function DailyActuals() {
     const [selectedProjectId, setSelectedProjectId] = useState('');

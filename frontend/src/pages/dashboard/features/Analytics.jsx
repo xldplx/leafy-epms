@@ -5,16 +5,12 @@ import {
 } from 'recharts';
 import { calculateCPM, generateSCurveData } from '../../../utils/cpmHelpers';
 import { computeEvm, indexColor } from '../../../utils/evmHelpers';
-import { 
-    ZoomIn, ZoomOut, MoveHorizontal, ChevronRight, 
-    Filter, Calendar, Target, 
+import { apiFetch } from '../../../utils/api';
+import {
+    ZoomIn, ZoomOut, MoveHorizontal, ChevronRight,
+    Filter, Calendar, Target,
     Info, AlertCircle, CheckCircle2, Clock, Loader2
 } from 'lucide-react';
-
-const BASE_URL = 'http://localhost:5000/api';
-const apiFetch = (path) => fetch(`${BASE_URL}${path}`, {
-    headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-}).then(r => r.json());
 
 // ─── TABS ────────────────────────────────────────────────────────────────────
 const TABS = ['Cost S-Curve', 'Manpower S-Curve', 'Progress S-Curve', 'Gantt Chart', 'CPM Analysis'];
