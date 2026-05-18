@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ArrowLeft, Lock, Plus, ChevronRight, ChevronDown, ListTodo, X, Calendar, DollarSign, Clock, Loader2, GitBranch } from 'lucide-react';
+import { ArrowLeft, Lock, Plus, ChevronRight, ChevronDown, ListTodo, X, Calendar, DollarSign, Clock, Loader2, GitBranch, Pencil, Trash2, AlertTriangle } from 'lucide-react';
 import { formatCurrency, formatDate } from '../../../utils/evmHelpers';
 import { STATUS_STYLES, INPUT_CLASS } from '../../../utils/uiConstants';
 import { apiFetch } from '../../../utils/api';
@@ -63,14 +63,20 @@ export default function ProjectDetail({ project, onBack }) {
     const [selectedWbsId, setSelectedWbsId] = useState(null);
     const [expandedNodes, setExpandedNodes]  = useState(new Set());
 
-    // Add Task modal
+    // Task modal (add + edit share the same modal)
     const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
+    const [editingTaskId, setEditingTaskId]     = useState(null);
     const [taskForm, setTaskForm] = useState({
         task_name: '', wbs_id: '', planned_start: '', planned_end: '',
         planned_cost: '', planned_hours: '', weight: '',
     });
-    const [taskError, setTaskError] = useState('');
+    const [taskError, setTaskError]   = useState('');
     const [savingTask, setSavingTask] = useState(false);
+
+    // Delete task confirm
+    const [deletingTaskId, setDeletingTaskId] = useState(null);
+    const [deletingTask, setDeletingTask]     = useState(false);
+    const [deleteError, setDeleteError]       = useState('');
 
     // Add WBS Node modal
     const [isWbsModalOpen, setIsWbsModalOpen] = useState(false);
@@ -113,13 +119,49 @@ export default function ProjectDetail({ project, onBack }) {
         const handler = (e) => {
             if (e.key === 'Escape') {
                 setIsTaskModalOpen(false);
+                setEditingTaskId(null);
                 setIsLockModalOpen(false);
                 setIsWbsModalOpen(false);
+                setDeletingTaskId(null);
             }
         };
         document.addEventListener('keydown', handler);
         return () => document.removeEventListener('keydown', handler);
     }, []);
+
+    const resetTaskForm = () => setTaskForm({
+        task_name: '', wbs_id: '', planned_start: '', planned_end: '',
+        planned_cost: '', planned_hours: '', weight: '',
+    });
+
+    const closeTaskModal = () => {
+        setIsTaskModalOpen(false);
+        setEditingTaskId(null);
+        setTaskError('');
+        resetTaskForm();
+    };
+
+    const openAddTaskModal = () => {
+        setEditingTaskId(null);
+        setTaskError('');
+        resetTaskForm();
+        setIsTaskModalOpen(true);
+    };
+
+    const openEditTaskModal = (task) => {
+        setEditingTaskId(task.id);
+        setTaskError('');
+        setTaskForm({
+            task_name:     task.task_name || '',
+            wbs_id:        String(task.wbs_id || ''),
+            planned_start: (task.planned_start || '').slice(0, 10),
+            planned_end:   (task.planned_end || '').slice(0, 10),
+            planned_cost:  task.planned_cost  != null ? String(task.planned_cost)  : '',
+            planned_hours: task.planned_hours != null ? String(task.planned_hours) : '',
+            weight:        task.weight        != null ? String(task.weight)        : '',
+        });
+        setIsTaskModalOpen(true);
+    };
 
     const toggleExpand = (id) => {
         setExpandedNodes(prev => {
@@ -189,8 +231,8 @@ export default function ProjectDetail({ project, onBack }) {
         }
     };
 
-    // ── Add Task ──────────────────────────────────────────────────────────────
-    const handleAddTask = async (e) => {
+    // ── Add / Edit Task ───────────────────────────────────────────────────────
+    const handleSubmitTask = async (e) => {
         e.preventDefault();
         setTaskError('');
         if (!taskForm.wbs_id) { setTaskError('Please select a WBS node.'); return; }
@@ -207,32 +249,37 @@ export default function ProjectDetail({ project, onBack }) {
         if (isNaN(w) || w <= 0 || w > 1) {
             setTaskError('Weight must be between 0.01 and 1.00.'); return;
         }
-        const currentTotal = tasks.reduce((s, t) => s + parseFloat(t.weight || 0), 0);
+        const currentTotal = tasks.reduce((s, t) => {
+            if (editingTaskId && t.id === editingTaskId) return s;
+            return s + parseFloat(t.weight || 0);
+        }, 0);
         if (currentTotal + w > 1.001) {
-            setTaskError(`Adding this weight would exceed 100%. Remaining: ${((1 - currentTotal) * 100).toFixed(1)}%`); return;
+            setTaskError(`Total weight would exceed 100%. Remaining: ${((1 - currentTotal) * 100).toFixed(1)}%`); return;
         }
 
         setSavingTask(true);
         try {
             const wbsNode  = wbsNodes.find(n => n.id === parseInt(taskForm.wbs_id));
             const duration = Math.round((new Date(taskForm.planned_end) - new Date(taskForm.planned_start)) / (1000 * 60 * 60 * 24));
-            const res = await apiFetch(`/projects/${project.id}/tasks`, {
-                method: 'POST',
-                body: JSON.stringify({
-                    wbs_id:           parseInt(taskForm.wbs_id),
-                    wbs_code:         wbsNode?.wbs_code || '',
-                    task_name:        taskForm.task_name,
-                    planned_start:    taskForm.planned_start,
-                    planned_end:      taskForm.planned_end,
-                    planned_duration: duration,
-                    planned_cost:     parseFloat(taskForm.planned_cost)  || 0,
-                    planned_hours:    parseFloat(taskForm.planned_hours) || 0,
-                    weight:           parseFloat(taskForm.weight)        || 0,
-                }),
+            const body = JSON.stringify({
+                wbs_id:           parseInt(taskForm.wbs_id),
+                wbs_code:         wbsNode?.wbs_code || '',
+                task_name:        taskForm.task_name,
+                planned_start:    taskForm.planned_start,
+                planned_end:      taskForm.planned_end,
+                planned_duration: duration,
+                planned_cost:     parseFloat(taskForm.planned_cost)  || 0,
+                planned_hours:    parseFloat(taskForm.planned_hours) || 0,
+                weight:           parseFloat(taskForm.weight)        || 0,
             });
-            if (!res.success) { setTaskError(res.message || 'Failed to add task.'); return; }
-            setIsTaskModalOpen(false);
-            setTaskForm({ task_name: '', wbs_id: '', planned_start: '', planned_end: '', planned_cost: '', planned_hours: '', weight: '' });
+            const res = editingTaskId
+                ? await apiFetch(`/tasks/${editingTaskId}`,             { method: 'PUT',  body })
+                : await apiFetch(`/projects/${project.id}/tasks`,        { method: 'POST', body });
+            if (!res.success) {
+                setTaskError(res.message || (editingTaskId ? 'Failed to update task.' : 'Failed to add task.'));
+                return;
+            }
+            closeTaskModal();
             fetchData();
         } catch (e) {
             setTaskError(e.message || 'Server error.');
@@ -240,6 +287,25 @@ export default function ProjectDetail({ project, onBack }) {
             setSavingTask(false);
         }
     };
+
+    // ── Delete Task ───────────────────────────────────────────────────────────
+    const handleDeleteTask = async () => {
+        if (!deletingTaskId) return;
+        setDeleteError('');
+        setDeletingTask(true);
+        try {
+            const res = await apiFetch(`/tasks/${deletingTaskId}`, { method: 'DELETE' });
+            if (!res.success) { setDeleteError(res.message || 'Failed to delete task.'); return; }
+            setDeletingTaskId(null);
+            fetchData();
+        } catch (e) {
+            setDeleteError(e.message || 'Server error.');
+        } finally {
+            setDeletingTask(false);
+        }
+    };
+
+    const deletingTaskName = tasks.find(t => t.id === deletingTaskId)?.task_name;
 
     // ── Lock Baseline ─────────────────────────────────────────────────────────
     const handleLockBaseline = async () => {
@@ -405,7 +471,7 @@ export default function ProjectDetail({ project, onBack }) {
                         </div>
                         {canEdit && !isLocked && (
                             <button
-                                onClick={() => setIsTaskModalOpen(true)}
+                                onClick={openAddTaskModal}
                                 disabled={wbsNodes.length === 0}
                                 title={wbsNodes.length === 0 ? 'Add a WBS node first' : 'Add task'}
                                 className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl font-semibold text-sm shadow-lg shadow-emerald-200 transition-all flex items-center gap-2 shrink-0 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
@@ -432,11 +498,12 @@ export default function ProjectDetail({ project, onBack }) {
                                     <th className="px-4 py-4">Planned Cost</th>
                                     <th className="px-4 py-4">Hours</th>
                                     <th className="px-4 py-4">Weight</th>
+                                    <th className="px-4 py-4 text-right">{canEdit ? 'Actions' : ''}</th>
                                 </tr>
                             </thead>
                             <tbody className="text-sm font-medium text-slate-600 divide-y divide-slate-50">
                                 {loadingTasks ? (
-                                    <tr><td colSpan="8" className="px-6 py-12 text-center"><Loader2 className="w-6 h-6 animate-spin text-slate-300 mx-auto" /></td></tr>
+                                    <tr><td colSpan="9" className="px-6 py-12 text-center"><Loader2 className="w-6 h-6 animate-spin text-slate-300 mx-auto" /></td></tr>
                                 ) : filteredTasks.length > 0 ? (
                                     filteredTasks.map(task => (
                                         <tr key={task.id} className="hover:bg-slate-50/50 transition-colors">
@@ -452,11 +519,37 @@ export default function ProjectDetail({ project, onBack }) {
                                                     {(parseFloat(task.weight || 0) * 100).toFixed(0)}%
                                                 </span>
                                             </td>
+                                            <td className="px-4 py-3.5 text-right">
+                                                {canEdit && (
+                                                    <div className="flex items-center justify-end gap-1">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => openEditTaskModal(task)}
+                                                            disabled={isLocked}
+                                                            title={isLocked ? 'Locked under baseline' : 'Edit task'}
+                                                            aria-label="Edit task"
+                                                            className="p-1.5 rounded-lg text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:text-slate-400 disabled:hover:bg-transparent"
+                                                        >
+                                                            <Pencil className="w-3.5 h-3.5" />
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => { setDeleteError(''); setDeletingTaskId(task.id); }}
+                                                            disabled={isLocked}
+                                                            title={isLocked ? 'Locked under baseline' : 'Delete task'}
+                                                            aria-label="Delete task"
+                                                            className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:text-slate-400 disabled:hover:bg-transparent"
+                                                        >
+                                                            <Trash2 className="w-3.5 h-3.5" />
+                                                        </button>
+                                                    </div>
+                                                )}
+                                            </td>
                                         </tr>
                                     ))
                                 ) : (
                                     <tr>
-                                        <td colSpan="8" className="px-6 py-12 text-center text-slate-400">
+                                        <td colSpan="9" className="px-6 py-12 text-center text-slate-400">
                                             <div className="flex flex-col items-center justify-center gap-2">
                                                 <ListTodo className="w-10 h-10 text-slate-200" />
                                                 <p>No tasks under this WBS node.</p>
@@ -472,6 +565,7 @@ export default function ProjectDetail({ project, onBack }) {
                                         <td className="px-4 py-3.5">{formatCurrency(totalCost)}</td>
                                         <td className="px-4 py-3.5">{totalHours} hrs</td>
                                         <td className={`px-4 py-3.5 ${totalWeight > 1.001 ? 'text-red-600 font-bold' : ''}`}>{(totalWeight * 100).toFixed(1)}%</td>
+                                        <td className="px-4 py-3.5"></td>
                                     </tr>
                                 </tfoot>
                             )}
@@ -553,14 +647,14 @@ export default function ProjectDetail({ project, onBack }) {
                 </div>
             )}
 
-            {/* ── ADD TASK MODAL ─────────────────────────────────────────────── */}
+            {/* ── ADD / EDIT TASK MODAL ──────────────────────────────────────── */}
             {isTaskModalOpen && (
-                <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50" onClick={() => setIsTaskModalOpen(false)}>
-                    <div role="dialog" aria-label="Add new task" className="bg-white rounded-3xl p-8 w-full max-w-lg shadow-2xl border border-slate-100 animate-in fade-in duration-200" onClick={e => e.stopPropagation()}>
+                <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50" onClick={closeTaskModal}>
+                    <div role="dialog" aria-label={editingTaskId ? 'Edit task' : 'Add new task'} className="bg-white rounded-3xl p-8 w-full max-w-lg shadow-2xl border border-slate-100 animate-in fade-in duration-200" onClick={e => e.stopPropagation()}>
 
                         <div className="flex items-center justify-between mb-6">
-                            <h3 className="text-xl font-bold text-slate-800">Add New Task</h3>
-                            <button onClick={() => setIsTaskModalOpen(false)} aria-label="Close" className="text-slate-400 hover:text-slate-600 transition-colors">
+                            <h3 className="text-xl font-bold text-slate-800">{editingTaskId ? 'Edit Task' : 'Add New Task'}</h3>
+                            <button onClick={closeTaskModal} aria-label="Close" className="text-slate-400 hover:text-slate-600 transition-colors">
                                 <X className="w-5 h-5" />
                             </button>
                         </div>
@@ -571,7 +665,7 @@ export default function ProjectDetail({ project, onBack }) {
                             </div>
                         )}
 
-                        <form onSubmit={handleAddTask} className="space-y-4">
+                        <form onSubmit={handleSubmitTask} className="space-y-4">
                             <div className="space-y-1">
                                 <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider ml-1">Task Name</label>
                                 <input type="text" required value={taskForm.task_name}
@@ -643,16 +737,55 @@ export default function ProjectDetail({ project, onBack }) {
                             </div>
 
                             <div className="flex gap-3 pt-4">
-                                <button type="button" onClick={() => setIsTaskModalOpen(false)}
+                                <button type="button" onClick={closeTaskModal}
                                     className="flex-1 px-6 py-3 bg-slate-100 text-slate-600 rounded-xl font-semibold hover:bg-slate-200 transition-all">
                                     Cancel
                                 </button>
                                 <button type="submit" disabled={savingTask}
                                     className="flex-1 px-6 py-3 bg-emerald-600 text-white rounded-xl font-semibold shadow-lg shadow-emerald-200 hover:bg-emerald-700 transition-all flex items-center justify-center gap-2 disabled:opacity-60">
-                                    {savingTask ? <><Loader2 className="w-4 h-4 animate-spin" /> Saving...</> : 'Add Task'}
+                                    {savingTask
+                                        ? <><Loader2 className="w-4 h-4 animate-spin" /> Saving...</>
+                                        : (editingTaskId ? 'Save Changes' : 'Add Task')}
                                 </button>
                             </div>
                         </form>
+                    </div>
+                </div>
+            )}
+
+            {/* ── DELETE TASK CONFIRM MODAL ──────────────────────────────────── */}
+            {deletingTaskId !== null && (
+                <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50" onClick={() => !deletingTask && setDeletingTaskId(null)}>
+                    <div role="dialog" aria-label="Delete task" className="bg-white rounded-3xl p-8 w-full max-w-md shadow-2xl border border-slate-100 animate-in fade-in duration-200" onClick={e => e.stopPropagation()}>
+
+                        <div className="flex items-center gap-3 mb-2">
+                            <div className="p-2.5 bg-red-50 rounded-xl text-red-600"><AlertTriangle className="w-5 h-5" /></div>
+                            <h3 className="text-xl font-bold text-slate-800">Delete Task</h3>
+                        </div>
+
+                        <p className="text-sm text-slate-500 mb-6 leading-relaxed">
+                            Permanently remove <strong className="text-slate-700">{deletingTaskName || 'this task'}</strong>?
+                            This cannot be undone.
+                        </p>
+
+                        {deleteError && (
+                            <div className="p-3 mb-4 rounded-lg bg-red-50/80 border border-red-100 text-red-600 text-xs text-center font-bold uppercase">
+                                {deleteError}
+                            </div>
+                        )}
+
+                        <div className="flex gap-3">
+                            <button onClick={() => setDeletingTaskId(null)} disabled={deletingTask}
+                                className="flex-1 px-6 py-3 bg-slate-100 text-slate-600 rounded-xl font-semibold hover:bg-slate-200 transition-all disabled:opacity-60">
+                                Cancel
+                            </button>
+                            <button onClick={handleDeleteTask} disabled={deletingTask}
+                                className="flex-1 px-6 py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl font-semibold shadow-lg shadow-red-100 transition-all flex items-center justify-center gap-2 disabled:opacity-60">
+                                {deletingTask
+                                    ? <><Loader2 className="w-4 h-4 animate-spin" /> Deleting...</>
+                                    : <><Trash2 className="w-4 h-4" /> Delete</>}
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}
