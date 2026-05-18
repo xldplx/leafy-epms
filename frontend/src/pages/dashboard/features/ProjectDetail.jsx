@@ -157,10 +157,11 @@ export default function ProjectDetail({ project, onBack }) {
     // Baseline
     const [isLocked, setIsLocked]             = useState(false);
     const [isLockModalOpen, setIsLockModalOpen] = useState(false);
-    const [baselineName, setBaselineName]      = useState('');
+    const [baselineName, setBaselineName]      = useState('Baseline Rev.0');
     const [baseline, setBaseline]              = useState(null);
     const [lockingBaseline, setLockingBaseline] = useState(false);
     const [lockError, setLockError]             = useState('');
+    const baselineCacheKey = `epms.baseline.v1.${project.id}`;
 
     // WBS name overrides — local-only edits until backend PUT route exists.
     const wbsOverrideKey = `epms.wbs_name_overrides.v1.${project.id}`;
@@ -194,6 +195,16 @@ export default function ProjectDetail({ project, onBack }) {
         setWbsOverrides(load(wbsOverrideKey, {}));
         setEditingWbsId(null);
     }, [wbsOverrideKey]);
+
+    // Restore cached baseline metadata (name + lockedAt) so the banner survives refresh.
+    useEffect(() => {
+        const cached = load(baselineCacheKey, null);
+        if (cached && cached.name) {
+            setBaseline({ name: cached.name, lockedAt: new Date(cached.lockedAt) });
+        } else {
+            setBaseline(null);
+        }
+    }, [baselineCacheKey]);
 
     const renameWbsNode = (id, newName) => {
         setWbsOverrides(prev => {
@@ -414,10 +425,11 @@ export default function ProjectDetail({ project, onBack }) {
                 body: JSON.stringify({ baseline_name: name }),
             });
             if (!res.success) { setLockError(res.message || 'Failed to lock baseline.'); return; }
-            setBaseline({ name, lockedAt: new Date() });
+            const lockedAt = new Date();
+            setBaseline({ name, lockedAt });
+            save(baselineCacheKey, { name, lockedAt: lockedAt.toISOString() });
             setIsLocked(true);
             setIsLockModalOpen(false);
-            setBaselineName('');
             fetchData();
         } catch (e) {
             setLockError(e.message || 'Server error.');
@@ -485,9 +497,15 @@ export default function ProjectDetail({ project, onBack }) {
                 </div>
 
                 {isLocked && baseline && (
-                    <div className="ml-14 flex items-center gap-2 px-3 py-1.5 bg-emerald-50 border border-emerald-200 rounded-lg text-xs text-emerald-700 font-semibold w-fit">
-                        <Lock className="w-3.5 h-3.5" />
-                        {baseline.name} — locked {baseline.lockedAt.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                    <div className="ml-14 flex items-center gap-3 px-4 py-3 bg-emerald-50/70 border border-emerald-200 rounded-2xl w-fit">
+                        <div className="p-2 bg-emerald-100 rounded-xl text-emerald-700"><Lock className="w-4 h-4" /></div>
+                        <div className="flex flex-col">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700/80">Active Baseline</span>
+                            <span className="text-sm font-bold text-emerald-800">{baseline.name}</span>
+                            <span className="text-[11px] text-emerald-700/80">
+                                {tasks.length} tasks · locked {baseline.lockedAt.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                        </div>
                     </div>
                 )}
             </div>
@@ -608,7 +626,12 @@ export default function ProjectDetail({ project, onBack }) {
                                 ) : filteredTasks.length > 0 ? (
                                     filteredTasks.map(task => (
                                         <tr key={task.id} className="hover:bg-slate-50/50 transition-colors">
-                                            <td className="px-4 py-3.5 font-semibold text-slate-700">{task.task_name}</td>
+                                            <td className="px-4 py-3.5 font-semibold text-slate-700">
+                                                <span className="inline-flex items-center gap-1.5">
+                                                    {isLocked && <Lock className="w-3 h-3 text-slate-400 shrink-0" aria-label="Locked under baseline" />}
+                                                    {task.task_name}
+                                                </span>
+                                            </td>
                                             <td className="px-4 py-3.5 font-mono text-xs text-slate-400">{task.wbs_code}</td>
                                             <td className="px-4 py-3.5 text-slate-500">{task.planned_start ? formatDate(task.planned_start) : '—'}</td>
                                             <td className="px-4 py-3.5 text-slate-500">{task.planned_end   ? formatDate(task.planned_end)   : '—'}</td>
@@ -902,8 +925,8 @@ export default function ProjectDetail({ project, onBack }) {
                         </div>
 
                         <p className="text-sm text-slate-500 mb-6 leading-relaxed">
-                            This will freeze all <strong>{tasks.length} tasks</strong> and their planned values as the reference baseline.
-                            You will not be able to add or edit tasks after locking.
+                            This freezes all <strong>{tasks.length} tasks</strong> and their planned values as the reference baseline.
+                            Tasks cannot be edited after locking.
                         </p>
 
                         {lockError && (
@@ -912,10 +935,22 @@ export default function ProjectDetail({ project, onBack }) {
                             </div>
                         )}
 
-                        <div className="space-y-1 mb-6">
-                            <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider ml-1">Baseline Name</label>
-                            <input type="text" value={baselineName} onChange={e => setBaselineName(e.target.value)}
-                                placeholder="Baseline Rev.0" className={INPUT_CLASS} />
+                        <div className="mb-6 p-4 bg-slate-50 border border-slate-100 rounded-2xl">
+                            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Will be saved as</p>
+                            <p className="text-base font-bold text-slate-800 mt-0.5">{baselineName.trim() || 'Baseline Rev.0'}</p>
+                            <details className="mt-3 group">
+                                <summary className="text-xs font-semibold text-slate-500 hover:text-emerald-600 cursor-pointer select-none list-none flex items-center gap-1">
+                                    <ChevronRight className="w-3 h-3 transition-transform group-open:rotate-90" />
+                                    Customize name
+                                </summary>
+                                <input
+                                    type="text"
+                                    value={baselineName}
+                                    onChange={e => setBaselineName(e.target.value)}
+                                    placeholder="Baseline Rev.0"
+                                    className={`${INPUT_CLASS} mt-2`}
+                                />
+                            </details>
                         </div>
 
                         <div className="flex gap-3">
