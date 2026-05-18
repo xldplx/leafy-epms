@@ -1,27 +1,46 @@
 import { useState, useEffect } from 'react';
-import { ArrowLeft, Lock, Plus, ChevronRight, ChevronDown, ListTodo, X, Calendar, DollarSign, Clock, Loader2, GitBranch, Pencil, Trash2, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, Lock, Plus, ChevronRight, ChevronDown, ListTodo, X, Calendar, DollarSign, Clock, Loader2, GitBranch, Pencil, Trash2, AlertTriangle, Check } from 'lucide-react';
 import { formatCurrency, formatDate } from '../../../utils/evmHelpers';
 import { STATUS_STYLES, INPUT_CLASS } from '../../../utils/uiConstants';
 import { apiFetch } from '../../../utils/api';
+import { load, save } from '../../../utils/localStore';
 
 // Recursive WBS node component
-function WbsNode({ node, allNodes, expandedNodes, toggleExpand, selectedWbsId, setSelectedWbsId }) {
+function WbsNode({
+    node, allNodes, expandedNodes, toggleExpand, selectedWbsId, setSelectedWbsId,
+    overrides, canRename, editingId, setEditingId, onRename,
+}) {
     const children    = allNodes.filter(n => n.parent_id === node.id);
     const hasChildren = children.length > 0;
     const isExpanded  = expandedNodes.has(node.id);
     const isSelected  = selectedWbsId === node.id;
     const indent      = (node.level - 1) * 16;
+    const displayName = (overrides && overrides[node.id]) || node.name;
+    const isEditing   = editingId === node.id;
+    const [draft, setDraft] = useState(displayName);
+
+    useEffect(() => { if (isEditing) setDraft(displayName); }, [isEditing, displayName]);
+
+    const commit = () => {
+        const trimmed = draft.trim();
+        // Reject empty submissions but allow reverting to original by clearing.
+        if (trimmed === '' || trimmed === node.name) {
+            onRename(node.id, '');
+        } else {
+            onRename(node.id, trimmed);
+        }
+        setEditingId(null);
+    };
 
     return (
         <div>
-            <button
-                type="button"
+            <div
                 style={{ paddingLeft: `${indent + 8}px` }}
-                onClick={() => setSelectedWbsId(node.id)}
-                aria-expanded={hasChildren ? isExpanded : undefined}
-                className={`w-full flex items-center gap-2 py-2 pr-2 rounded-lg text-sm transition-colors cursor-pointer ${
+                className={`group w-full flex items-center gap-2 py-2 pr-2 rounded-lg text-sm transition-colors ${
                     isSelected ? 'bg-emerald-50 text-emerald-700 font-semibold' : 'text-slate-600 hover:bg-slate-50'
-                }`}
+                } ${isEditing ? '' : 'cursor-pointer'}`}
+                onClick={() => { if (!isEditing) setSelectedWbsId(node.id); }}
+                role={isEditing ? undefined : 'button'}
             >
                 {hasChildren ? (
                     <span
@@ -38,8 +57,54 @@ function WbsNode({ node, allNodes, expandedNodes, toggleExpand, selectedWbsId, s
                     <div className="w-3.5 h-3.5 shrink-0" />
                 )}
                 <span className="font-mono text-[10px] text-slate-400 shrink-0">{node.wbs_code}</span>
-                <span className="truncate text-left">{node.name}</span>
-            </button>
+
+                {isEditing ? (
+                    <div className="flex items-center gap-1 flex-1 min-w-0" onClick={e => e.stopPropagation()}>
+                        <input
+                            type="text"
+                            autoFocus
+                            value={draft}
+                            onChange={e => setDraft(e.target.value)}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter') { e.preventDefault(); commit(); }
+                                if (e.key === 'Escape') { e.preventDefault(); setEditingId(null); }
+                            }}
+                            className="flex-1 min-w-0 px-2 py-0.5 text-sm bg-white border border-emerald-300 rounded focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                        />
+                        <button
+                            type="button"
+                            onClick={commit}
+                            aria-label="Save name"
+                            className="p-1 rounded text-emerald-600 hover:bg-emerald-50"
+                        >
+                            <Check className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setEditingId(null)}
+                            aria-label="Cancel edit"
+                            className="p-1 rounded text-slate-400 hover:bg-slate-100"
+                        >
+                            <X className="w-3.5 h-3.5" />
+                        </button>
+                    </div>
+                ) : (
+                    <>
+                        <span className="truncate text-left flex-1 min-w-0">{displayName}</span>
+                        {canRename && (
+                            <button
+                                type="button"
+                                onClick={(e) => { e.stopPropagation(); setEditingId(node.id); }}
+                                title="Rename"
+                                aria-label="Rename node"
+                                className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded text-slate-400 hover:text-emerald-600 hover:bg-emerald-50"
+                            >
+                                <Pencil className="w-3 h-3" />
+                            </button>
+                        )}
+                    </>
+                )}
+            </div>
             {hasChildren && isExpanded && children.map(child => (
                 <WbsNode
                     key={child.id}
@@ -49,6 +114,11 @@ function WbsNode({ node, allNodes, expandedNodes, toggleExpand, selectedWbsId, s
                     toggleExpand={toggleExpand}
                     selectedWbsId={selectedWbsId}
                     setSelectedWbsId={setSelectedWbsId}
+                    overrides={overrides}
+                    canRename={canRename}
+                    editingId={editingId}
+                    setEditingId={setEditingId}
+                    onRename={onRename}
                 />
             ))}
         </div>
@@ -92,6 +162,11 @@ export default function ProjectDetail({ project, onBack }) {
     const [lockingBaseline, setLockingBaseline] = useState(false);
     const [lockError, setLockError]             = useState('');
 
+    // WBS name overrides — local-only edits until backend PUT route exists.
+    const wbsOverrideKey = `epms.wbs_name_overrides.v1.${project.id}`;
+    const [wbsOverrides, setWbsOverrides] = useState({});
+    const [editingWbsId, setEditingWbsId] = useState(null);
+
     const userRole = localStorage.getItem('userRole');
     const canEdit  = userRole === 'Project Manager' || userRole === 'Planner';
 
@@ -113,6 +188,27 @@ export default function ProjectDetail({ project, onBack }) {
     };
 
     useEffect(() => { fetchData(); }, [project.id]);
+
+    // Load WBS name overrides whenever the project changes.
+    useEffect(() => {
+        setWbsOverrides(load(wbsOverrideKey, {}));
+        setEditingWbsId(null);
+    }, [wbsOverrideKey]);
+
+    const renameWbsNode = (id, newName) => {
+        setWbsOverrides(prev => {
+            const next = { ...prev };
+            const trimmed = (newName || '').trim();
+            const original = wbsNodes.find(n => n.id === id)?.name;
+            if (!trimmed || trimmed === original) {
+                delete next[id];
+            } else {
+                next[id] = trimmed;
+            }
+            save(wbsOverrideKey, next);
+            return next;
+        });
+    };
 
     // Close modals on Escape
     useEffect(() => {
@@ -436,6 +532,11 @@ export default function ProjectDetail({ project, onBack }) {
                                     toggleExpand={toggleExpand}
                                     selectedWbsId={selectedWbsId}
                                     setSelectedWbsId={setSelectedWbsId}
+                                    overrides={wbsOverrides}
+                                    canRename={canEdit && !isLocked}
+                                    editingId={editingWbsId}
+                                    setEditingId={setEditingWbsId}
+                                    onRename={renameWbsNode}
                                 />
                             ))}
                             {rootNodes.length === 0 && (
@@ -463,7 +564,7 @@ export default function ProjectDetail({ project, onBack }) {
                             <h3 className="font-bold text-slate-700">Tasks</h3>
                             {selectedNode ? (
                                 <p className="text-xs text-slate-400 mt-0.5">
-                                    Showing: <span className="font-mono text-emerald-600">{selectedNode.wbs_code}</span> — {selectedNode.name}
+                                    Showing: <span className="font-mono text-emerald-600">{selectedNode.wbs_code}</span> — {wbsOverrides[selectedNode.id] || selectedNode.name}
                                 </p>
                             ) : (
                                 <p className="text-xs text-slate-400 mt-0.5">All tasks in this project</p>
@@ -627,7 +728,7 @@ export default function ProjectDetail({ project, onBack }) {
                                 >
                                     <option value="">— Root level node —</option>
                                     {wbsNodes.map(n => (
-                                        <option key={n.id} value={n.id}>{n.wbs_code} — {n.name}</option>
+                                        <option key={n.id} value={n.id}>{n.wbs_code} — {wbsOverrides[n.id] || n.name}</option>
                                     ))}
                                 </select>
                             </div>
@@ -683,7 +784,7 @@ export default function ProjectDetail({ project, onBack }) {
                                 >
                                     <option value="">Select a WBS node...</option>
                                     {leafNodes.map(n => (
-                                        <option key={n.id} value={n.id}>{n.wbs_code} — {n.name}</option>
+                                        <option key={n.id} value={n.id}>{n.wbs_code} — {wbsOverrides[n.id] || n.name}</option>
                                     ))}
                                 </select>
                             </div>
