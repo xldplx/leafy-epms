@@ -1,11 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Plus, Users, Search, X, Loader2, CheckCircle2 } from 'lucide-react';
-
-const BASE_URL = 'http://localhost:5000/api';
-const apiFetch = (path, options = {}) => fetch(`${BASE_URL}${path}`, {
-    ...options,
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token')}`, ...(options.headers || {}) },
-}).then(r => r.json());
+import { apiFetch } from '../../../utils/api';
 
 const STATUS_BADGE = {
     active:   'bg-emerald-50 text-emerald-700 border border-emerald-100',

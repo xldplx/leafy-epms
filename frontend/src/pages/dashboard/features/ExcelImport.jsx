@@ -2,12 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { Upload, CheckCircle2, AlertTriangle, FileSpreadsheet, X, ArrowRight, Download, Loader2 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { INPUT_CLASS } from '../../../utils/uiConstants';
-
-const BASE_URL = 'http://localhost:5000/api';
-const apiFetch = (path, options = {}) => fetch(`${BASE_URL}${path}`, {
-    ...options,
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token')}`, ...(options.headers || {}) },
-}).then(r => r.json());
+import { apiFetch } from '../../../utils/api';
 
 const TASK_FIELDS = [
     { key: 'task_name',     label: 'Task Name',       required: true,  type: 'string' },

@@ -2,12 +2,7 @@ import { useState, useEffect } from 'react';
 import { Bell, AlertTriangle, CheckCircle2, Settings } from 'lucide-react';
 import { computeAlerts } from '../../../utils/evmHelpers';
 import { INPUT_CLASS } from '../../../utils/uiConstants';
-
-const BASE_URL = 'http://localhost:5000/api';
-const apiFetch = (path, options = {}) => fetch(`${BASE_URL}${path}`, {
-    ...options,
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token')}`, ...(options.headers || {}) },
-}).then(r => r.json());
+import { apiFetch } from '../../../utils/api';
 
 export default function Alerts() {
     const [thresholds, setThresholds] = useState({
