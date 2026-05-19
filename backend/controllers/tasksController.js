@@ -10,12 +10,11 @@ const getTasksByProject = async (req, res) => {
 
 const createTask = async (req, res) => {
     const { projectId } = req.params;
-    const { wbs_id, wbs_code, task_name, planned_start, planned_end, planned_duration, planned_cost, planned_hours, weight, predecessors } = req.body;
+    const { wbs_code, task_name, planned_start, planned_end, planned_duration, planned_cost, planned_hours, weight, predecessors } = req.body;
     if (!task_name) return res.status(400).json({ success: false, message: 'task_name is required.' });
     try {
         const { data, error } = await supabase.from('tasks').insert([{
             project_id:       parseInt(projectId),
-            wbs_id:           wbs_id ? parseInt(wbs_id) : null,
             wbs_code:         wbs_code         || null,
             task_name,
             planned_start:    planned_start    || null,
@@ -34,7 +33,7 @@ const createTask = async (req, res) => {
 
 const updateTask = async (req, res) => {
     const updates = {};
-    ['wbs_id','wbs_code','task_name','planned_start','planned_end','planned_duration','planned_cost',
+    ['wbs_code','task_name','planned_start','planned_end','planned_duration','planned_cost',
      'planned_hours','weight','predecessors','actual_cost','actual_hours','pct_complete']
         .forEach(f => { if (req.body[f] !== undefined) updates[f] = req.body[f]; });
     updates.updated_at = new Date().toISOString();
@@ -97,4 +96,19 @@ const lockBaseline = async (req, res) => {
     } catch (e) { res.status(500).json({ success: false, message: e.message }); }
 };
 
-module.exports = { getTasksByProject, createTask, updateTask, deleteTask, bulkImportTasks, lockBaseline };
+const getBaselineInfo = async (req, res) => {
+    const { projectId } = req.params;
+    try {
+        const { data, error } = await supabase
+            .from('baselines')
+            .select('baseline_name, locked_by, locked_at')
+            .eq('project_id', projectId)
+            .order('locked_at', { ascending: false })
+            .limit(1)
+            .single();
+        if (error || !data) return res.json({ success: false, data: null });
+        res.json({ success: true, data });
+    } catch (e) { res.status(500).json({ success: false, message: e.message }); }
+};
+
+module.exports = { getTasksByProject, createTask, updateTask, deleteTask, bulkImportTasks, lockBaseline, getBaselineInfo };

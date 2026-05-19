@@ -27,6 +27,26 @@ const createWbsNode = async (req, res) => {
     } catch (e) { res.status(500).json({ success: false, message: e.message }); }
 };
 
+// ── UPDATE WBS node name (rename) ─────────────────────────────────────────────
+const updateWbsNode = async (req, res) => {
+    const { name, wbs_code } = req.body;
+    if (!name && !wbs_code)
+        return res.status(400).json({ success: false, message: 'name or wbs_code is required.' });
+    const updates = {};
+    if (name)     updates.name     = name.trim();
+    if (wbs_code) updates.wbs_code = wbs_code.trim();
+    try {
+        const { data, error } = await supabase
+            .from('wbs').update(updates)
+            .eq('id', req.params.id)
+            .eq('project_id', req.params.projectId)
+            .select().single();
+        if (error) return res.status(500).json({ success: false, message: error.message });
+        if (!data) return res.status(404).json({ success: false, message: 'WBS node not found.' });
+        res.json({ success: true, data });
+    } catch (e) { res.status(500).json({ success: false, message: e.message }); }
+};
+
 const deleteWbsNode = async (req, res) => {
     try {
         const { data: linked } = await supabase.from('tasks').select('id').eq('wbs_id', req.params.id).limit(1);
@@ -38,4 +58,4 @@ const deleteWbsNode = async (req, res) => {
     } catch (e) { res.status(500).json({ success: false, message: e.message }); }
 };
 
-module.exports = { getWbsByProject, createWbsNode, deleteWbsNode };
+module.exports = { getWbsByProject, createWbsNode, updateWbsNode, deleteWbsNode };
