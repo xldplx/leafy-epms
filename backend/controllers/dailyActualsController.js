@@ -31,12 +31,15 @@ const submitDailyActuals = async (req, res) => {
             photo_url:    e.photo_url || null,
             submitted_by: req.user.username,
         }));
+
         const { data, error } = await supabase.from('daily_actuals').insert(rows).select();
         if (error) return res.status(500).json({ success: false, message: error.message });
 
         // Update cumulative actuals on each task
         for (const e of entries.filter(e => e.task_id)) {
-            const { data: task } = await supabase.from('tasks').select('actual_cost,actual_hours,pct_complete').eq('id', e.task_id).single();
+            const { data: task } = await supabase.from('tasks')
+                .select('actual_cost, actual_hours, pct_complete')
+                .eq('id', e.task_id).single();
             if (task) {
                 await supabase.from('tasks').update({
                     actual_cost:  (parseFloat(task.actual_cost)  || 0) + (parseFloat(e.actual_cost)  || 0),
@@ -50,4 +53,30 @@ const submitDailyActuals = async (req, res) => {
     } catch (e) { res.status(500).json({ success: false, message: e.message }); }
 };
 
-module.exports = { getDailyActuals, submitDailyActuals };
+// Upload photo ke Supabase Storage — dipanggil frontend sebelum submit
+const uploadEvidencePhoto = async (req, res) => {
+    const { projectId } = req.params;
+    const { taskId } = req.body;
+
+    if (!req.file) return res.status(400).json({ success: false, message: 'No file uploaded.' });
+
+    try {
+        const ext      = req.file.originalname.split('.').pop();
+        const filename = `${projectId}/${taskId}/${Date.now()}.${ext}`;
+
+        const { data, error } = await supabase.storage
+            .from('evidence')
+            .upload(filename, req.file.buffer, {
+                contentType: req.file.mimetype,
+                upsert: false,
+            });
+
+        if (error) return res.status(500).json({ success: false, message: error.message });
+
+        const { data: urlData } = supabase.storage.from('evidence').getPublicUrl(filename);
+
+        res.json({ success: true, url: urlData.publicUrl, path: filename });
+    } catch (e) { res.status(500).json({ success: false, message: e.message }); }
+};
+
+module.exports = { getDailyActuals, submitDailyActuals, uploadEvidencePhoto };
