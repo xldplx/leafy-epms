@@ -4,6 +4,15 @@ import { formatCurrency, formatDate } from '../../../utils/evmHelpers';
 import { INPUT_CLASS, INLINE_INPUT_CLASS, CARD_CLASS } from '../../../utils/uiConstants';
 import { apiFetch } from '../../../utils/api';
 
+const BASE_URL = 'http://localhost:5000/api';
+
+// Separate fetch for multipart/form-data — no Content-Type header (browser sets boundary auto)
+const apiUpload = (path, formData) => fetch(`${BASE_URL}${path}`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+    body: formData,
+}).then(r => r.json());
+
 export default function DailyActuals() {
     const [selectedProjectId, setSelectedProjectId] = useState('');
     const [entryDate, setEntryDate]                 = useState('');
@@ -15,7 +24,7 @@ export default function DailyActuals() {
     const [isSubmitting, setIsSubmitting]           = useState(false);
     const [submitError, setSubmitError]             = useState('');
 
-    // Real data from API — replaces dummyProjectsEvm and dummyTaskData
+    // Real data from API
     const [projects, setProjects]         = useState([]);
     const [projectTasks, setProjectTasks] = useState([]);
 
@@ -51,20 +60,32 @@ export default function DailyActuals() {
         setActuals(prev => ({ ...prev, [taskId]: { ...prev[taskId], [field]: v } }));
     };
 
+    // Upload foto ke Supabase Storage via backend — menggantikan mock upload
     const handleFileChange = async (taskId, file) => {
         if (!file) return;
-        
         setIsUploading(prev => ({ ...prev, [taskId]: true }));
-        
-        // MOCK UPLOAD: In a real app, you'd upload to Supabase Storage here
-        // const { data, error } = await supabase.storage.from('evidence').upload(path, file);
-        // For now, we'll use a local preview URL to simulate success
-        const previewUrl = URL.createObjectURL(file);
-        
-        setTimeout(() => {
-            updateActual(taskId, 'photo', { file, url: previewUrl });
+        try {
+            const formData = new FormData();
+            formData.append('photo', file);
+            formData.append('taskId', String(taskId));
+
+            const res = await apiUpload(`/projects/${selectedProjectId}/daily-actuals/upload`, formData);
+
+            if (res.success) {
+                // Simpan Supabase public URL — persisten di database
+                updateActual(taskId, 'photo', { url: res.url, path: res.path });
+            } else {
+                console.error('Upload failed:', res.message);
+                // Fallback: local preview sementara
+                updateActual(taskId, 'photo', { url: URL.createObjectURL(file), path: null });
+            }
+        } catch (e) {
+            console.error('Upload error:', e);
+            // Fallback: local preview sementara
+            updateActual(taskId, 'photo', { url: URL.createObjectURL(file), path: null });
+        } finally {
             setIsUploading(prev => ({ ...prev, [taskId]: false }));
-        }, 1000);
+        }
     };
 
     const removePhoto = (taskId) => {
@@ -95,6 +116,7 @@ export default function DailyActuals() {
                 actual_hours: actuals[t.id]?.actual_hours || 0,
                 actual_cost:  actuals[t.id]?.actual_cost  || 0,
                 pct_complete: actuals[t.id]?.pct_complete || 0,
+                // Kirim Supabase Storage URL — disimpan ke kolom photo_url di database
                 photo_url:    actuals[t.id]?.photo?.url   || null,
             }));
 
@@ -303,7 +325,7 @@ export default function DailyActuals() {
                                             {actuals[task.id]?.photo ? (
                                                 <div className="relative group/img w-16 h-12 rounded-xl overflow-hidden shadow-sm border border-slate-200">
                                                     <img src={actuals[task.id].photo.url} className="w-full h-full object-cover" alt="evidence" />
-                                                    <button 
+                                                    <button
                                                         onClick={() => removePhoto(task.id)}
                                                         className="absolute inset-0 bg-red-600/80 text-white flex items-center justify-center opacity-0 group-hover/img:opacity-100 transition-opacity"
                                                     >
@@ -311,7 +333,7 @@ export default function DailyActuals() {
                                                     </button>
                                                 </div>
                                             ) : (
-                                                <button 
+                                                <button
                                                     onClick={() => fileInputRefs.current[task.id]?.click()}
                                                     disabled={isUploading[task.id]}
                                                     className="w-12 h-12 rounded-xl border-2 border-dashed border-slate-200 text-slate-300 hover:border-emerald-500 hover:text-emerald-500 hover:bg-emerald-50 transition-all flex items-center justify-center disabled:opacity-50"
@@ -323,10 +345,10 @@ export default function DailyActuals() {
                                                     )}
                                                 </button>
                                             )}
-                                            <input 
-                                                type="file" 
-                                                accept="image/*" 
-                                                className="hidden" 
+                                            <input
+                                                type="file"
+                                                accept="image/*"
+                                                className="hidden"
                                                 ref={el => fileInputRefs.current[task.id] = el}
                                                 onChange={e => handleFileChange(task.id, e.target.files[0])}
                                             />

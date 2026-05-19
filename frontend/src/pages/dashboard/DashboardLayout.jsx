@@ -160,7 +160,7 @@ export default function DashboardLayout() {
             {/* MAIN */}
             <main className="flex-1 h-full overflow-y-auto p-8 lg:p-12 scroll-smooth">
                 <div className="animate-in fade-in duration-300 max-w-7xl mx-auto">
-                    <ActiveComponent />
+                    <ActiveComponent key={activePage} />
                 </div>
             </main>
         </div>

@@ -3,7 +3,6 @@ import { ArrowLeft, Lock, Plus, ChevronRight, ChevronDown, ListTodo, X, Calendar
 import { formatCurrency, formatDate } from '../../../utils/evmHelpers';
 import { STATUS_STYLES, INPUT_CLASS } from '../../../utils/uiConstants';
 import { apiFetch } from '../../../utils/api';
-import { load, save } from '../../../utils/localStore';
 
 // Recursive WBS node component
 function WbsNode({
@@ -161,10 +160,7 @@ export default function ProjectDetail({ project, onBack }) {
     const [baseline, setBaseline]              = useState(null);
     const [lockingBaseline, setLockingBaseline] = useState(false);
     const [lockError, setLockError]             = useState('');
-    const baselineCacheKey = `epms.baseline.v1.${project.id}`;
 
-    // WBS name overrides — local-only edits until backend PUT route exists.
-    const wbsOverrideKey = `epms.wbs_name_overrides.v1.${project.id}`;
     const [wbsOverrides, setWbsOverrides] = useState({});
     const [editingWbsId, setEditingWbsId] = useState(null);
 
@@ -181,7 +177,19 @@ export default function ProjectDetail({ project, onBack }) {
             const fetchedTasks = taskRes.data || [];
             setTasks(fetchedTasks);
             setWbsNodes(wbsRes.data || []);
-            setIsLocked(fetchedTasks.some(t => t.is_baseline_locked));
+            const locked = fetchedTasks.some(t => t.is_baseline_locked);
+            setIsLocked(locked);
+            // Fetch baseline metadata from DB if locked
+            if (locked) {
+                try {
+                    const blRes = await apiFetch(`/projects/${project.id}/tasks/baseline-info`);
+                    if (blRes.success && blRes.data) {
+                        setBaseline({ name: blRes.data.baseline_name, lockedAt: new Date(blRes.data.locked_at) });
+                    }
+                } catch { /* baseline info optional */ }
+            } else {
+                setBaseline(null);
+            }
             const roots = (wbsRes.data || []).filter(n => n.parent_id === null);
             setExpandedNodes(new Set(roots.map(n => n.id)));
         } catch (e) { console.error(e); }
@@ -190,35 +198,38 @@ export default function ProjectDetail({ project, onBack }) {
 
     useEffect(() => { fetchData(); }, [project.id]);
 
-    // Load WBS name overrides whenever the project changes.
-    useEffect(() => {
-        setWbsOverrides(load(wbsOverrideKey, {}));
-        setEditingWbsId(null);
-    }, [wbsOverrideKey]);
 
-    // Restore cached baseline metadata (name + lockedAt) so the banner survives refresh.
-    useEffect(() => {
-        const cached = load(baselineCacheKey, null);
-        if (cached && cached.name) {
-            setBaseline({ name: cached.name, lockedAt: new Date(cached.lockedAt) });
-        } else {
-            setBaseline(null);
+
+    const renameWbsNode = async (id, newName) => {
+        const trimmed  = (newName || '').trim();
+        const original = wbsNodes.find(n => n.id === id)?.name;
+        if (!trimmed || trimmed === original) {
+            // Revert — no API call needed
+            setWbsOverrides(prev => { const next = { ...prev }; delete next[id]; return next; });
+            return;
         }
-    }, [baselineCacheKey]);
-
-    const renameWbsNode = (id, newName) => {
-        setWbsOverrides(prev => {
-            const next = { ...prev };
-            const trimmed = (newName || '').trim();
-            const original = wbsNodes.find(n => n.id === id)?.name;
-            if (!trimmed || trimmed === original) {
-                delete next[id];
+        // Optimistic update
+        setWbsOverrides(prev => ({ ...prev, [id]: trimmed }));
+        try {
+            const res = await apiFetch(`/projects/${project.id}/wbs/${id}`, {
+                method: 'PUT',
+                body: JSON.stringify({ name: trimmed }),
+            });
+            if (!res.success) {
+                // Revert on failure
+                setWbsOverrides(prev => { const next = { ...prev }; delete next[id]; return next; });
+                console.error('Rename failed:', res.message);
             } else {
-                next[id] = trimmed;
+                // Sync from server — clear override since DB now has the correct name
+                setWbsOverrides(prev => { const next = { ...prev }; delete next[id]; return next; });
+                // Refresh WBS nodes to get updated name from DB
+                fetchData();
             }
-            save(wbsOverrideKey, next);
-            return next;
-        });
+        } catch (e) {
+            // Revert on error
+            setWbsOverrides(prev => { const next = { ...prev }; delete next[id]; return next; });
+            console.error('Rename error:', e);
+        }
     };
 
     // Close modals on Escape
@@ -427,7 +438,6 @@ export default function ProjectDetail({ project, onBack }) {
             if (!res.success) { setLockError(res.message || 'Failed to lock baseline.'); return; }
             const lockedAt = new Date();
             setBaseline({ name, lockedAt });
-            save(baselineCacheKey, { name, lockedAt: lockedAt.toISOString() });
             setIsLocked(true);
             setIsLockModalOpen(false);
             fetchData();
