@@ -3,11 +3,7 @@ import { BarChart3, Download, CheckCircle2 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { computeEvm, computeAlerts, indexColor, varianceColor, formatCurrency } from '../../../utils/evmHelpers';
 import { INPUT_CLASS } from '../../../utils/uiConstants';
-
-const BASE_URL = 'http://localhost:5000/api';
-const apiFetch = (path) => fetch(`${BASE_URL}${path}`, {
-    headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-}).then(r => r.json());
+import { apiFetch } from '../../../utils/api';
 
 export default function PlanVsActual() {
     const [selectedProjectId, setSelectedProjectId] = useState('');

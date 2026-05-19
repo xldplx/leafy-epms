@@ -1,32 +1,46 @@
 import { useState, useEffect } from 'react';
-import { ArrowLeft, Lock, Plus, ChevronRight, ChevronDown, ListTodo, X, Calendar, DollarSign, Clock, Loader2, GitBranch } from 'lucide-react';
+import { ArrowLeft, Lock, Plus, ChevronRight, ChevronDown, ListTodo, X, Calendar, DollarSign, Clock, Loader2, GitBranch, Pencil, Trash2, AlertTriangle, Check } from 'lucide-react';
 import { formatCurrency, formatDate } from '../../../utils/evmHelpers';
 import { STATUS_STYLES, INPUT_CLASS } from '../../../utils/uiConstants';
-
-const BASE_URL = 'http://localhost:5000/api';
-const apiFetch = (path, options = {}) => fetch(`${BASE_URL}${path}`, {
-    ...options,
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token')}`, ...(options.headers || {}) },
-}).then(r => r.json());
+import { apiFetch } from '../../../utils/api';
+import { load, save } from '../../../utils/localStore';
 
 // Recursive WBS node component
-function WbsNode({ node, allNodes, expandedNodes, toggleExpand, selectedWbsId, setSelectedWbsId }) {
+function WbsNode({
+    node, allNodes, expandedNodes, toggleExpand, selectedWbsId, setSelectedWbsId,
+    overrides, canRename, editingId, setEditingId, onRename,
+}) {
     const children    = allNodes.filter(n => n.parent_id === node.id);
     const hasChildren = children.length > 0;
     const isExpanded  = expandedNodes.has(node.id);
     const isSelected  = selectedWbsId === node.id;
     const indent      = (node.level - 1) * 16;
+    const displayName = (overrides && overrides[node.id]) || node.name;
+    const isEditing   = editingId === node.id;
+    const [draft, setDraft] = useState(displayName);
+
+    useEffect(() => { if (isEditing) setDraft(displayName); }, [isEditing, displayName]);
+
+    const commit = () => {
+        const trimmed = draft.trim();
+        // Reject empty submissions but allow reverting to original by clearing.
+        if (trimmed === '' || trimmed === node.name) {
+            onRename(node.id, '');
+        } else {
+            onRename(node.id, trimmed);
+        }
+        setEditingId(null);
+    };
 
     return (
         <div>
-            <button
-                type="button"
+            <div
                 style={{ paddingLeft: `${indent + 8}px` }}
-                onClick={() => setSelectedWbsId(node.id)}
-                aria-expanded={hasChildren ? isExpanded : undefined}
-                className={`w-full flex items-center gap-2 py-2 pr-2 rounded-lg text-sm transition-colors cursor-pointer ${
+                className={`group w-full flex items-center gap-2 py-2 pr-2 rounded-lg text-sm transition-colors ${
                     isSelected ? 'bg-emerald-50 text-emerald-700 font-semibold' : 'text-slate-600 hover:bg-slate-50'
-                }`}
+                } ${isEditing ? '' : 'cursor-pointer'}`}
+                onClick={() => { if (!isEditing) setSelectedWbsId(node.id); }}
+                role={isEditing ? undefined : 'button'}
             >
                 {hasChildren ? (
                     <span
@@ -43,8 +57,54 @@ function WbsNode({ node, allNodes, expandedNodes, toggleExpand, selectedWbsId, s
                     <div className="w-3.5 h-3.5 shrink-0" />
                 )}
                 <span className="font-mono text-[10px] text-slate-400 shrink-0">{node.wbs_code}</span>
-                <span className="truncate text-left">{node.name}</span>
-            </button>
+
+                {isEditing ? (
+                    <div className="flex items-center gap-1 flex-1 min-w-0" onClick={e => e.stopPropagation()}>
+                        <input
+                            type="text"
+                            autoFocus
+                            value={draft}
+                            onChange={e => setDraft(e.target.value)}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter') { e.preventDefault(); commit(); }
+                                if (e.key === 'Escape') { e.preventDefault(); setEditingId(null); }
+                            }}
+                            className="flex-1 min-w-0 px-2 py-0.5 text-sm bg-white border border-emerald-300 rounded focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                        />
+                        <button
+                            type="button"
+                            onClick={commit}
+                            aria-label="Save name"
+                            className="p-1 rounded text-emerald-600 hover:bg-emerald-50"
+                        >
+                            <Check className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setEditingId(null)}
+                            aria-label="Cancel edit"
+                            className="p-1 rounded text-slate-400 hover:bg-slate-100"
+                        >
+                            <X className="w-3.5 h-3.5" />
+                        </button>
+                    </div>
+                ) : (
+                    <>
+                        <span className="truncate text-left flex-1 min-w-0">{displayName}</span>
+                        {canRename && (
+                            <button
+                                type="button"
+                                onClick={(e) => { e.stopPropagation(); setEditingId(node.id); }}
+                                title="Rename"
+                                aria-label="Rename node"
+                                className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded text-slate-400 hover:text-emerald-600 hover:bg-emerald-50"
+                            >
+                                <Pencil className="w-3 h-3" />
+                            </button>
+                        )}
+                    </>
+                )}
+            </div>
             {hasChildren && isExpanded && children.map(child => (
                 <WbsNode
                     key={child.id}
@@ -54,6 +114,11 @@ function WbsNode({ node, allNodes, expandedNodes, toggleExpand, selectedWbsId, s
                     toggleExpand={toggleExpand}
                     selectedWbsId={selectedWbsId}
                     setSelectedWbsId={setSelectedWbsId}
+                    overrides={overrides}
+                    canRename={canRename}
+                    editingId={editingId}
+                    setEditingId={setEditingId}
+                    onRename={onRename}
                 />
             ))}
         </div>
@@ -68,14 +133,20 @@ export default function ProjectDetail({ project, onBack }) {
     const [selectedWbsId, setSelectedWbsId] = useState(null);
     const [expandedNodes, setExpandedNodes]  = useState(new Set());
 
-    // Add Task modal
+    // Task modal (add + edit share the same modal)
     const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
+    const [editingTaskId, setEditingTaskId]     = useState(null);
     const [taskForm, setTaskForm] = useState({
         task_name: '', wbs_id: '', planned_start: '', planned_end: '',
         planned_cost: '', planned_hours: '', weight: '',
     });
-    const [taskError, setTaskError] = useState('');
+    const [taskError, setTaskError]   = useState('');
     const [savingTask, setSavingTask] = useState(false);
+
+    // Delete task confirm
+    const [deletingTaskId, setDeletingTaskId] = useState(null);
+    const [deletingTask, setDeletingTask]     = useState(false);
+    const [deleteError, setDeleteError]       = useState('');
 
     // Add WBS Node modal
     const [isWbsModalOpen, setIsWbsModalOpen] = useState(false);
@@ -86,9 +157,16 @@ export default function ProjectDetail({ project, onBack }) {
     // Baseline
     const [isLocked, setIsLocked]             = useState(false);
     const [isLockModalOpen, setIsLockModalOpen] = useState(false);
-    const [baselineName, setBaselineName]      = useState('');
+    const [baselineName, setBaselineName]      = useState('Baseline Rev.0');
     const [baseline, setBaseline]              = useState(null);
     const [lockingBaseline, setLockingBaseline] = useState(false);
+    const [lockError, setLockError]             = useState('');
+    const baselineCacheKey = `epms.baseline.v1.${project.id}`;
+
+    // WBS name overrides — local-only edits until backend PUT route exists.
+    const wbsOverrideKey = `epms.wbs_name_overrides.v1.${project.id}`;
+    const [wbsOverrides, setWbsOverrides] = useState({});
+    const [editingWbsId, setEditingWbsId] = useState(null);
 
     const userRole = localStorage.getItem('userRole');
     const canEdit  = userRole === 'Project Manager' || userRole === 'Planner';
@@ -112,18 +190,85 @@ export default function ProjectDetail({ project, onBack }) {
 
     useEffect(() => { fetchData(); }, [project.id]);
 
+    // Load WBS name overrides whenever the project changes.
+    useEffect(() => {
+        setWbsOverrides(load(wbsOverrideKey, {}));
+        setEditingWbsId(null);
+    }, [wbsOverrideKey]);
+
+    // Restore cached baseline metadata (name + lockedAt) so the banner survives refresh.
+    useEffect(() => {
+        const cached = load(baselineCacheKey, null);
+        if (cached && cached.name) {
+            setBaseline({ name: cached.name, lockedAt: new Date(cached.lockedAt) });
+        } else {
+            setBaseline(null);
+        }
+    }, [baselineCacheKey]);
+
+    const renameWbsNode = (id, newName) => {
+        setWbsOverrides(prev => {
+            const next = { ...prev };
+            const trimmed = (newName || '').trim();
+            const original = wbsNodes.find(n => n.id === id)?.name;
+            if (!trimmed || trimmed === original) {
+                delete next[id];
+            } else {
+                next[id] = trimmed;
+            }
+            save(wbsOverrideKey, next);
+            return next;
+        });
+    };
+
     // Close modals on Escape
     useEffect(() => {
         const handler = (e) => {
             if (e.key === 'Escape') {
                 setIsTaskModalOpen(false);
+                setEditingTaskId(null);
                 setIsLockModalOpen(false);
                 setIsWbsModalOpen(false);
+                setDeletingTaskId(null);
             }
         };
         document.addEventListener('keydown', handler);
         return () => document.removeEventListener('keydown', handler);
     }, []);
+
+    const resetTaskForm = () => setTaskForm({
+        task_name: '', wbs_id: '', planned_start: '', planned_end: '',
+        planned_cost: '', planned_hours: '', weight: '',
+    });
+
+    const closeTaskModal = () => {
+        setIsTaskModalOpen(false);
+        setEditingTaskId(null);
+        setTaskError('');
+        resetTaskForm();
+    };
+
+    const openAddTaskModal = () => {
+        setEditingTaskId(null);
+        setTaskError('');
+        resetTaskForm();
+        setIsTaskModalOpen(true);
+    };
+
+    const openEditTaskModal = (task) => {
+        setEditingTaskId(task.id);
+        setTaskError('');
+        setTaskForm({
+            task_name:     task.task_name || '',
+            wbs_id:        String(task.wbs_id || ''),
+            planned_start: (task.planned_start || '').slice(0, 10),
+            planned_end:   (task.planned_end || '').slice(0, 10),
+            planned_cost:  task.planned_cost  != null ? String(task.planned_cost)  : '',
+            planned_hours: task.planned_hours != null ? String(task.planned_hours) : '',
+            weight:        task.weight        != null ? String(task.weight)        : '',
+        });
+        setIsTaskModalOpen(true);
+    };
 
     const toggleExpand = (id) => {
         setExpandedNodes(prev => {
@@ -136,9 +281,11 @@ export default function ProjectDetail({ project, onBack }) {
     const leafNodes = wbsNodes.filter(n => !wbsNodes.some(m => m.parent_id === n.id));
     const rootNodes = wbsNodes.filter(n => n.parent_id === null);
 
-    const getDescendantIds = (nodeId) => {
+    const getDescendantIds = (nodeId, visited = new Set()) => {
+        if (visited.has(nodeId)) return [];
+        visited.add(nodeId);
         const children = wbsNodes.filter(n => n.parent_id === nodeId);
-        return [nodeId, ...children.flatMap(c => getDescendantIds(c.id))];
+        return [nodeId, ...children.flatMap(c => getDescendantIds(c.id, visited))];
     };
     const selectedIds   = selectedWbsId ? getDescendantIds(selectedWbsId) : null;
     const filteredTasks = selectedIds ? tasks.filter(t => selectedIds.includes(t.wbs_id)) : tasks;
@@ -191,13 +338,13 @@ export default function ProjectDetail({ project, onBack }) {
         }
     };
 
-    // ── Add Task ──────────────────────────────────────────────────────────────
-    const handleAddTask = async (e) => {
+    // ── Add / Edit Task ───────────────────────────────────────────────────────
+    const handleSubmitTask = async (e) => {
         e.preventDefault();
         setTaskError('');
         if (!taskForm.wbs_id) { setTaskError('Please select a WBS node.'); return; }
-        if (new Date(taskForm.planned_end) <= new Date(taskForm.planned_start)) {
-            setTaskError('End date must be after start date.'); return;
+        if (new Date(taskForm.planned_end) < new Date(taskForm.planned_start)) {
+            setTaskError('End date must be on or after start date.'); return;
         }
         if (parseFloat(taskForm.planned_cost) <= 0 || isNaN(parseFloat(taskForm.planned_cost))) {
             setTaskError('Planned cost must be greater than zero.'); return;
@@ -209,32 +356,37 @@ export default function ProjectDetail({ project, onBack }) {
         if (isNaN(w) || w <= 0 || w > 1) {
             setTaskError('Weight must be between 0.01 and 1.00.'); return;
         }
-        const currentTotal = tasks.reduce((s, t) => s + parseFloat(t.weight || 0), 0);
+        const currentTotal = tasks.reduce((s, t) => {
+            if (editingTaskId && t.id === editingTaskId) return s;
+            return s + parseFloat(t.weight || 0);
+        }, 0);
         if (currentTotal + w > 1.001) {
-            setTaskError(`Adding this weight would exceed 100%. Remaining: ${((1 - currentTotal) * 100).toFixed(1)}%`); return;
+            setTaskError(`Total weight would exceed 100%. Remaining: ${((1 - currentTotal) * 100).toFixed(1)}%`); return;
         }
 
         setSavingTask(true);
         try {
             const wbsNode  = wbsNodes.find(n => n.id === parseInt(taskForm.wbs_id));
             const duration = Math.round((new Date(taskForm.planned_end) - new Date(taskForm.planned_start)) / (1000 * 60 * 60 * 24));
-            const res = await apiFetch(`/projects/${project.id}/tasks`, {
-                method: 'POST',
-                body: JSON.stringify({
-                    wbs_id:           parseInt(taskForm.wbs_id),
-                    wbs_code:         wbsNode?.wbs_code || '',
-                    task_name:        taskForm.task_name,
-                    planned_start:    taskForm.planned_start,
-                    planned_end:      taskForm.planned_end,
-                    planned_duration: duration,
-                    planned_cost:     parseFloat(taskForm.planned_cost)  || 0,
-                    planned_hours:    parseFloat(taskForm.planned_hours) || 0,
-                    weight:           parseFloat(taskForm.weight)        || 0,
-                }),
+            const body = JSON.stringify({
+                wbs_id:           parseInt(taskForm.wbs_id),
+                wbs_code:         wbsNode?.wbs_code || '',
+                task_name:        taskForm.task_name,
+                planned_start:    taskForm.planned_start,
+                planned_end:      taskForm.planned_end,
+                planned_duration: duration,
+                planned_cost:     parseFloat(taskForm.planned_cost)  || 0,
+                planned_hours:    parseFloat(taskForm.planned_hours) || 0,
+                weight:           parseFloat(taskForm.weight)        || 0,
             });
-            if (!res.success) { setTaskError(res.message || 'Failed to add task.'); return; }
-            setIsTaskModalOpen(false);
-            setTaskForm({ task_name: '', wbs_id: '', planned_start: '', planned_end: '', planned_cost: '', planned_hours: '', weight: '' });
+            const res = editingTaskId
+                ? await apiFetch(`/tasks/${editingTaskId}`,             { method: 'PUT',  body })
+                : await apiFetch(`/projects/${project.id}/tasks`,        { method: 'POST', body });
+            if (!res.success) {
+                setTaskError(res.message || (editingTaskId ? 'Failed to update task.' : 'Failed to add task.'));
+                return;
+            }
+            closeTaskModal();
             fetchData();
         } catch (e) {
             setTaskError(e.message || 'Server error.');
@@ -243,8 +395,28 @@ export default function ProjectDetail({ project, onBack }) {
         }
     };
 
+    // ── Delete Task ───────────────────────────────────────────────────────────
+    const handleDeleteTask = async () => {
+        if (!deletingTaskId) return;
+        setDeleteError('');
+        setDeletingTask(true);
+        try {
+            const res = await apiFetch(`/tasks/${deletingTaskId}`, { method: 'DELETE' });
+            if (!res.success) { setDeleteError(res.message || 'Failed to delete task.'); return; }
+            setDeletingTaskId(null);
+            fetchData();
+        } catch (e) {
+            setDeleteError(e.message || 'Server error.');
+        } finally {
+            setDeletingTask(false);
+        }
+    };
+
+    const deletingTaskName = tasks.find(t => t.id === deletingTaskId)?.task_name;
+
     // ── Lock Baseline ─────────────────────────────────────────────────────────
     const handleLockBaseline = async () => {
+        setLockError('');
         setLockingBaseline(true);
         try {
             const name = baselineName.trim() || 'Baseline Rev.0';
@@ -252,14 +424,15 @@ export default function ProjectDetail({ project, onBack }) {
                 method: 'POST',
                 body: JSON.stringify({ baseline_name: name }),
             });
-            if (!res.success) { alert(res.message || 'Failed to lock baseline.'); return; }
-            setBaseline({ name, lockedAt: new Date() });
+            if (!res.success) { setLockError(res.message || 'Failed to lock baseline.'); return; }
+            const lockedAt = new Date();
+            setBaseline({ name, lockedAt });
+            save(baselineCacheKey, { name, lockedAt: lockedAt.toISOString() });
             setIsLocked(true);
             setIsLockModalOpen(false);
-            setBaselineName('');
             fetchData();
         } catch (e) {
-            alert(e.message || 'Server error.');
+            setLockError(e.message || 'Server error.');
         } finally {
             setLockingBaseline(false);
         }
@@ -296,7 +469,7 @@ export default function ProjectDetail({ project, onBack }) {
                             </div>
                         ) : (
                             <button
-                                onClick={() => tasks.length > 0 && setIsLockModalOpen(true)}
+                                onClick={() => { if (tasks.length > 0) { setLockError(''); setIsLockModalOpen(true); } }}
                                 disabled={tasks.length === 0}
                                 className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-sm transition-all shadow-lg shadow-amber-100 ${tasks.length > 0 ? 'bg-amber-500 hover:bg-amber-600 text-white cursor-pointer' : 'bg-amber-500 text-white opacity-50 cursor-not-allowed'}`}
                             >
@@ -324,9 +497,15 @@ export default function ProjectDetail({ project, onBack }) {
                 </div>
 
                 {isLocked && baseline && (
-                    <div className="ml-14 flex items-center gap-2 px-3 py-1.5 bg-emerald-50 border border-emerald-200 rounded-lg text-xs text-emerald-700 font-semibold w-fit">
-                        <Lock className="w-3.5 h-3.5" />
-                        {baseline.name} — locked {baseline.lockedAt.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                    <div className="ml-14 flex items-center gap-3 px-4 py-3 bg-emerald-50/70 border border-emerald-200 rounded-2xl w-fit">
+                        <div className="p-2 bg-emerald-100 rounded-xl text-emerald-700"><Lock className="w-4 h-4" /></div>
+                        <div className="flex flex-col">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700/80">Active Baseline</span>
+                            <span className="text-sm font-bold text-emerald-800">{baseline.name}</span>
+                            <span className="text-[11px] text-emerald-700/80">
+                                {tasks.length} tasks · locked {baseline.lockedAt.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                        </div>
                     </div>
                 )}
             </div>
@@ -371,6 +550,11 @@ export default function ProjectDetail({ project, onBack }) {
                                     toggleExpand={toggleExpand}
                                     selectedWbsId={selectedWbsId}
                                     setSelectedWbsId={setSelectedWbsId}
+                                    overrides={wbsOverrides}
+                                    canRename={canEdit && !isLocked}
+                                    editingId={editingWbsId}
+                                    setEditingId={setEditingWbsId}
+                                    onRename={renameWbsNode}
                                 />
                             ))}
                             {rootNodes.length === 0 && (
@@ -398,7 +582,7 @@ export default function ProjectDetail({ project, onBack }) {
                             <h3 className="font-bold text-slate-700">Tasks</h3>
                             {selectedNode ? (
                                 <p className="text-xs text-slate-400 mt-0.5">
-                                    Showing: <span className="font-mono text-emerald-600">{selectedNode.wbs_code}</span> — {selectedNode.name}
+                                    Showing: <span className="font-mono text-emerald-600">{selectedNode.wbs_code}</span> — {wbsOverrides[selectedNode.id] || selectedNode.name}
                                 </p>
                             ) : (
                                 <p className="text-xs text-slate-400 mt-0.5">All tasks in this project</p>
@@ -406,7 +590,7 @@ export default function ProjectDetail({ project, onBack }) {
                         </div>
                         {canEdit && !isLocked && (
                             <button
-                                onClick={() => setIsTaskModalOpen(true)}
+                                onClick={openAddTaskModal}
                                 disabled={wbsNodes.length === 0}
                                 title={wbsNodes.length === 0 ? 'Add a WBS node first' : 'Add task'}
                                 className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl font-semibold text-sm shadow-lg shadow-emerald-200 transition-all flex items-center gap-2 shrink-0 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
@@ -433,15 +617,21 @@ export default function ProjectDetail({ project, onBack }) {
                                     <th className="px-4 py-4">Planned Cost</th>
                                     <th className="px-4 py-4">Hours</th>
                                     <th className="px-4 py-4">Weight</th>
+                                    <th className="px-4 py-4 text-right">{canEdit ? 'Actions' : ''}</th>
                                 </tr>
                             </thead>
                             <tbody className="text-sm font-medium text-slate-600 divide-y divide-slate-50">
                                 {loadingTasks ? (
-                                    <tr><td colSpan="8" className="px-6 py-12 text-center"><Loader2 className="w-6 h-6 animate-spin text-slate-300 mx-auto" /></td></tr>
+                                    <tr><td colSpan="9" className="px-6 py-12 text-center"><Loader2 className="w-6 h-6 animate-spin text-slate-300 mx-auto" /></td></tr>
                                 ) : filteredTasks.length > 0 ? (
                                     filteredTasks.map(task => (
                                         <tr key={task.id} className="hover:bg-slate-50/50 transition-colors">
-                                            <td className="px-4 py-3.5 font-semibold text-slate-700">{task.task_name}</td>
+                                            <td className="px-4 py-3.5 font-semibold text-slate-700">
+                                                <span className="inline-flex items-center gap-1.5">
+                                                    {isLocked && <Lock className="w-3 h-3 text-slate-400 shrink-0" aria-label="Locked under baseline" />}
+                                                    {task.task_name}
+                                                </span>
+                                            </td>
                                             <td className="px-4 py-3.5 font-mono text-xs text-slate-400">{task.wbs_code}</td>
                                             <td className="px-4 py-3.5 text-slate-500">{task.planned_start ? formatDate(task.planned_start) : '—'}</td>
                                             <td className="px-4 py-3.5 text-slate-500">{task.planned_end   ? formatDate(task.planned_end)   : '—'}</td>
@@ -453,11 +643,37 @@ export default function ProjectDetail({ project, onBack }) {
                                                     {(parseFloat(task.weight || 0) * 100).toFixed(0)}%
                                                 </span>
                                             </td>
+                                            <td className="px-4 py-3.5 text-right">
+                                                {canEdit && (
+                                                    <div className="flex items-center justify-end gap-1">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => openEditTaskModal(task)}
+                                                            disabled={isLocked}
+                                                            title={isLocked ? 'Locked under baseline' : 'Edit task'}
+                                                            aria-label="Edit task"
+                                                            className="p-1.5 rounded-lg text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:text-slate-400 disabled:hover:bg-transparent"
+                                                        >
+                                                            <Pencil className="w-3.5 h-3.5" />
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => { setDeleteError(''); setDeletingTaskId(task.id); }}
+                                                            disabled={isLocked}
+                                                            title={isLocked ? 'Locked under baseline' : 'Delete task'}
+                                                            aria-label="Delete task"
+                                                            className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:text-slate-400 disabled:hover:bg-transparent"
+                                                        >
+                                                            <Trash2 className="w-3.5 h-3.5" />
+                                                        </button>
+                                                    </div>
+                                                )}
+                                            </td>
                                         </tr>
                                     ))
                                 ) : (
                                     <tr>
-                                        <td colSpan="8" className="px-6 py-12 text-center text-slate-400">
+                                        <td colSpan="9" className="px-6 py-12 text-center text-slate-400">
                                             <div className="flex flex-col items-center justify-center gap-2">
                                                 <ListTodo className="w-10 h-10 text-slate-200" />
                                                 <p>No tasks under this WBS node.</p>
@@ -472,7 +688,8 @@ export default function ProjectDetail({ project, onBack }) {
                                         <td className="px-4 py-3.5" colSpan="5">Total</td>
                                         <td className="px-4 py-3.5">{formatCurrency(totalCost)}</td>
                                         <td className="px-4 py-3.5">{totalHours} hrs</td>
-                                        <td className="px-4 py-3.5">{(totalWeight * 100).toFixed(0)}%</td>
+                                        <td className={`px-4 py-3.5 ${totalWeight > 1.001 ? 'text-red-600 font-bold' : ''}`}>{(totalWeight * 100).toFixed(1)}%</td>
+                                        <td className="px-4 py-3.5"></td>
                                     </tr>
                                 </tfoot>
                             )}
@@ -534,7 +751,7 @@ export default function ProjectDetail({ project, onBack }) {
                                 >
                                     <option value="">— Root level node —</option>
                                     {wbsNodes.map(n => (
-                                        <option key={n.id} value={n.id}>{n.wbs_code} — {n.name}</option>
+                                        <option key={n.id} value={n.id}>{n.wbs_code} — {wbsOverrides[n.id] || n.name}</option>
                                     ))}
                                 </select>
                             </div>
@@ -554,14 +771,14 @@ export default function ProjectDetail({ project, onBack }) {
                 </div>
             )}
 
-            {/* ── ADD TASK MODAL ─────────────────────────────────────────────── */}
+            {/* ── ADD / EDIT TASK MODAL ──────────────────────────────────────── */}
             {isTaskModalOpen && (
-                <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50" onClick={() => setIsTaskModalOpen(false)}>
-                    <div role="dialog" aria-label="Add new task" className="bg-white rounded-3xl p-8 w-full max-w-lg shadow-2xl border border-slate-100 animate-in fade-in duration-200" onClick={e => e.stopPropagation()}>
+                <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50" onClick={closeTaskModal}>
+                    <div role="dialog" aria-label={editingTaskId ? 'Edit task' : 'Add new task'} className="bg-white rounded-3xl p-8 w-full max-w-lg shadow-2xl border border-slate-100 animate-in fade-in duration-200" onClick={e => e.stopPropagation()}>
 
                         <div className="flex items-center justify-between mb-6">
-                            <h3 className="text-xl font-bold text-slate-800">Add New Task</h3>
-                            <button onClick={() => setIsTaskModalOpen(false)} aria-label="Close" className="text-slate-400 hover:text-slate-600 transition-colors">
+                            <h3 className="text-xl font-bold text-slate-800">{editingTaskId ? 'Edit Task' : 'Add New Task'}</h3>
+                            <button onClick={closeTaskModal} aria-label="Close" className="text-slate-400 hover:text-slate-600 transition-colors">
                                 <X className="w-5 h-5" />
                             </button>
                         </div>
@@ -572,7 +789,7 @@ export default function ProjectDetail({ project, onBack }) {
                             </div>
                         )}
 
-                        <form onSubmit={handleAddTask} className="space-y-4">
+                        <form onSubmit={handleSubmitTask} className="space-y-4">
                             <div className="space-y-1">
                                 <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider ml-1">Task Name</label>
                                 <input type="text" required value={taskForm.task_name}
@@ -590,7 +807,7 @@ export default function ProjectDetail({ project, onBack }) {
                                 >
                                     <option value="">Select a WBS node...</option>
                                     {leafNodes.map(n => (
-                                        <option key={n.id} value={n.id}>{n.wbs_code} — {n.name}</option>
+                                        <option key={n.id} value={n.id}>{n.wbs_code} — {wbsOverrides[n.id] || n.name}</option>
                                     ))}
                                 </select>
                             </div>
@@ -599,6 +816,8 @@ export default function ProjectDetail({ project, onBack }) {
                                 <div className="space-y-1">
                                     <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider ml-1">Start Date</label>
                                     <input type="date" required value={taskForm.planned_start}
+                                        min={project.planned_start || undefined}
+                                        max={project.planned_end || undefined}
                                         onChange={e => setTaskForm({ ...taskForm, planned_start: e.target.value })}
                                         className="w-full px-4 py-3 bg-white/50 border border-slate-200 rounded-lg outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all text-slate-700 text-sm"
                                     />
@@ -606,6 +825,8 @@ export default function ProjectDetail({ project, onBack }) {
                                 <div className="space-y-1">
                                     <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider ml-1">End Date</label>
                                     <input type="date" required value={taskForm.planned_end}
+                                        min={taskForm.planned_start || project.planned_start || undefined}
+                                        max={project.planned_end || undefined}
                                         onChange={e => setTaskForm({ ...taskForm, planned_end: e.target.value })}
                                         className="w-full px-4 py-3 bg-white/50 border border-slate-200 rounded-lg outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all text-slate-700 text-sm"
                                     />
@@ -640,16 +861,55 @@ export default function ProjectDetail({ project, onBack }) {
                             </div>
 
                             <div className="flex gap-3 pt-4">
-                                <button type="button" onClick={() => setIsTaskModalOpen(false)}
+                                <button type="button" onClick={closeTaskModal}
                                     className="flex-1 px-6 py-3 bg-slate-100 text-slate-600 rounded-xl font-semibold hover:bg-slate-200 transition-all">
                                     Cancel
                                 </button>
                                 <button type="submit" disabled={savingTask}
                                     className="flex-1 px-6 py-3 bg-emerald-600 text-white rounded-xl font-semibold shadow-lg shadow-emerald-200 hover:bg-emerald-700 transition-all flex items-center justify-center gap-2 disabled:opacity-60">
-                                    {savingTask ? <><Loader2 className="w-4 h-4 animate-spin" /> Saving...</> : 'Add Task'}
+                                    {savingTask
+                                        ? <><Loader2 className="w-4 h-4 animate-spin" /> Saving...</>
+                                        : (editingTaskId ? 'Save Changes' : 'Add Task')}
                                 </button>
                             </div>
                         </form>
+                    </div>
+                </div>
+            )}
+
+            {/* ── DELETE TASK CONFIRM MODAL ──────────────────────────────────── */}
+            {deletingTaskId !== null && (
+                <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50" onClick={() => !deletingTask && setDeletingTaskId(null)}>
+                    <div role="dialog" aria-label="Delete task" className="bg-white rounded-3xl p-8 w-full max-w-md shadow-2xl border border-slate-100 animate-in fade-in duration-200" onClick={e => e.stopPropagation()}>
+
+                        <div className="flex items-center gap-3 mb-2">
+                            <div className="p-2.5 bg-red-50 rounded-xl text-red-600"><AlertTriangle className="w-5 h-5" /></div>
+                            <h3 className="text-xl font-bold text-slate-800">Delete Task</h3>
+                        </div>
+
+                        <p className="text-sm text-slate-500 mb-6 leading-relaxed">
+                            Permanently remove <strong className="text-slate-700">{deletingTaskName || 'this task'}</strong>?
+                            This cannot be undone.
+                        </p>
+
+                        {deleteError && (
+                            <div className="p-3 mb-4 rounded-lg bg-red-50/80 border border-red-100 text-red-600 text-xs text-center font-bold uppercase">
+                                {deleteError}
+                            </div>
+                        )}
+
+                        <div className="flex gap-3">
+                            <button onClick={() => setDeletingTaskId(null)} disabled={deletingTask}
+                                className="flex-1 px-6 py-3 bg-slate-100 text-slate-600 rounded-xl font-semibold hover:bg-slate-200 transition-all disabled:opacity-60">
+                                Cancel
+                            </button>
+                            <button onClick={handleDeleteTask} disabled={deletingTask}
+                                className="flex-1 px-6 py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl font-semibold shadow-lg shadow-red-100 transition-all flex items-center justify-center gap-2 disabled:opacity-60">
+                                {deletingTask
+                                    ? <><Loader2 className="w-4 h-4 animate-spin" /> Deleting...</>
+                                    : <><Trash2 className="w-4 h-4" /> Delete</>}
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}
@@ -665,14 +925,32 @@ export default function ProjectDetail({ project, onBack }) {
                         </div>
 
                         <p className="text-sm text-slate-500 mb-6 leading-relaxed">
-                            This will freeze all <strong>{tasks.length} tasks</strong> and their planned values as the reference baseline.
-                            You will not be able to add or edit tasks after locking.
+                            This freezes all <strong>{tasks.length} tasks</strong> and their planned values as the reference baseline.
+                            Tasks cannot be edited after locking.
                         </p>
 
-                        <div className="space-y-1 mb-6">
-                            <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider ml-1">Baseline Name</label>
-                            <input type="text" value={baselineName} onChange={e => setBaselineName(e.target.value)}
-                                placeholder="Baseline Rev.0" className={INPUT_CLASS} />
+                        {lockError && (
+                            <div className="p-3 mb-4 rounded-lg bg-red-50/80 border border-red-100 text-red-600 text-xs text-center font-bold uppercase">
+                                {lockError}
+                            </div>
+                        )}
+
+                        <div className="mb-6 p-4 bg-slate-50 border border-slate-100 rounded-2xl">
+                            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Will be saved as</p>
+                            <p className="text-base font-bold text-slate-800 mt-0.5">{baselineName.trim() || 'Baseline Rev.0'}</p>
+                            <details className="mt-3 group">
+                                <summary className="text-xs font-semibold text-slate-500 hover:text-emerald-600 cursor-pointer select-none list-none flex items-center gap-1">
+                                    <ChevronRight className="w-3 h-3 transition-transform group-open:rotate-90" />
+                                    Customize name
+                                </summary>
+                                <input
+                                    type="text"
+                                    value={baselineName}
+                                    onChange={e => setBaselineName(e.target.value)}
+                                    placeholder="Baseline Rev.0"
+                                    className={`${INPUT_CLASS} mt-2`}
+                                />
+                            </details>
                         </div>
 
                         <div className="flex gap-3">

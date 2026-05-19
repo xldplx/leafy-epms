@@ -10,11 +10,12 @@ const getTasksByProject = async (req, res) => {
 
 const createTask = async (req, res) => {
     const { projectId } = req.params;
-    const { wbs_code, task_name, planned_start, planned_end, planned_duration, planned_cost, planned_hours, weight, predecessors } = req.body;
+    const { wbs_id, wbs_code, task_name, planned_start, planned_end, planned_duration, planned_cost, planned_hours, weight, predecessors } = req.body;
     if (!task_name) return res.status(400).json({ success: false, message: 'task_name is required.' });
     try {
         const { data, error } = await supabase.from('tasks').insert([{
             project_id:       parseInt(projectId),
+            wbs_id:           wbs_id ? parseInt(wbs_id) : null,
             wbs_code:         wbs_code         || null,
             task_name,
             planned_start:    planned_start    || null,
@@ -33,7 +34,7 @@ const createTask = async (req, res) => {
 
 const updateTask = async (req, res) => {
     const updates = {};
-    ['wbs_code','task_name','planned_start','planned_end','planned_duration','planned_cost',
+    ['wbs_id','wbs_code','task_name','planned_start','planned_end','planned_duration','planned_cost',
      'planned_hours','weight','predecessors','actual_cost','actual_hours','pct_complete']
         .forEach(f => { if (req.body[f] !== undefined) updates[f] = req.body[f]; });
     updates.updated_at = new Date().toISOString();

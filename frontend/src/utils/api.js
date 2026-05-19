@@ -7,7 +7,7 @@ const BASE_URL = 'http://localhost:5000/api';
 
 function getToken() { return localStorage.getItem('token'); }
 
-async function apiFetch(path, options = {}) {
+export async function apiFetch(path, options = {}) {
     const token = getToken();
     const res = await fetch(`${BASE_URL}${path}`, {
         ...options,

@@ -3,12 +3,7 @@ import { Plus, FolderKanban, Calendar, DollarSign, ChevronRight, X, CheckCircle2
 import ProjectDetail from './ProjectDetail';
 import { formatCurrency, formatDate, computeEvm, indexColor } from '../../../utils/evmHelpers';
 import { STATUS_STYLES } from '../../../utils/uiConstants';
-
-const BASE_URL = 'http://localhost:5000/api';
-const apiFetch = (path, options = {}) => fetch(`${BASE_URL}${path}`, {
-    ...options,
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token')}`, ...(options.headers || {}) },
-}).then(r => r.json());
+import { apiFetch } from '../../../utils/api';
 
 export default function Projects() {
     // Real data from API — replaces seedProjects, dummyProjectsEvm, dummyTaskData
@@ -29,6 +24,11 @@ export default function Projects() {
     });
     const [error, setError]             = useState('');
     const [successToast, setSuccessToast] = useState(false);
+
+    const resetForm = () => setForm({
+        project_name: '', project_code: '', description: '',
+        planned_start: '', planned_end: '', total_budget: '',
+    });
 
     const userRole = localStorage.getItem('userRole') || 'Guest';
 
@@ -96,7 +96,7 @@ export default function Projects() {
                 return;
             }
             setIsModalOpen(false);
-            setForm({ project_name: '', project_code: '', description: '', planned_start: '', planned_end: '', total_budget: '' });
+            resetForm();
             setSuccessToast(true);
             setTimeout(() => setSuccessToast(false), 3000);
             fetchProjects();
@@ -162,7 +162,7 @@ export default function Projects() {
                                     <FolderKanban className="w-6 h-6" />
                                 </div>
                                 <span className={`text-[10px] font-bold uppercase px-2.5 py-1 rounded-lg border ${STATUS_STYLES[project.status] || STATUS_STYLES.planning}`}>
-                                    {project.status.replace('_', ' ')}
+                                    {(project.status || 'planning').replace('_', ' ')}
                                 </span>
                             </div>
 
@@ -292,6 +292,7 @@ export default function Projects() {
                                     <input
                                         type="date"
                                         required
+                                        min={form.planned_start || undefined}
                                         value={form.planned_end}
                                         onChange={(e) => setForm({ ...form, planned_end: e.target.value })}
                                         className="w-full px-4 py-3 bg-white/50 border border-slate-200 rounded-lg outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all text-slate-700 text-sm"
@@ -314,7 +315,7 @@ export default function Projects() {
                             <div className="flex gap-3 pt-4">
                                 <button
                                     type="button"
-                                    onClick={() => setIsModalOpen(false)}
+                                    onClick={() => { setIsModalOpen(false); resetForm(); }}
                                     className="flex-1 px-6 py-3 bg-slate-100 text-slate-600 rounded-xl font-semibold hover:bg-slate-200 transition-all"
                                 >
                                     Cancel
