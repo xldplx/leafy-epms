@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { Plus, FolderKanban, Calendar, DollarSign, ChevronRight, X, CheckCircle2, Loader2, Download } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
+import { Plus, FolderKanban, Calendar, DollarSign, ChevronRight, X, CheckCircle2, Loader2, Download, Search } from 'lucide-react';
 import ProjectDetail from './ProjectDetail';
 import { formatCurrency, formatDate, computeEvm, indexColor } from '../../../utils/evmHelpers';
 import { STATUS_STYLES } from '../../../utils/uiConstants';
@@ -30,6 +30,11 @@ export default function Projects() {
     const [error, setError]             = useState('');
     const [successToast, setSuccessToast] = useState(false);
     const [exportToast, setExportToast]   = useState(false);
+
+    // Portfolio controls
+    const [statusFilter, setStatusFilter] = useState('All');
+    const [search, setSearch]             = useState('');
+    const [sortBy, setSortBy]             = useState('recent');
 
     const resetForm = () => setForm({
         project_name: '', project_code: '', description: '',
@@ -140,6 +145,21 @@ export default function Projects() {
         setTimeout(() => setExportToast(false), 2500);
     };
 
+    const visibleProjects = useMemo(() => {
+        const q = search.trim().toLowerCase();
+        const list = projects.filter(p => {
+            if (statusFilter !== 'All' && (p.status || 'planning') !== statusFilter) return false;
+            if (q && !`${p.project_name} ${p.project_code}`.toLowerCase().includes(q)) return false;
+            return true;
+        });
+        return [...list].sort((a, b) => {
+            if (sortBy === 'name')   return (a.project_name || '').localeCompare(b.project_name || '');
+            if (sortBy === 'code')   return (a.project_code || '').localeCompare(b.project_code || '');
+            if (sortBy === 'budget') return (Number(b.total_budget) || 0) - (Number(a.total_budget) || 0);
+            return 0; // 'recent' — keep API order (created_at desc)
+        });
+    }, [projects, statusFilter, search, sortBy]);
+
     if (selectedProject) {
         return <ProjectDetail key={selectedProject.id} project={selectedProject} onBack={() => { setSelectedProject(null); fetchProjects(); }} />;
     }
@@ -187,6 +207,50 @@ export default function Projects() {
                 </div>
             </div>
 
+            {/* PORTFOLIO CONTROLS */}
+            {!loading && !loadError && projects.length > 0 && (
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div className="flex items-center gap-1.5 bg-white/40 backdrop-blur-md p-1.5 rounded-2xl border border-slate-200/50 shadow-sm overflow-x-auto no-scrollbar">
+                        {['All', 'active', 'planning', 'completed', 'on_hold'].map(f => (
+                            <button
+                                key={f}
+                                onClick={() => setStatusFilter(f)}
+                                className={`px-4 py-2 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all whitespace-nowrap ${
+                                    statusFilter === f
+                                        ? 'bg-white text-emerald-700 shadow-md shadow-emerald-500/5 border border-emerald-100'
+                                        : 'text-slate-400 hover:text-slate-700'
+                                }`}
+                            >
+                                {f === 'All' ? 'All' : f.replace('_', ' ')}
+                            </button>
+                        ))}
+                    </div>
+                    <div className="flex items-center gap-3">
+                        <div className="relative">
+                            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                            <input
+                                type="text"
+                                placeholder="Search name or code..."
+                                value={search}
+                                onChange={e => setSearch(e.target.value)}
+                                className="text-sm bg-white border border-slate-200 rounded-xl pl-9 pr-3 py-2 outline-none focus:border-emerald-500 transition-colors min-w-[220px]"
+                            />
+                        </div>
+                        <select
+                            value={sortBy}
+                            onChange={e => setSortBy(e.target.value)}
+                            aria-label="Sort projects"
+                            className="text-sm bg-white border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-emerald-500 transition-colors text-slate-600 font-semibold"
+                        >
+                            <option value="recent">Most recent</option>
+                            <option value="name">Name (A–Z)</option>
+                            <option value="code">Code (A–Z)</option>
+                            <option value="budget">Budget (high–low)</option>
+                        </select>
+                    </div>
+                </div>
+            )}
+
             {/* PROJECT CARDS GRID */}
             {loading ? (
                 <div className="flex items-center justify-center h-48 gap-3 text-slate-400">
@@ -194,9 +258,17 @@ export default function Projects() {
                 </div>
             ) : loadError ? (
                 <ErrorState message={loadError} onRetry={fetchProjects} />
-            ) : projects.length > 0 ? (
+            ) : projects.length === 0 ? (
+                /* EMPTY STATE */
+                <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-16">
+                    <div className="flex flex-col items-center justify-center gap-2">
+                        <FolderKanban className="w-12 h-12 text-slate-200" />
+                        <p className="text-slate-400">No projects found. Create your first project to get started.</p>
+                    </div>
+                </div>
+            ) : visibleProjects.length > 0 ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {projects.map((project) => {
+                    {visibleProjects.map((project) => {
                         const evm = projectEvm[project.id];
                         const cpi = evm ? indexColor(evm.CPI) : null;
                         const spi = evm ? indexColor(evm.SPI) : null;
@@ -261,11 +333,17 @@ export default function Projects() {
                     })}
                 </div>
             ) : (
-                /* EMPTY STATE */
+                /* NO MATCH FOR CURRENT FILTERS */
                 <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-16">
-                    <div className="flex flex-col items-center justify-center gap-2">
-                        <FolderKanban className="w-12 h-12 text-slate-200" />
-                        <p className="text-slate-400">No projects found. Create your first project to get started.</p>
+                    <div className="flex flex-col items-center justify-center gap-3">
+                        <Search className="w-12 h-12 text-slate-200" />
+                        <p className="text-slate-400">No projects match your filters.</p>
+                        <button
+                            onClick={() => { setStatusFilter('All'); setSearch(''); }}
+                            className="text-xs font-bold text-emerald-600 hover:text-emerald-700 uppercase tracking-wider"
+                        >
+                            Clear filters
+                        </button>
                     </div>
                 </div>
             )}
