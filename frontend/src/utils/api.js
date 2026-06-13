@@ -130,6 +130,16 @@ export const auditApi = {
     getAll: (filters = {}) => apiFetch(`/audit-logs${Object.keys(filters).length ? '?' + new URLSearchParams(filters) : ''}`),
 };
 
+// ─── USERS (User Management) ──────────────────────────────────────────────────
+// Backend not built yet (Ananta's userController). Settings.jsx persists users
+// locally via createLocalResource; swap to this module once /users ships.
+export const usersApi = {
+    getAll:  ()            => apiFetch('/users'),
+    create:  (payload)     => apiFetch('/users', { method: 'POST', body: JSON.stringify(payload) }),
+    update:  (id, payload) => apiFetch(`/users/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
+    delete:  (id)          => apiFetch(`/users/${id}`, { method: 'DELETE' }),
+};
+
 // ─── MATERIALS ────────────────────────────────────────────────────────────────
 export const materialsApi = {
     getAll:        (filters = {}) => apiFetch(`/materials${Object.keys(filters).length ? '?' + new URLSearchParams(filters) : ''}`),
