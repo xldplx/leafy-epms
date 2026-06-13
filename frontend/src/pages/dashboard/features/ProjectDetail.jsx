@@ -10,7 +10,7 @@ import { load, save } from '../../../utils/localStore';
 // Recursive WBS node component
 function WbsNode({
     node, allNodes, expandedNodes, toggleExpand, selectedWbsId, setSelectedWbsId,
-    overrides, canRename, editingId, setEditingId, onRename,
+    overrides, canRename, editingId, setEditingId, onRename, taskCounts,
 }) {
     const children    = allNodes.filter(n => n.parent_id === node.id);
     const hasChildren = children.length > 0;
@@ -93,6 +93,11 @@ function WbsNode({
                 ) : (
                     <>
                         <span className="truncate text-left flex-1 min-w-0">{displayName}</span>
+                        {taskCounts?.[node.id] > 0 && (
+                            <span className="text-[9px] font-bold text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded-md shrink-0" title={`${taskCounts[node.id]} task(s)`}>
+                                {taskCounts[node.id]}
+                            </span>
+                        )}
                         {canRename && (
                             <button
                                 type="button"
@@ -121,6 +126,7 @@ function WbsNode({
                     editingId={editingId}
                     setEditingId={setEditingId}
                     onRename={onRename}
+                    taskCounts={taskCounts}
                 />
             ))}
         </div>
@@ -357,6 +363,8 @@ export default function ProjectDetail({ project, onBack }) {
             return next;
         });
     };
+    const expandAll   = () => setExpandedNodes(new Set(wbsNodes.map(n => n.id)));
+    const collapseAll = () => setExpandedNodes(new Set());
 
     const leafNodes = wbsNodes.filter(n => !wbsNodes.some(m => m.parent_id === n.id));
     const rootNodes = wbsNodes.filter(n => n.parent_id === null);
@@ -370,6 +378,18 @@ export default function ProjectDetail({ project, onBack }) {
     const selectedIds   = selectedWbsId ? getDescendantIds(selectedWbsId) : null;
     const filteredTasks = selectedIds ? tasks.filter(t => selectedIds.includes(t.wbs_id)) : tasks;
     const selectedNode  = wbsNodes.find(n => n.id === selectedWbsId);
+
+    // Task count per WBS node (includes descendants) for the tree badges.
+    const taskCounts = useMemo(() => {
+        const map = {};
+        for (const n of wbsNodes) {
+            const ids = getDescendantIds(n.id);
+            map[n.id] = tasks.filter(t => ids.includes(t.wbs_id)).length;
+        }
+        return map;
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [wbsNodes, tasks]);
+    const anyExpandable = wbsNodes.some(n => wbsNodes.some(m => m.parent_id === n.id));
 
     const totalCost   = filteredTasks.reduce((s, t) => s + parseFloat(t.planned_cost   || 0), 0);
     const totalHours  = filteredTasks.reduce((s, t) => s + parseFloat(t.planned_hours  || 0), 0);
@@ -621,16 +641,29 @@ export default function ProjectDetail({ project, onBack }) {
                 <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-6 w-72 shrink-0">
                     <div className="flex items-center justify-between mb-4">
                         <h3 className="text-sm font-bold text-slate-700 uppercase tracking-wider">WBS</h3>
-                        {/* ADD WBS NODE BUTTON */}
-                        {canEdit && !isLocked && (
-                            <button
-                                onClick={() => setIsWbsModalOpen(true)}
-                                title="Add WBS Node"
-                                className="p-1.5 rounded-lg text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors"
-                            >
-                                <Plus className="w-4 h-4" />
-                            </button>
-                        )}
+                        <div className="flex items-center gap-1">
+                            {anyExpandable && (
+                                <>
+                                    <button onClick={expandAll} title="Expand all"
+                                        className="p-1.5 rounded-lg text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors">
+                                        <ChevronDown className="w-4 h-4" />
+                                    </button>
+                                    <button onClick={collapseAll} title="Collapse all"
+                                        className="p-1.5 rounded-lg text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors">
+                                        <ChevronRight className="w-4 h-4" />
+                                    </button>
+                                </>
+                            )}
+                            {canEdit && !isLocked && (
+                                <button
+                                    onClick={() => setIsWbsModalOpen(true)}
+                                    title="Add WBS Node"
+                                    className="p-1.5 rounded-lg text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors"
+                                >
+                                    <Plus className="w-4 h-4" />
+                                </button>
+                            )}
+                        </div>
                     </div>
 
                     {loadingTasks ? (
@@ -659,6 +692,7 @@ export default function ProjectDetail({ project, onBack }) {
                                     editingId={editingWbsId}
                                     setEditingId={setEditingWbsId}
                                     onRename={renameWbsNode}
+                                    taskCounts={taskCounts}
                                 />
                             ))}
                             {rootNodes.length === 0 && (
