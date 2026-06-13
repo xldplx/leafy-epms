@@ -164,6 +164,11 @@ export default function ExcelImport() {
     const validRows   = validationResults.filter(r => r.errors.length === 0);
     const invalidRows = validationResults.filter(r => r.errors.length > 0);
 
+    // Every required field must be mapped before validation is meaningful.
+    const requiredMapped = TASK_FIELDS
+        .filter(f => f.required)
+        .every(f => mapping[f.key] !== undefined && mapping[f.key] !== '');
+
     const handleDownloadTemplate = () => {
         const wb = XLSX.utils.book_new();
         const templateData = [
@@ -337,7 +342,8 @@ export default function ExcelImport() {
                         </div>
                         <button
                             onClick={handleValidate}
-                            disabled={!mapping.task_name && mapping.task_name !== 0}
+                            disabled={!requiredMapped}
+                            title={!requiredMapped ? 'Map all required (*) fields first' : undefined}
                             className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-xl font-semibold text-sm shadow-lg shadow-emerald-200 transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
                         >
                             Validate <ArrowRight className="w-4 h-4" />
@@ -346,6 +352,11 @@ export default function ExcelImport() {
 
                     <div className="p-6 space-y-4">
                         <p className="text-sm text-slate-500">Map each task field to a column from your spreadsheet. Auto-detected mappings are pre-selected.</p>
+                        {!requiredMapped && (
+                            <p className="text-xs font-semibold text-amber-600 flex items-center gap-1.5">
+                                <AlertTriangle className="w-3.5 h-3.5" /> Map all required (*) fields to enable validation.
+                            </p>
+                        )}
 
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                             {TASK_FIELDS.map(field => (
