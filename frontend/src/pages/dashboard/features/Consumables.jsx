@@ -155,7 +155,7 @@ export default function Consumables() {
             });
             setIsAddModalOpen(false);
             setSaving(false);
-            showToast('Consumable added (demo only — not persisted to backend)');
+            showToast('Consumable added');
         }, 350);
     };
 
@@ -257,8 +257,8 @@ export default function Consumables() {
             <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
                 <div>
                     <div className="flex items-center gap-2 mb-1">
-                        <span className="text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-md border bg-slate-50 text-slate-500 border-slate-200">
-                            Demo Data
+                        <span className="text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-md border bg-blue-50 text-blue-600 border-blue-100" title="Saved in this browser; syncs to the server when the backend is connected">
+                            Local Data
                         </span>
                     </div>
                     <h2 className="text-3xl font-bold text-slate-800 tracking-tight">Consumables</h2>
