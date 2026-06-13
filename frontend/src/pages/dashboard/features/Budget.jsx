@@ -3,6 +3,7 @@ import { Plus, Wallet, X, Loader2, CheckCircle2, TrendingUp, TrendingDown, Dolla
 import { formatCurrency } from '../../../utils/evmHelpers';
 import { INPUT_CLASS } from '../../../utils/uiConstants';
 import { exportWorkbook, exportFilename } from '../../../utils/excelExport';
+import { createLocalResource } from '../../../utils/localResource';
 import { apiFetch } from '../../../utils/api';
 
 // ── DEMO BUDGET DATA — replace with budgetApi.getByProject(projectId) when Ananta's backend ships ──
@@ -23,11 +24,18 @@ const DEMO_BUDGET_BY_PROJECT = {
     ],
 };
 
+// Flatten the demo into one persistent collection of rows tagged with project_id.
+// Swap `budgetStore` for `budgetApi` (utils/api.js) when the backend ships.
+const BUDGET_SEED = Object.entries(DEMO_BUDGET_BY_PROJECT).flatMap(([pid, rows]) =>
+    rows.map(r => ({ ...r, project_id: Number(pid) }))
+);
+const budgetStore = createLocalResource('epms.budget.v1', BUDGET_SEED);
+
 export default function Budget() {
     const [projects, setProjects]                   = useState([]);
     const [isLoadingProjects, setIsLoadingProjects] = useState(true);
     const [selectedProjectId, setSelectedProjectId] = useState('');
-    const [categories, setCategories]               = useState([]);
+    const [allCategories, setAllCategories]         = useState(() => budgetStore.snapshot());
 
     // Modal state
     const [isModalOpen, setIsModalOpen]   = useState(false);
@@ -53,11 +61,13 @@ export default function Budget() {
             .finally(() => setIsLoadingProjects(false));
     }, []);
 
-    // Re-seed categories from demo data when project changes
-    useEffect(() => {
-        if (!selectedProjectId) { setCategories([]); return; }
-        setCategories(DEMO_BUDGET_BY_PROJECT[parseInt(selectedProjectId)] || []);
-    }, [selectedProjectId]);
+    const reload = () => budgetStore.getAll().then(r => setAllCategories(r.data));
+
+    // Categories for the selected project, derived from the persistent store.
+    const categories = useMemo(
+        () => (selectedProjectId ? allCategories.filter(c => String(c.project_id) === selectedProjectId) : []),
+        [allCategories, selectedProjectId],
+    );
 
     // Close modal on Escape
     useEffect(() => {
@@ -119,18 +129,19 @@ export default function Budget() {
         const plannedNum = parseFloat(form.planned);
         if (isNaN(plannedNum) || plannedNum < 0) { setFormError('Planned amount must be a non-negative number.'); return; }
 
-        // Simulate a brief save for UX feedback (demo only)
         setSaving(true);
-        setTimeout(() => {
-            setCategories(prev => [
-                ...prev,
-                { id: Date.now(), category: form.category.trim(), type: form.type, planned: plannedNum, actual: 0 },
-            ]);
+        budgetStore.create({
+            category:   form.category.trim(),
+            type:       form.type,
+            planned:    plannedNum,
+            actual:     0,
+            project_id: parseInt(selectedProjectId),
+        }).then(reload).then(() => {
             setIsModalOpen(false);
             setSaving(false);
             setSuccessToast(true);
             setTimeout(() => setSuccessToast(false), 3000);
-        }, 400);
+        });
     };
 
     const renderRow = (row) => {
@@ -171,7 +182,7 @@ export default function Budget() {
             {/* SUCCESS TOAST */}
             {successToast && (
                 <div className="fixed top-6 right-6 z-50 bg-emerald-600 text-white px-5 py-3 rounded-xl shadow-lg shadow-emerald-200 flex items-center gap-2 text-sm font-semibold animate-in slide-in-from-top-2 fade-in duration-200">
-                    <CheckCircle2 className="w-4 h-4" /> Category added (demo only — not persisted)
+                    <CheckCircle2 className="w-4 h-4" /> Category added
                 </div>
             )}
 
@@ -186,8 +197,8 @@ export default function Budget() {
             <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
                 <div>
                     <div className="flex items-center gap-2 mb-1">
-                        <span className="text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-md border bg-slate-50 text-slate-500 border-slate-200">
-                            Demo Data
+                        <span className="text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-md border bg-blue-50 text-blue-600 border-blue-100" title="Saved in this browser; syncs to the server when the backend is connected">
+                            Local Data
                         </span>
                     </div>
                     <h2 className="text-3xl font-bold text-slate-800 tracking-tight">Budget</h2>
