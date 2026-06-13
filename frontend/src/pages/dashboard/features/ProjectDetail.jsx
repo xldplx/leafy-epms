@@ -163,6 +163,9 @@ function WbsPicker({ leafNodes, allNodes, overrides, value, onChange }) {
             <button
                 type="button"
                 onClick={() => setOpen(o => !o)}
+                aria-label="Select WBS node"
+                aria-haspopup="listbox"
+                aria-expanded={open}
                 className="w-full flex items-center justify-between gap-2 px-4 py-3 bg-white/50 border border-slate-200 rounded-lg outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all text-sm text-left"
             >
                 <span className={selected ? 'text-slate-700 truncate' : 'text-slate-400'}>
@@ -180,6 +183,7 @@ function WbsPicker({ leafNodes, allNodes, overrides, value, onChange }) {
                             onChange={e => setQuery(e.target.value)}
                             onKeyDown={e => { if (e.key === 'Escape') { e.stopPropagation(); setOpen(false); } }}
                             placeholder="Search code or name..."
+                            aria-label="Search WBS nodes by code or name"
                             className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm outline-none focus:border-emerald-500"
                         />
                     </div>
