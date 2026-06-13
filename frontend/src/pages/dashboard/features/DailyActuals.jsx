@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { ClipboardList, CheckCircle2, Camera, X, Image as ImageIcon, Loader2 } from 'lucide-react';
 import { formatCurrency, formatDate } from '../../../utils/evmHelpers';
 import { INPUT_CLASS, INLINE_INPUT_CLASS, CARD_CLASS } from '../../../utils/uiConstants';
+import EmptyState from '../../../components/EmptyState';
 import { apiFetch } from '../../../utils/api';
 
 export default function DailyActuals() {
@@ -37,7 +38,7 @@ export default function DailyActuals() {
         apiFetch(`/projects/${selectedProjectId}/tasks`).then(r => setProjectTasks(r.data || [])).catch(console.error);
     }, [selectedProjectId]);
 
-    const selectedProject = projects.find(p => p.id === parseInt(selectedProjectId));
+    const selectedProject = projects.find(p => String(p.id) === selectedProjectId);
     const isReady = selectedProjectId && entryDate;
 
     const updateActual = (taskId, field, value) => {
@@ -88,6 +89,18 @@ export default function DailyActuals() {
         }
         setSubmitError('');
 
+        // EVM integrity: a row with cost must also have hours, and vice-versa.
+        const mismatched = projectTasks.filter(t => {
+            const a = actuals[t.id] || {};
+            const h = parseFloat(a.actual_hours) || 0;
+            const c = parseFloat(a.actual_cost)  || 0;
+            return (h > 0) !== (c > 0);
+        }).map(t => t.task_name);
+        if (mismatched.length) {
+            setSubmitError(`Enter both hours and cost (or neither) for: ${mismatched.join(', ')}`);
+            return;
+        }
+
         const entries = projectTasks
             .filter(t => actuals[t.id]?.actual_hours > 0 || actuals[t.id]?.actual_cost > 0 || actuals[t.id]?.pct_complete > 0 || actuals[t.id]?.photo)
             .map(t => ({
@@ -95,7 +108,7 @@ export default function DailyActuals() {
                 actual_hours: actuals[t.id]?.actual_hours || 0,
                 actual_cost:  actuals[t.id]?.actual_cost  || 0,
                 pct_complete: actuals[t.id]?.pct_complete || 0,
-                photo_url:    actuals[t.id]?.photo?.url   || null,
+                photo_url:    null, // evidence is a local preview only until file storage is wired
             }));
 
         setIsSubmitting(true);
@@ -194,8 +207,19 @@ export default function DailyActuals() {
                 </div>
             </div>
 
-            {/* TASKS TABLE — shown only when project + date are selected */}
-            {isReady && (
+            {/* EMPTY STATE — project + date chosen but the project has no tasks */}
+            {isReady && projectTasks.length === 0 && (
+                <div className={`${cardClass} p-8`}>
+                    <EmptyState
+                        icon={ClipboardList}
+                        title="No tasks for this project"
+                        hint="Add tasks under this project's WBS before recording daily progress."
+                    />
+                </div>
+            )}
+
+            {/* TASKS TABLE — shown when project + date selected and tasks exist */}
+            {isReady && projectTasks.length > 0 && (
                 <div className={`${cardClass} animate-in fade-in slide-in-from-bottom-4 duration-500`}>
 
                     {/* Table header */}
@@ -240,7 +264,7 @@ export default function DailyActuals() {
                                     <th className="px-6 py-5 text-emerald-600">Actual Hours</th>
                                     <th className="px-6 py-5 text-emerald-600">Actual Cost</th>
                                     <th className="px-6 py-5 text-emerald-600">% Done</th>
-                                    <th className="px-8 py-5 text-emerald-600">Evidence</th>
+                                    <th className="px-8 py-5 text-emerald-600">Evidence <span className="text-slate-300 lowercase font-bold tracking-normal">(preview only)</span></th>
                                 </tr>
                             </thead>
                             <tbody className="text-sm font-medium text-slate-600 divide-y divide-slate-50">
@@ -380,7 +404,7 @@ export default function DailyActuals() {
                                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{formatDate(entry.date)}</p>
                                     <div className="flex items-center gap-1.5 justify-end mt-1 text-emerald-600">
                                         <CheckCircle2 className="w-3 h-3" />
-                                        <span className="text-[10px] font-black uppercase tracking-tighter">Synced</span>
+                                        <span className="text-[10px] font-black uppercase tracking-tighter">Recorded</span>
                                     </div>
                                 </div>
                             </div>
