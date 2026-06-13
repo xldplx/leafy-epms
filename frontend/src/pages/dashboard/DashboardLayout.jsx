@@ -18,6 +18,7 @@ import Consumables  from './features/Consumables';
 import Materials    from './features/Materials';
 import Tools        from './features/Tools';
 import Budget       from './features/Budget';
+import SettingsPage from './features/Settings';
 
 const pageComponents = {
     'Overview':      Overview,
@@ -33,6 +34,7 @@ const pageComponents = {
     'Materials':     Materials,
     'Tools':         Tools,
     'Budget':        Budget,
+    'Settings':      SettingsPage,
 };
 
 export default function DashboardLayout() {
@@ -73,6 +75,7 @@ export default function DashboardLayout() {
         { name: 'Materials',     icon: <Package className="w-5 h-5" />,         allowedRoles: ['Project Manager','Planner','Site Engineer'] },
         { name: 'Tools',         icon: <Hammer className="w-5 h-5" />,          allowedRoles: ['Project Manager','Planner','Site Engineer'] },
         { name: 'Budget',        icon: <Wallet className="w-5 h-5" />,          allowedRoles: ['Project Manager','Cost Engineer'] },
+        { name: 'Settings',      icon: <Settings className="w-5 h-5" />,        allowedRoles: ['Project Manager','Management'] },
     ].filter(item => item.allowedRoles.includes(userRole));
 
     const ActiveComponent = pageComponents[activePage] || pageComponents['Overview'];
@@ -127,9 +130,13 @@ export default function DashboardLayout() {
                                 <button className="w-full flex items-center gap-3 px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 rounded-lg transition-colors text-left">
                                     <User className="w-4 h-4 text-slate-400" /> My Profile
                                 </button>
-                                <button className="w-full flex items-center gap-3 px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 rounded-lg transition-colors text-left">
-                                    <Settings className="w-4 h-4 text-slate-400" /> Settings
-                                </button>
+                                {['Project Manager','Management'].includes(userRole) && (
+                                    <button
+                                        onClick={() => { setActivePage('Settings'); setIsUserMenuOpen(false); }}
+                                        className="w-full flex items-center gap-3 px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 rounded-lg transition-colors text-left">
+                                        <Settings className="w-4 h-4 text-slate-400" /> Settings
+                                    </button>
+                                )}
                                 <div className="h-px bg-slate-100 my-1 mx-2" />
                                 <button onClick={handleLogout} className="w-full flex items-center gap-3 px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors text-left">
                                     <LogOut className="w-4 h-4" /> Sign Out

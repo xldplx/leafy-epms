@@ -103,6 +103,14 @@ export const consumablesApi = {
     delete:  (id)           => apiFetch(`/consumables/${id}`, { method: 'DELETE' }),
 };
 
+// ─── AUDIT LOG ────────────────────────────────────────────────────────────────
+// Backend endpoint not built yet (Ananta). Settings.jsx currently reads demo
+// rows from data/auditSeed.js via localStore; swap to auditApi.getAll() once
+// GET /audit-logs ships. Filters mirror the planned query params.
+export const auditApi = {
+    getAll: (filters = {}) => apiFetch(`/audit-logs${Object.keys(filters).length ? '?' + new URLSearchParams(filters) : ''}`),
+};
+
 // ─── MATERIALS ────────────────────────────────────────────────────────────────
 export const materialsApi = {
     getAll:        (filters = {}) => apiFetch(`/materials${Object.keys(filters).length ? '?' + new URLSearchParams(filters) : ''}`),
