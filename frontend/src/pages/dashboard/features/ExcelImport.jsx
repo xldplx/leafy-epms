@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { Upload, CheckCircle2, AlertTriangle, FileSpreadsheet, X, ArrowRight, Download, Loader2 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { INPUT_CLASS } from '../../../utils/uiConstants';
+import { recordAudit } from '../../../utils/auditLog';
 import { apiFetch } from '../../../utils/api';
 
 const TASK_FIELDS = [
@@ -212,7 +213,9 @@ export default function ExcelImport() {
                 body:   JSON.stringify({ tasks }),
             });
             if (!res.success) throw new Error(res.message || 'Import failed.');
-            setImportedCount(res.imported || tasks.length);
+            const count = res.imported || tasks.length;
+            setImportedCount(count);
+            recordAudit({ action: 'CREATE', resource_type: 'task', resource_id: `${count} tasks`, detail: `Imported ${count} tasks from ${fileName}` });
             setStep('done');
         } catch (e) {
             setImportError(e.message);

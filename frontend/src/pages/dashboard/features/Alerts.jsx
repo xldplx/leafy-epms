@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Bell, AlertTriangle, CheckCircle2, Settings } from 'lucide-react';
 import { computeAlerts } from '../../../utils/evmHelpers';
 import { INPUT_CLASS } from '../../../utils/uiConstants';
+import { recordAudit } from '../../../utils/auditLog';
 import { apiFetch } from '../../../utils/api';
 
 export default function Alerts() {
@@ -87,6 +88,7 @@ export default function Alerts() {
             });
         } catch (e) { console.error(e); }
 
+        recordAudit({ action: 'UPDATE', resource_type: 'threshold', detail: `Set ${key} to ${clamped.toFixed(2)}` });
         setThresholdToast(true);
         setTimeout(() => setThresholdToast(false), 2000);
     };

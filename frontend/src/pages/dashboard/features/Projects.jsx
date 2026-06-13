@@ -5,6 +5,7 @@ import { formatCurrency, formatDate, computeEvm, indexColor } from '../../../uti
 import { STATUS_STYLES } from '../../../utils/uiConstants';
 import { isValidProjectCode } from '../../../utils/validators';
 import { exportWorkbook, exportFilename } from '../../../utils/excelExport';
+import { recordAudit } from '../../../utils/auditLog';
 import { apiFetch } from '../../../utils/api';
 
 export default function Projects() {
@@ -99,6 +100,7 @@ export default function Projects() {
                 setError(res.message || 'Failed to create project.');
                 return;
             }
+            recordAudit({ action: 'CREATE', resource_type: 'project', resource_id: trimmedCode, detail: `Created project "${trimmedName}"` });
             setIsModalOpen(false);
             resetForm();
             setSuccessToast(true);
