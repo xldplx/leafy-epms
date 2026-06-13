@@ -103,6 +103,25 @@ export const consumablesApi = {
     delete:  (id)           => apiFetch(`/consumables/${id}`, { method: 'DELETE' }),
 };
 
+// ─── TOOLS ────────────────────────────────────────────────────────────────────
+// Backend not built yet — Tools.jsx persists locally via createLocalResource.
+// Swap to this module once GET/POST/PUT/DELETE /tools ship.
+export const toolsApi = {
+    getAll:  (filters = {}) => apiFetch(`/tools${Object.keys(filters).length ? '?' + new URLSearchParams(filters) : ''}`),
+    create:  (payload)      => apiFetch('/tools', { method: 'POST', body: JSON.stringify(payload) }),
+    update:  (id, payload)  => apiFetch(`/tools/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
+    delete:  (id)           => apiFetch(`/tools/${id}`, { method: 'DELETE' }),
+};
+
+// ─── BUDGET ───────────────────────────────────────────────────────────────────
+// Backend not built yet — Budget.jsx persists locally via createLocalResource.
+export const budgetApi = {
+    getAll:  (filters = {}) => apiFetch(`/budget${Object.keys(filters).length ? '?' + new URLSearchParams(filters) : ''}`),
+    create:  (payload)      => apiFetch('/budget', { method: 'POST', body: JSON.stringify(payload) }),
+    update:  (id, payload)  => apiFetch(`/budget/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
+    delete:  (id)           => apiFetch(`/budget/${id}`, { method: 'DELETE' }),
+};
+
 // ─── AUDIT LOG ────────────────────────────────────────────────────────────────
 // Backend endpoint not built yet (Ananta). Settings.jsx currently reads demo
 // rows from data/auditSeed.js via localStore; swap to auditApi.getAll() once
