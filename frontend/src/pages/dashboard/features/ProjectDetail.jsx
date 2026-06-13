@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { ArrowLeft, Lock, Plus, ChevronRight, ChevronDown, ListTodo, X, Calendar, DollarSign, Clock, Loader2, GitBranch, Pencil, Trash2, AlertTriangle, Check } from 'lucide-react';
 import { formatCurrency, formatDate } from '../../../utils/evmHelpers';
 import { STATUS_STYLES, INPUT_CLASS } from '../../../utils/uiConstants';
@@ -125,6 +125,86 @@ function WbsNode({
     );
 }
 
+// Searchable WBS leaf-node picker for the task modal — filter by code or name,
+// with each node's ancestor path shown for disambiguation on deep trees.
+function WbsPicker({ leafNodes, allNodes, overrides, value, onChange }) {
+    const [query, setQuery] = useState('');
+    const [open, setOpen]   = useState(false);
+    const wrapRef = useRef(null);
+
+    const byId   = useMemo(() => Object.fromEntries(allNodes.map(n => [n.id, n])), [allNodes]);
+    const nameOf = (n) => (overrides && overrides[n.id]) || n.name;
+    const pathOf = (n) => {
+        const parts = [];
+        let cur = n, guard = 0;
+        while (cur && guard++ < 32) {
+            parts.unshift(cur.wbs_code);
+            cur = cur.parent_id != null ? byId[cur.parent_id] : null;
+        }
+        return parts.join(' ▸ ');
+    };
+
+    const selected = value ? byId[parseInt(value)] : null;
+    const filtered = useMemo(() => {
+        const q = query.trim().toLowerCase();
+        if (!q) return leafNodes;
+        return leafNodes.filter(n => `${n.wbs_code} ${nameOf(n)}`.toLowerCase().includes(q));
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [leafNodes, query, overrides]);
+
+    useEffect(() => {
+        const onDoc = (e) => { if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false); };
+        document.addEventListener('mousedown', onDoc);
+        return () => document.removeEventListener('mousedown', onDoc);
+    }, []);
+
+    return (
+        <div className="relative" ref={wrapRef}>
+            <button
+                type="button"
+                onClick={() => setOpen(o => !o)}
+                className="w-full flex items-center justify-between gap-2 px-4 py-3 bg-white/50 border border-slate-200 rounded-lg outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all text-sm text-left"
+            >
+                <span className={selected ? 'text-slate-700 truncate' : 'text-slate-400'}>
+                    {selected ? `${selected.wbs_code} — ${nameOf(selected)}` : 'Select a WBS node...'}
+                </span>
+                <ChevronDown className={`w-4 h-4 shrink-0 text-slate-400 transition-transform ${open ? 'rotate-180' : ''}`} />
+            </button>
+
+            {open && (
+                <div className="absolute z-20 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-xl shadow-slate-200/50 overflow-hidden animate-in fade-in slide-in-from-top-1 duration-150">
+                    <div className="p-2 border-b border-slate-100">
+                        <input
+                            autoFocus
+                            value={query}
+                            onChange={e => setQuery(e.target.value)}
+                            onKeyDown={e => { if (e.key === 'Escape') { e.stopPropagation(); setOpen(false); } }}
+                            placeholder="Search code or name..."
+                            className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm outline-none focus:border-emerald-500"
+                        />
+                    </div>
+                    <ul className="max-h-56 overflow-y-auto py-1">
+                        {filtered.length > 0 ? filtered.map(n => (
+                            <li key={n.id}>
+                                <button
+                                    type="button"
+                                    onClick={() => { onChange(String(n.id)); setOpen(false); setQuery(''); }}
+                                    className={`w-full text-left px-3 py-2 transition-colors hover:bg-slate-50 ${String(n.id) === String(value) ? 'bg-emerald-50' : ''}`}
+                                >
+                                    <div className="font-mono text-[10px] text-slate-400">{pathOf(n)}</div>
+                                    <div className={`text-sm ${String(n.id) === String(value) ? 'text-emerald-700 font-semibold' : 'text-slate-700'}`}>{nameOf(n)}</div>
+                                </button>
+                            </li>
+                        )) : (
+                            <li className="px-3 py-4 text-sm text-slate-400 text-center">No matching WBS nodes.</li>
+                        )}
+                    </ul>
+                </div>
+            )}
+        </div>
+    );
+}
+
 export default function ProjectDetail({ project, onBack }) {
     const [tasks, setTasks]       = useState([]);
     const [wbsNodes, setWbsNodes] = useState([]);
@@ -240,7 +320,12 @@ export default function ProjectDetail({ project, onBack }) {
     const openAddTaskModal = () => {
         setEditingTaskId(null);
         setTaskError('');
-        resetTaskForm();
+        // Pre-select the WBS node the user already highlighted in the tree (leaf only).
+        const preset = selectedWbsId && leafNodes.some(n => n.id === selectedWbsId) ? String(selectedWbsId) : '';
+        setTaskForm({
+            task_name: '', wbs_id: preset, planned_start: '', planned_end: '',
+            planned_cost: '', planned_hours: '', weight: '',
+        });
         setIsTaskModalOpen(true);
     };
 
@@ -790,15 +875,26 @@ export default function ProjectDetail({ project, onBack }) {
 
                             <div className="space-y-1">
                                 <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider ml-1">WBS Node</label>
-                                <select required value={taskForm.wbs_id}
-                                    onChange={e => setTaskForm({ ...taskForm, wbs_id: e.target.value })}
-                                    className="w-full px-4 py-3 bg-white/50 border border-slate-200 rounded-lg outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all text-slate-700 text-sm"
-                                >
-                                    <option value="">Select a WBS node...</option>
-                                    {leafNodes.map(n => (
-                                        <option key={n.id} value={n.id}>{n.wbs_code} — {wbsOverrides[n.id] || n.name}</option>
-                                    ))}
-                                </select>
+                                {leafNodes.length === 0 ? (
+                                    <div className="px-4 py-3 bg-amber-50/60 border border-amber-100 rounded-lg text-sm text-amber-700 flex items-center justify-between gap-3">
+                                        <span>No WBS nodes yet — add one first.</span>
+                                        <button
+                                            type="button"
+                                            onClick={() => { closeTaskModal(); setIsWbsModalOpen(true); }}
+                                            className="shrink-0 text-xs font-bold uppercase tracking-wider px-3 py-1.5 rounded-lg bg-white border border-amber-200 text-amber-700 hover:bg-amber-100 transition-colors"
+                                        >
+                                            Add WBS Node
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <WbsPicker
+                                        leafNodes={leafNodes}
+                                        allNodes={wbsNodes}
+                                        overrides={wbsOverrides}
+                                        value={taskForm.wbs_id}
+                                        onChange={(v) => setTaskForm({ ...taskForm, wbs_id: v })}
+                                    />
+                                )}
                             </div>
 
                             <div className="grid grid-cols-2 gap-4">
@@ -854,8 +950,8 @@ export default function ProjectDetail({ project, onBack }) {
                                     className="flex-1 px-6 py-3 bg-slate-100 text-slate-600 rounded-xl font-semibold hover:bg-slate-200 transition-all">
                                     Cancel
                                 </button>
-                                <button type="submit" disabled={savingTask}
-                                    className="flex-1 px-6 py-3 bg-emerald-600 text-white rounded-xl font-semibold shadow-lg shadow-emerald-200 hover:bg-emerald-700 transition-all flex items-center justify-center gap-2 disabled:opacity-60">
+                                <button type="submit" disabled={savingTask || !taskForm.wbs_id}
+                                    className="flex-1 px-6 py-3 bg-emerald-600 text-white rounded-xl font-semibold shadow-lg shadow-emerald-200 hover:bg-emerald-700 transition-all flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed">
                                     {savingTask
                                         ? <><Loader2 className="w-4 h-4 animate-spin" /> Saving...</>
                                         : (editingTaskId ? 'Save Changes' : 'Add Task')}
