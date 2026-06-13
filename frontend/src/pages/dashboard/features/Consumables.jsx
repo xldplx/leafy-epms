@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Package, Plus, Search, X, Loader2, CheckCircle2, AlertTriangle, Droplet, Activity, Layers, History, ChevronDown, ChevronRight } from 'lucide-react';
+import { Package, Plus, Search, X, Loader2, CheckCircle2, AlertTriangle, Droplet, Activity, Layers, History, ChevronDown, ChevronRight, Download } from 'lucide-react';
 import { apiFetch } from '../../../utils/api';
 import { load, save } from '../../../utils/localStore';
+import { exportWorkbook, exportFilename } from '../../../utils/excelExport';
 
 const ITEMS_KEY = 'epms.consumables.v1';
 const LOG_KEY   = 'epms.consumables_log.v1';
@@ -209,6 +210,39 @@ export default function Consumables() {
     const logTarget = itemById[logTargetId];
     const selectedProject = projects.find(p => String(p.id) === selectedProjectId);
 
+    // ── Excel export (stock catalog + consumption log) ──────────────────────────
+    const handleExport = () => {
+        const projectById = Object.fromEntries(projects.map(p => [p.id, p]));
+        const stockRows = items.map(i => ({
+            'Name':          i.name,
+            'Category':      i.category,
+            'Unit':          i.unit,
+            'Current Stock': i.current_stock,
+            'Reorder At':    i.reorder_threshold,
+            'Status':        stockState(i),
+            'Last Used':     i.last_used_at ? fmtDate(i.last_used_at) : '',
+        }));
+        const logRows = [...log]
+            .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : b.id - a.id))
+            .map(e => {
+                const item = itemById[e.item_id];
+                const proj = projectById[e.project_id];
+                return {
+                    'Date':     fmtDate(e.date),
+                    'Item':     item?.name || `Item #${e.item_id}`,
+                    'Quantity': e.qty,
+                    'Unit':     item?.unit || '',
+                    'Project':  proj ? `${proj.project_code} — ${proj.project_name}` : '',
+                    'Note':     e.note || '',
+                };
+            });
+        exportWorkbook(exportFilename('Consumables'), [
+            { name: 'Stock',           rows: stockRows },
+            { name: 'Consumption Log', rows: logRows },
+        ]);
+        showToast('Consumables exported to Excel');
+    };
+
     return (
         <div className="space-y-8">
 
@@ -230,14 +264,22 @@ export default function Consumables() {
                     <h2 className="text-3xl font-bold text-slate-800 tracking-tight">Consumables</h2>
                     <p className="text-slate-500 mt-1">Fuel, lubricants, and operational items — daily consumption logging</p>
                 </div>
-                {canAdd && (
+                <div className="flex items-center gap-3">
                     <button
-                        onClick={openAddModal}
-                        className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2.5 rounded-xl font-semibold shadow-lg shadow-emerald-200 transition-all transform hover:-translate-y-0.5 flex items-center gap-2">
-                        <Plus className="w-5 h-5" />
-                        Add Consumable
+                        onClick={handleExport}
+                        disabled={items.length === 0}
+                        className="text-sm font-semibold px-4 py-2.5 rounded-xl transition-all flex items-center gap-2 border shadow-sm text-emerald-600 bg-emerald-50 border-emerald-100 hover:bg-emerald-600 hover:text-white hover:border-emerald-600 hover:shadow-lg hover:shadow-emerald-200 hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-40 disabled:pointer-events-none">
+                        <Download className="w-4 h-4" /> Export
                     </button>
-                )}
+                    {canAdd && (
+                        <button
+                            onClick={openAddModal}
+                            className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2.5 rounded-xl font-semibold shadow-lg shadow-emerald-200 transition-all transform hover:-translate-y-0.5 flex items-center gap-2">
+                            <Plus className="w-5 h-5" />
+                            Add Consumable
+                        </button>
+                    )}
+                </div>
             </div>
 
             {/* PROJECT SELECTOR */}

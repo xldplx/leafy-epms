@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Plus, Wallet, X, Loader2, CheckCircle2, TrendingUp, TrendingDown, DollarSign, Activity } from 'lucide-react';
+import { Plus, Wallet, X, Loader2, CheckCircle2, TrendingUp, TrendingDown, DollarSign, Activity, Download } from 'lucide-react';
 import { formatCurrency } from '../../../utils/evmHelpers';
 import { INPUT_CLASS } from '../../../utils/uiConstants';
+import { exportWorkbook, exportFilename } from '../../../utils/excelExport';
 import { apiFetch } from '../../../utils/api';
 
 // ── DEMO BUDGET DATA — replace with budgetApi.getByProject(projectId) when Ananta's backend ships ──
@@ -33,6 +34,7 @@ export default function Budget() {
     const [saving, setSaving]             = useState(false);
     const [formError, setFormError]       = useState('');
     const [successToast, setSuccessToast] = useState(false);
+    const [exportToast, setExportToast]   = useState(false);
     const [form, setForm] = useState({ category: '', type: 'CAPEX', planned: '' });
 
     const userRole = localStorage.getItem('userRole');
@@ -80,6 +82,28 @@ export default function Budget() {
 
     const capexRows = categories.filter(c => c.type === 'CAPEX');
     const opexRows  = categories.filter(c => c.type === 'OPEX');
+
+    // ── Excel export (budget category breakdown for selected project) ───────────
+    const handleExport = () => {
+        const rows = categories.map(c => {
+            const planned  = Number(c.planned) || 0;
+            const actual   = Number(c.actual) || 0;
+            const variance = planned - actual;
+            return {
+                'Category':     c.category,
+                'Type':         c.type,
+                'Planned (IDR)': planned,
+                'Actual (IDR)':  actual,
+                'Variance (IDR)': variance,
+                '% Used':       planned > 0 ? Number(((actual / planned) * 100).toFixed(1)) : 0,
+            };
+        });
+        exportWorkbook(exportFilename('Budget', selectedProject?.project_code), [
+            { name: 'Budget Categories', rows },
+        ]);
+        setExportToast(true);
+        setTimeout(() => setExportToast(false), 2500);
+    };
 
     const openAddModal = () => {
         setForm({ category: '', type: 'CAPEX', planned: '' });
@@ -151,6 +175,13 @@ export default function Budget() {
                 </div>
             )}
 
+            {/* EXPORT TOAST */}
+            {exportToast && (
+                <div className="fixed top-6 right-6 z-50 bg-emerald-600 text-white px-5 py-3 rounded-xl shadow-lg shadow-emerald-200 flex items-center gap-2 text-sm font-semibold animate-in slide-in-from-top-2 fade-in duration-200">
+                    <CheckCircle2 className="w-4 h-4" /> Budget exported to Excel
+                </div>
+            )}
+
             {/* HEADER */}
             <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
                 <div>
@@ -162,14 +193,23 @@ export default function Budget() {
                     <h2 className="text-3xl font-bold text-slate-800 tracking-tight">Budget</h2>
                     <p className="text-slate-500 mt-1">CAPEX & OPEX financial resources — planned vs actual with variance analysis</p>
                 </div>
-                {canEdit && selectedProjectId && (
-                    <button
-                        onClick={openAddModal}
-                        className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2.5 rounded-xl font-semibold shadow-lg shadow-emerald-200 transition-all transform hover:-translate-y-0.5 flex items-center gap-2">
-                        <Plus className="w-5 h-5" />
-                        Add Category
-                    </button>
-                )}
+                <div className="flex items-center gap-3">
+                    {selectedProjectId && categories.length > 0 && (
+                        <button
+                            onClick={handleExport}
+                            className="text-sm font-semibold px-4 py-2.5 rounded-xl transition-all flex items-center gap-2 border shadow-sm text-emerald-600 bg-emerald-50 border-emerald-100 hover:bg-emerald-600 hover:text-white hover:border-emerald-600 hover:shadow-lg hover:shadow-emerald-200 hover:-translate-y-0.5 active:translate-y-0">
+                            <Download className="w-4 h-4" /> Export
+                        </button>
+                    )}
+                    {canEdit && selectedProjectId && (
+                        <button
+                            onClick={openAddModal}
+                            className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2.5 rounded-xl font-semibold shadow-lg shadow-emerald-200 transition-all transform hover:-translate-y-0.5 flex items-center gap-2">
+                            <Plus className="w-5 h-5" />
+                            Add Category
+                        </button>
+                    )}
+                </div>
             </div>
 
             {/* PROJECT SELECTOR */}

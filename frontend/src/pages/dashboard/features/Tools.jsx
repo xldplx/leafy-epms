@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Plus, Hammer, Search, X, Loader2, CheckCircle2, Wrench, AlertTriangle, Package, RotateCcw } from 'lucide-react';
+import { Plus, Hammer, Search, X, Loader2, CheckCircle2, Wrench, AlertTriangle, Package, RotateCcw, Download } from 'lucide-react';
 import { INPUT_CLASS } from '../../../utils/uiConstants';
+import { exportWorkbook, exportFilename } from '../../../utils/excelExport';
 
 // ── DEMO TOOLS DATA — replace with toolsApi.getAll() when Ananta's backend ships ──
 const DEMO_TOOLS = [
@@ -147,6 +148,33 @@ export default function Tools() {
 
     const checkoutTarget = tools.find(t => t.id === checkoutTargetId);
 
+    // ── Excel export (inventory + checkout records) ─────────────────────────────
+    const handleExport = () => {
+        const inventoryRows = tools.map(t => ({
+            'Name':          t.name,
+            'Category':      t.category || '',
+            'Condition':     t.condition.replace('_', ' '),
+            'Status':        toolStatus(t),
+            'Assigned To':   t.assigned_to || '',
+            'Checkout Date': t.checkout_date ? fmtDate(t.checkout_date) : '',
+            'Return Date':   t.return_date ? fmtDate(t.return_date) : '',
+        }));
+        const checkoutRows = tools
+            .filter(t => t.assigned_to || t.return_date)
+            .map(t => ({
+                'Tool':          t.name,
+                'Assigned To':   t.assigned_to || '',
+                'Checkout Date': t.checkout_date ? fmtDate(t.checkout_date) : '',
+                'Return Date':   t.return_date ? fmtDate(t.return_date) : '',
+                'Status':        toolStatus(t),
+            }));
+        exportWorkbook(exportFilename('Tools'), [
+            { name: 'Inventory',    rows: inventoryRows },
+            { name: 'Checkout Log', rows: checkoutRows },
+        ]);
+        showToast('Tools exported to Excel');
+    };
+
     return (
         <div className="space-y-8">
 
@@ -168,14 +196,22 @@ export default function Tools() {
                     <h2 className="text-3xl font-bold text-slate-800 tracking-tight">Tools</h2>
                     <p className="text-slate-500 mt-1">Drills, test instruments, and specialized tools — checkout tracking</p>
                 </div>
-                {canEdit && (
+                <div className="flex items-center gap-3">
                     <button
-                        onClick={openAddModal}
-                        className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2.5 rounded-xl font-semibold shadow-lg shadow-emerald-200 transition-all transform hover:-translate-y-0.5 flex items-center gap-2">
-                        <Plus className="w-5 h-5" />
-                        Add Tool
+                        onClick={handleExport}
+                        disabled={tools.length === 0}
+                        className="text-sm font-semibold px-4 py-2.5 rounded-xl transition-all flex items-center gap-2 border shadow-sm text-emerald-600 bg-emerald-50 border-emerald-100 hover:bg-emerald-600 hover:text-white hover:border-emerald-600 hover:shadow-lg hover:shadow-emerald-200 hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-40 disabled:pointer-events-none">
+                        <Download className="w-4 h-4" /> Export
                     </button>
-                )}
+                    {canEdit && (
+                        <button
+                            onClick={openAddModal}
+                            className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2.5 rounded-xl font-semibold shadow-lg shadow-emerald-200 transition-all transform hover:-translate-y-0.5 flex items-center gap-2">
+                            <Plus className="w-5 h-5" />
+                            Add Tool
+                        </button>
+                    )}
+                </div>
             </div>
 
             {/* KPI STRIP */}
