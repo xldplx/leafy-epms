@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
-import { Plus, FolderKanban, Calendar, DollarSign, ChevronRight, X, CheckCircle2, Loader2 } from 'lucide-react';
+import { Plus, FolderKanban, Calendar, DollarSign, ChevronRight, X, CheckCircle2, Loader2, Download } from 'lucide-react';
 import ProjectDetail from './ProjectDetail';
 import { formatCurrency, formatDate, computeEvm, indexColor } from '../../../utils/evmHelpers';
 import { STATUS_STYLES } from '../../../utils/uiConstants';
+import { isValidProjectCode } from '../../../utils/validators';
+import { exportWorkbook, exportFilename } from '../../../utils/excelExport';
 import { apiFetch } from '../../../utils/api';
 
 export default function Projects() {
@@ -24,6 +26,7 @@ export default function Projects() {
     });
     const [error, setError]             = useState('');
     const [successToast, setSuccessToast] = useState(false);
+    const [exportToast, setExportToast]   = useState(false);
 
     const resetForm = () => setForm({
         project_name: '', project_code: '', description: '',
@@ -74,6 +77,7 @@ export default function Projects() {
 
         if (!trimmedName) { setError('Project name is required.'); return; }
         if (!trimmedCode) { setError('Project code is required.'); return; }
+        if (!isValidProjectCode(trimmedCode)) { setError('Project code must match PRJ-YYYY-NNN, e.g. PRJ-2026-004.'); return; }
         if (parseFloat(form.total_budget) < 0) { setError('Budget cannot be negative.'); return; }
         if (form.planned_end && form.planned_start && new Date(form.planned_end) < new Date(form.planned_start)) {
             setError('End date must be on or after start date.');
@@ -107,6 +111,30 @@ export default function Projects() {
         }
     };
 
+    // Live project-code format feedback (only flags non-empty, malformed input)
+    const codeTrimmed = form.project_code.trim();
+    const codeInvalid = codeTrimmed.length > 0 && !isValidProjectCode(codeTrimmed);
+
+    const handleExport = () => {
+        const rows = projects.map((p) => {
+            const evm = projectEvm[p.id];
+            return {
+                'Code':         p.project_code,
+                'Name':         p.project_name,
+                'Status':       (p.status || 'planning').replace('_', ' '),
+                'Start':        p.planned_start ? formatDate(p.planned_start) : '',
+                'End':          p.planned_end ? formatDate(p.planned_end) : '',
+                'Budget (IDR)': Number(p.total_budget) || 0,
+                'CPI':          evm?.CPI != null ? Number(evm.CPI.toFixed(2)) : '',
+                'SPI':          evm?.SPI != null ? Number(evm.SPI.toFixed(2)) : '',
+                '% Complete':   evm?.overallPct != null ? Number(evm.overallPct.toFixed(1)) : '',
+            };
+        });
+        exportWorkbook(exportFilename('Projects'), [{ name: 'Projects', rows }]);
+        setExportToast(true);
+        setTimeout(() => setExportToast(false), 2500);
+    };
+
     if (selectedProject) {
         return <ProjectDetail project={selectedProject} onBack={() => { setSelectedProject(null); fetchProjects(); }} />;
     }
@@ -121,21 +149,37 @@ export default function Projects() {
                 </div>
             )}
 
+            {/* EXPORT TOAST */}
+            {exportToast && (
+                <div className="fixed top-6 right-6 z-50 bg-emerald-600 text-white px-5 py-3 rounded-xl shadow-lg shadow-emerald-200 flex items-center gap-2 text-sm font-semibold animate-in slide-in-from-top-2 fade-in duration-200">
+                    <CheckCircle2 className="w-4 h-4" /> Projects exported to Excel
+                </div>
+            )}
+
             {/* HEADER */}
             <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
                 <div>
                     <h2 className="text-3xl font-bold text-slate-800 tracking-tight">Projects</h2>
                     <p className="text-slate-500 mt-1">Manage project portfolio & work breakdown</p>
                 </div>
-                {userRole === 'Project Manager' && (
+                <div className="flex items-center gap-3">
                     <button
-                        onClick={() => setIsModalOpen(true)}
-                        className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2.5 rounded-xl font-semibold shadow-lg shadow-emerald-200 transition-all transform hover:-translate-y-0.5 flex items-center gap-2"
+                        onClick={handleExport}
+                        disabled={projects.length === 0}
+                        className="text-sm font-semibold px-4 py-2.5 rounded-xl transition-all flex items-center gap-2 border shadow-sm text-emerald-600 bg-emerald-50 border-emerald-100 hover:bg-emerald-600 hover:text-white hover:border-emerald-600 hover:shadow-lg hover:shadow-emerald-200 hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-40 disabled:pointer-events-none"
                     >
-                        <Plus className="w-5 h-5" />
-                        New Project
+                        <Download className="w-4 h-4" /> Export
                     </button>
-                )}
+                    {userRole === 'Project Manager' && (
+                        <button
+                            onClick={() => setIsModalOpen(true)}
+                            className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2.5 rounded-xl font-semibold shadow-lg shadow-emerald-200 transition-all transform hover:-translate-y-0.5 flex items-center gap-2"
+                        >
+                            <Plus className="w-5 h-5" />
+                            New Project
+                        </button>
+                    )}
+                </div>
             </div>
 
             {/* PROJECT CARDS GRID */}
@@ -260,9 +304,17 @@ export default function Projects() {
                                     required
                                     value={form.project_code}
                                     onChange={(e) => setForm({ ...form, project_code: e.target.value })}
-                                    className="w-full px-4 py-3 bg-white/50 border border-slate-200 rounded-lg outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all text-slate-700 text-sm"
+                                    className={`w-full px-4 py-3 bg-white/50 border rounded-lg outline-none focus:ring-2 transition-all text-slate-700 text-sm ${
+                                        codeInvalid
+                                            ? 'border-red-300 focus:border-red-500 focus:ring-red-500/20'
+                                            : 'border-slate-200 focus:border-emerald-500 focus:ring-emerald-500/20'
+                                    }`}
                                     placeholder="e.g. PRJ-2026-004"
+                                    aria-invalid={codeInvalid}
                                 />
+                                <p className={`text-[11px] ml-1 ${codeInvalid ? 'text-red-500 font-semibold' : 'text-slate-400'}`}>
+                                    Format: PRJ-YYYY-NNN (e.g. PRJ-2026-004)
+                                </p>
                             </div>
 
                             <div className="space-y-1">
