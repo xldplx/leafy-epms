@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { Plus, Hammer, Search, X, Loader2, CheckCircle2, Wrench, AlertTriangle, Package, RotateCcw, Download } from 'lucide-react';
 import { INPUT_CLASS } from '../../../utils/uiConstants';
 import { exportWorkbook, exportFilename } from '../../../utils/excelExport';
+import { createLocalResource } from '../../../utils/localResource';
 
 // ── DEMO TOOLS DATA — replace with toolsApi.getAll() when Ananta's backend ships ──
 const DEMO_TOOLS = [
@@ -13,6 +14,9 @@ const DEMO_TOOLS = [
     { id: 6, name: 'Laser Level DeWalt',        category: 'Survey',        condition: 'good',         assigned_to: null,           checkout_date: null,         return_date: null },
     { id: 7, name: 'Concrete Mixer 350L',       category: 'Concrete',      condition: 'good',         assigned_to: null,           checkout_date: null,         return_date: null },
 ];
+
+// Local-first store — swap `toolStore` for `toolsApi` (utils/api.js) when the backend ships.
+const toolStore = createLocalResource('epms.tools.v1', DEMO_TOOLS);
 
 const CONDITION_BADGE = {
     good:         'bg-emerald-50 text-emerald-700 border-emerald-100',
@@ -35,7 +39,7 @@ const toolStatus = (t) => {
 };
 
 export default function Tools() {
-    const [tools, setTools]                 = useState(DEMO_TOOLS);
+    const [tools, setTools]                 = useState(() => toolStore.snapshot());
     const [search, setSearch]               = useState('');
     const [statusFilter, setStatusFilter]   = useState('All');
 
@@ -81,6 +85,8 @@ export default function Tools() {
         return true;
     }), [tools, search, statusFilter]);
 
+    const reload = () => toolStore.getAll().then(r => setTools(r.data));
+
     const showToast = (msg) => {
         setSuccessToast(msg);
         setTimeout(() => setSuccessToast(''), 3000);
@@ -98,20 +104,18 @@ export default function Tools() {
         if (!addForm.name.trim()) { setAddError('Tool name is required.'); return; }
 
         setSaving(true);
-        setTimeout(() => {
-            setTools(prev => [...prev, {
-                id:            Date.now(),
-                name:          addForm.name.trim(),
-                category:      addForm.category.trim() || null,
-                condition:     addForm.condition,
-                assigned_to:   null,
-                checkout_date: null,
-                return_date:   null,
-            }]);
+        toolStore.create({
+            name:          addForm.name.trim(),
+            category:      addForm.category.trim() || null,
+            condition:     addForm.condition,
+            assigned_to:   null,
+            checkout_date: null,
+            return_date:   null,
+        }).then(reload).then(() => {
             setIsAddModalOpen(false);
             setSaving(false);
-            showToast('Tool added (demo only — not persisted)');
-        }, 400);
+            showToast('Tool added');
+        });
     };
 
     const openCheckoutModal = (toolId) => {
@@ -127,23 +131,21 @@ export default function Tools() {
         if (!checkoutForm.checkout_date) { setCheckoutError('Checkout date is required.'); return; }
 
         setSaving(true);
-        setTimeout(() => {
-            setTools(prev => prev.map(t => t.id === checkoutTargetId
-                ? { ...t, assigned_to: checkoutForm.assigned_to.trim(), checkout_date: checkoutForm.checkout_date, return_date: null }
-                : t
-            ));
+        toolStore.update(checkoutTargetId, {
+            assigned_to:   checkoutForm.assigned_to.trim(),
+            checkout_date: checkoutForm.checkout_date,
+            return_date:   null,
+        }).then(reload).then(() => {
             setCheckoutTargetId(null);
             setSaving(false);
-            showToast('Tool checked out (demo only — not persisted)');
-        }, 400);
+            showToast('Tool checked out');
+        });
     };
 
     const handleReturn = (toolId) => {
-        setTools(prev => prev.map(t => t.id === toolId
-            ? { ...t, assigned_to: null, checkout_date: null, return_date: todayISO() }
-            : t
-        ));
-        showToast('Tool returned (demo only — not persisted)');
+        toolStore.update(toolId, { assigned_to: null, checkout_date: null, return_date: todayISO() })
+            .then(reload)
+            .then(() => showToast('Tool returned'));
     };
 
     const checkoutTarget = tools.find(t => t.id === checkoutTargetId);
@@ -189,8 +191,8 @@ export default function Tools() {
             <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
                 <div>
                     <div className="flex items-center gap-2 mb-1">
-                        <span className="text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-md border bg-slate-50 text-slate-500 border-slate-200">
-                            Demo Data
+                        <span className="text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-md border bg-blue-50 text-blue-600 border-blue-100" title="Saved in this browser; syncs to the server when the backend is connected">
+                            Local Data
                         </span>
                     </div>
                     <h2 className="text-3xl font-bold text-slate-800 tracking-tight">Tools</h2>
