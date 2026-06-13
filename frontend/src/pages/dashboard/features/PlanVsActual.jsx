@@ -1,8 +1,8 @@
 import { useState, useMemo, useEffect } from 'react';
 import { BarChart3, Download, CheckCircle2 } from 'lucide-react';
-import * as XLSX from 'xlsx';
 import { computeEvm, computeAlerts, indexColor, varianceColor, formatCurrency } from '../../../utils/evmHelpers';
 import { INPUT_CLASS } from '../../../utils/uiConstants';
+import { exportWorkbook, exportFilename } from '../../../utils/excelExport';
 import { apiFetch } from '../../../utils/api';
 
 export default function PlanVsActual() {
@@ -65,7 +65,6 @@ export default function PlanVsActual() {
 
     const handleExport = () => {
         if (!selectedProject) return;
-        const wb = XLSX.utils.book_new();
 
         // Sheet 1: KPI Summary — readable formatted values
         const kpiData = [
@@ -82,9 +81,6 @@ export default function PlanVsActual() {
             { Metric: 'VAC (Variance at Completion)',         Value: VAC !== null ? fmtIDR(Math.round(VAC)) : 'N/A', Status: VAC !== null ? varianceColor(VAC).label : '' },
             { Metric: 'TCPI (To-Complete Performance Index)', Value: TCPI !== null ? TCPI.toFixed(2) : 'N/A',  Status: TCPI !== null ? indexColor(TCPI).label : '' },
         ];
-        const ws1 = XLSX.utils.json_to_sheet(kpiData);
-        ws1['!cols'] = [{ wch: 38 }, { wch: 28 }, { wch: 14 }];
-        XLSX.utils.book_append_sheet(wb, ws1, 'KPI Summary');
 
         // Sheet 2: Task Details — formatted currency columns
         const taskRows = tasks.map(t => {
@@ -102,9 +98,6 @@ export default function PlanVsActual() {
                 '% Complete':     `${t.pct_complete}%`,
             };
         });
-        const ws2 = XLSX.utils.json_to_sheet(taskRows);
-        ws2['!cols'] = [{ wch: 28 }, { wch: 8 }, { wch: 22 }, { wch: 22 }, { wch: 22 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 12 }];
-        XLSX.utils.book_append_sheet(wb, ws2, 'Task Details');
 
         // Sheet 3: Alerts
         const projectAlerts = computeAlerts(
@@ -121,11 +114,12 @@ export default function PlanVsActual() {
                 'Recommendation': a.recommendation,
             }))
             : [{ 'Metric': '-', 'Value': '-', 'Threshold': '-', 'Severity': 'No Alerts', 'Recommendation': 'All metrics are within configured thresholds.' }];
-        const ws3 = XLSX.utils.json_to_sheet(alertRows);
-        ws3['!cols'] = [{ wch: 10 }, { wch: 8 }, { wch: 10 }, { wch: 12 }, { wch: 60 }];
-        XLSX.utils.book_append_sheet(wb, ws3, 'Alerts');
 
-        XLSX.writeFile(wb, `EVM_Report_${selectedProject.project_code}_${new Date().toISOString().slice(0, 10)}.xlsx`);
+        exportWorkbook(exportFilename('EVM_Report', selectedProject.project_code), [
+            { name: 'KPI Summary',  rows: kpiData },
+            { name: 'Task Details', rows: taskRows },
+            { name: 'Alerts',       rows: alertRows },
+        ]);
         setExportFeedback(true);
         setTimeout(() => setExportFeedback(false), 2500);
     };
