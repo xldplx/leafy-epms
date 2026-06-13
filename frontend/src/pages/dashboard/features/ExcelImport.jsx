@@ -40,6 +40,20 @@ function autoDetectMapping(headers) {
     return mapping;
 }
 
+// A numeric cell that arrives as a formatted string (e.g. "1,000.50") would be
+// silently truncated by parseFloat ("1,000.50" → 1). Reject those explicitly so
+// the user fixes the source cell instead of importing a corrupt value.
+function numericFieldError(raw, label) {
+    if (raw === undefined || raw === null || String(raw).trim() === '') return `${label} is required`;
+    const s = String(raw).trim();
+    if (typeof raw === 'string' && !/^-?\d+(\.\d+)?$/.test(s)) {
+        return `${label} must be a plain number (remove thousands separators or text)`;
+    }
+    const n = parseFloat(s);
+    if (isNaN(n) || n <= 0) return `${label} must be greater than 0`;
+    return null;
+}
+
 function validateRow(row, mapping) {
     const errors = [];
     const getValue = (field) => {
@@ -51,12 +65,11 @@ function validateRow(row, mapping) {
     if (!getValue('task_name')?.toString().trim()) errors.push('Task Name is required');
     if (!getValue('wbs_code')?.toString().trim()) errors.push('WBS Code is required');
 
-    // Required number fields
-    const cost = parseFloat(getValue('planned_cost'));
-    if (isNaN(cost) || cost <= 0) errors.push('Planned Cost must be > 0');
-
-    const hours = parseFloat(getValue('planned_hours'));
-    if (isNaN(hours) || hours <= 0) errors.push('Planned Hours must be > 0');
+    // Required number fields — reject formatted/locale strings, not just <= 0
+    const costErr = numericFieldError(getValue('planned_cost'), 'Planned Cost');
+    if (costErr) errors.push(costErr);
+    const hoursErr = numericFieldError(getValue('planned_hours'), 'Planned Hours');
+    if (hoursErr) errors.push(hoursErr);
 
     // Optional: weight
     const weight = getValue('weight');
@@ -136,6 +149,11 @@ export default function ExcelImport() {
             const hdrs = raw[0].map(h => (h ?? '').toString());
             const rows = raw.slice(1).filter(r => r.some(cell => cell !== undefined && cell !== ''));
 
+            if (rows.length === 0) {
+                alert('No data rows found below the header row.');
+                return;
+            }
+
             setHeaders(hdrs);
             setDataRows(rows);
             setMapping(autoDetectMapping(hdrs));
@@ -152,6 +170,7 @@ export default function ExcelImport() {
     };
 
     const handleValidate = () => {
+        if (dataRows.length === 0) return;
         const results = dataRows.map((row, idx) => ({
             rowIndex: idx,
             errors:   validateRow(row, mapping),
