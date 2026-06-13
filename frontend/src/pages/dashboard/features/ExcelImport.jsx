@@ -3,17 +3,8 @@ import { Upload, CheckCircle2, AlertTriangle, FileSpreadsheet, X, ArrowRight, Do
 import * as XLSX from 'xlsx';
 import { INPUT_CLASS } from '../../../utils/uiConstants';
 import { recordAudit } from '../../../utils/auditLog';
+import { TASK_COLUMNS as TASK_FIELDS, TASK_TEMPLATE_ROWS } from '../../../utils/taskSchema';
 import { apiFetch } from '../../../utils/api';
-
-const TASK_FIELDS = [
-    { key: 'task_name',     label: 'Task Name',       required: true,  type: 'string' },
-    { key: 'wbs_code',      label: 'WBS Code',        required: true,  type: 'string' },
-    { key: 'planned_cost',  label: 'Planned Cost',     required: true,  type: 'number' },
-    { key: 'planned_hours', label: 'Planned Hours',    required: true,  type: 'number' },
-    { key: 'planned_start', label: 'Planned Start',    required: false, type: 'date' },
-    { key: 'planned_end',   label: 'Planned End',      required: false, type: 'date' },
-    { key: 'weight',        label: 'Weight (0–1)',     required: false, type: 'weight' },
-];
 
 function autoDetectMapping(headers) {
     const mapping = {};
@@ -114,6 +105,7 @@ export default function ExcelImport() {
     const [isDragging, setIsDragging]               = useState(false);
     const [isImporting, setIsImporting]             = useState(false);
     const [importError, setImportError]             = useState('');
+    const [importMode, setImportMode]               = useState('append'); // 'append' | 'replace'
     const fileInputRef = useRef(null);
 
     // Real data from API — replaces dummyProjectsEvm
@@ -128,9 +120,10 @@ export default function ExcelImport() {
         const validTypes = [
             'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
             'application/vnd.ms-excel',
+            'text/csv',
         ];
-        if (!validTypes.includes(file.type) && !file.name.match(/\.xlsx?$/i)) {
-            alert('Please upload an .xlsx or .xls file.');
+        if (!validTypes.includes(file.type) && !file.name.match(/\.(xlsx?|csv)$/i)) {
+            alert('Please upload an .xlsx, .xls, or .csv file.');
             return;
         }
 
@@ -190,12 +183,9 @@ export default function ExcelImport() {
         .every(f => mapping[f.key] !== undefined && mapping[f.key] !== '');
 
     const handleDownloadTemplate = () => {
+        // Template columns come from the shared schema, so they match the export exactly.
         const wb = XLSX.utils.book_new();
-        const templateData = [
-            { 'Task Name': 'Excavation Works', 'WBS Code': '1.1.1', 'Planned Cost': 250000000, 'Planned Hours': 160, 'Planned Start': '2026-04-01', 'Planned End': '2026-04-30', 'Weight': 0.15 },
-            { 'Task Name': 'Concrete Pouring', 'WBS Code': '1.1.2', 'Planned Cost': 180000000, 'Planned Hours': 120, 'Planned Start': '2026-05-01', 'Planned End': '2026-05-20', 'Weight': 0.10 },
-        ];
-        const ws = XLSX.utils.json_to_sheet(templateData);
+        const ws = XLSX.utils.json_to_sheet(TASK_TEMPLATE_ROWS);
         ws['!cols'] = [{ wch: 24 }, { wch: 12 }, { wch: 16 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 8 }];
         XLSX.utils.book_append_sheet(wb, ws, 'Task Import Template');
         XLSX.writeFile(wb, 'Task_Import_Template.xlsx');
@@ -204,10 +194,20 @@ export default function ExcelImport() {
     // Wire to real API — POST /api/projects/:id/tasks/import
     const handleImport = async () => {
         if (validRows.length === 0 || !selectedProjectId) return;
+        if (importMode === 'replace' &&
+            !window.confirm('Replace all tasks for this project? This permanently deletes the current tasks before importing.')) {
+            return;
+        }
         setIsImporting(true);
         setImportError('');
         try {
             const tasks = validRows.map(r => parseTask(r.data, mapping));
+            if (importMode === 'replace') {
+                const existing = await apiFetch(`/projects/${selectedProjectId}/tasks`);
+                for (const t of (existing.data || [])) {
+                    await apiFetch(`/tasks/${t.id}`, { method: 'DELETE' });
+                }
+            }
             const res   = await apiFetch(`/projects/${selectedProjectId}/tasks/import`, {
                 method: 'POST',
                 body:   JSON.stringify({ tasks }),
@@ -215,7 +215,7 @@ export default function ExcelImport() {
             if (!res.success) throw new Error(res.message || 'Import failed.');
             const count = res.imported || tasks.length;
             setImportedCount(count);
-            recordAudit({ action: 'CREATE', resource_type: 'task', resource_id: `${count} tasks`, detail: `Imported ${count} tasks from ${fileName}` });
+            recordAudit({ action: importMode === 'replace' ? 'UPDATE' : 'CREATE', resource_type: 'task', resource_id: `${count} tasks`, detail: `Imported ${count} tasks from ${fileName} (${importMode})` });
             setStep('done');
         } catch (e) {
             setImportError(e.message);
@@ -327,7 +327,7 @@ export default function ExcelImport() {
                     <input
                         ref={fileInputRef}
                         type="file"
-                        accept=".xlsx,.xls"
+                        accept=".xlsx,.xls,.csv"
                         onChange={(e) => handleFile(e.target.files[0])}
                         className="hidden"
                     />
@@ -337,7 +337,7 @@ export default function ExcelImport() {
                         </div>
                         <div>
                             <p className="font-semibold text-slate-700">Drop your Excel file here, or click to browse</p>
-                            <p className="text-xs text-slate-400 mt-1">Accepts .xlsx and .xls files</p>
+                            <p className="text-xs text-slate-400 mt-1">Accepts .xlsx, .xls, and .csv files</p>
                         </div>
                         <button
                             onClick={(e) => { e.stopPropagation(); handleDownloadTemplate(); }}
@@ -457,21 +457,42 @@ export default function ExcelImport() {
 
                     {/* Validation table */}
                     <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
-                        <div className="p-6 border-b border-slate-50 flex items-center justify-between gap-4">
+                        <div className="p-6 border-b border-slate-50 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                             <div>
                                 <h3 className="font-bold text-slate-700">Validation Results</h3>
                                 <p className="text-xs text-slate-400 mt-0.5">{validRows.length} of {validationResults.length} rows ready to import</p>
+                                {importMode === 'replace' && (
+                                    <p className="text-[11px] font-semibold text-red-500 mt-1">Replace deletes this project's current tasks first.</p>
+                                )}
                             </div>
-                            <button
-                                onClick={handleImport}
-                                disabled={validRows.length === 0 || !selectedProjectId || isImporting}
-                                className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-xl font-semibold text-sm shadow-lg shadow-emerald-200 transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
-                            >
-                                {isImporting
-                                    ? <><Loader2 className="w-4 h-4 animate-spin" /> Importing...</>
-                                    : <><Upload className="w-4 h-4" /> Import {validRows.length} Tasks</>
-                                }
-                            </button>
+                            <div className="flex items-center gap-3 shrink-0">
+                                <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl" role="group" aria-label="Import mode">
+                                    {[['append', 'Append'], ['replace', 'Replace all']].map(([m, label]) => (
+                                        <button
+                                            key={m}
+                                            type="button"
+                                            onClick={() => setImportMode(m)}
+                                            className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all ${
+                                                importMode === m
+                                                    ? (m === 'replace' ? 'bg-white text-red-600 shadow-sm' : 'bg-white text-emerald-700 shadow-sm')
+                                                    : 'text-slate-400 hover:text-slate-600'
+                                            }`}
+                                        >
+                                            {label}
+                                        </button>
+                                    ))}
+                                </div>
+                                <button
+                                    onClick={handleImport}
+                                    disabled={validRows.length === 0 || !selectedProjectId || isImporting}
+                                    className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-xl font-semibold text-sm shadow-lg shadow-emerald-200 transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
+                                >
+                                    {isImporting
+                                        ? <><Loader2 className="w-4 h-4 animate-spin" /> Importing...</>
+                                        : <><Upload className="w-4 h-4" /> Import {validRows.length} Tasks</>
+                                    }
+                                </button>
+                            </div>
                         </div>
 
                         <div className="overflow-x-auto max-h-96">
