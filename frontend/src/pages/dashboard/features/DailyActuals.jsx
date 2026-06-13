@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
-import { ClipboardList, CheckCircle2, Camera, X, Image as ImageIcon, Loader2 } from 'lucide-react';
+import { ClipboardList, CheckCircle2, Camera, X, Image as ImageIcon, Loader2, Download } from 'lucide-react';
 import { formatCurrency, formatDate } from '../../../utils/evmHelpers';
 import { INPUT_CLASS, INLINE_INPUT_CLASS, CARD_CLASS } from '../../../utils/uiConstants';
 import EmptyState from '../../../components/EmptyState';
+import { exportWorkbook, exportFilename } from '../../../utils/excelExport';
 import { apiFetch } from '../../../utils/api';
 
 export default function DailyActuals() {
@@ -81,6 +82,18 @@ export default function DailyActuals() {
 
     const totalActualHours = projectTasks.reduce((s, t) => s + (parseFloat(actuals[t.id]?.actual_hours) || 0), 0);
     const totalActualCost  = projectTasks.reduce((s, t) => s + (parseFloat(actuals[t.id]?.actual_cost)  || 0), 0);
+
+    const handleExport = () => {
+        const rows = projectTasks.map(t => ({
+            'Task':         t.task_name,
+            'WBS':          t.wbs_code,
+            'Planned Cost': Number(t.planned_cost) || 0,
+            'Actual Hours': parseFloat(actuals[t.id]?.actual_hours) || 0,
+            'Actual Cost':  parseFloat(actuals[t.id]?.actual_cost)  || 0,
+            '% Done':       parseFloat(actuals[t.id]?.pct_complete) || 0,
+        }));
+        exportWorkbook(exportFilename('DailyActuals', selectedProject?.project_code), [{ name: 'Actuals', rows }]);
+    };
 
     const handleSubmit = async () => {
         if (!selectedProjectId || !entryDate) {
@@ -167,6 +180,13 @@ export default function DailyActuals() {
                     <h2 className="text-4xl font-black text-slate-900 tracking-tight">Daily Progress</h2>
                     <p className="text-slate-500 mt-1 font-medium">Record site activity, costs, and visual evidence</p>
                 </div>
+                <button
+                    onClick={handleExport}
+                    disabled={!isReady || projectTasks.length === 0}
+                    className="text-sm font-semibold px-4 py-2.5 rounded-xl transition-all flex items-center gap-2 border shadow-sm text-emerald-600 bg-emerald-50 border-emerald-100 hover:bg-emerald-600 hover:text-white hover:border-emerald-600 hover:shadow-lg hover:shadow-emerald-200 hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-40 disabled:pointer-events-none"
+                >
+                    <Download className="w-4 h-4" /> Export
+                </button>
             </div>
 
             {/* CONTROLS CARD */}

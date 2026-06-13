@@ -3,7 +3,7 @@ import {
     Activity, TrendingUp, AlertTriangle, BarChart3, 
     LineChart as ChartIcon, ArrowUpRight, ArrowDownRight, 
     Target, Loader2, Layers, Briefcase, CheckCircle2,
-    Calendar, Clock, DollarSign
+    Calendar, Clock, DollarSign, Download
 } from 'lucide-react';
 import { 
     LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, 
@@ -14,6 +14,7 @@ import { generateSCurveData } from '../../../utils/cpmHelpers';
 import { STATUS_STYLES, CARD_CLASS } from '../../../utils/uiConstants';
 import EmptyState from '../../../components/EmptyState';
 import ErrorState from '../../../components/ErrorState';
+import { exportWorkbook, exportFilename } from '../../../utils/excelExport';
 import { apiFetch } from '../../../utils/api';
 
 const COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444'];
@@ -138,6 +139,21 @@ export default function Overview() {
 
     const cardClass = CARD_CLASS;
 
+    const handleExport = () => {
+        const rows = projectMetrics.map(p => ({
+            'Code':       p.project_code,
+            'Name':       p.project_name,
+            'Status':     p.status,
+            'BAC':        Math.round(p.BAC) || 0,
+            'EV':         Math.round(p.EV) || 0,
+            'AC':         Math.round(p.AC) || 0,
+            'CPI':        p.CPI != null ? Number(p.CPI.toFixed(2)) : '',
+            'SPI':        p.SPI != null ? Number(p.SPI.toFixed(2)) : '',
+            '% Complete': Number.isFinite(p.overallPct) ? Number(p.overallPct.toFixed(1)) : 0,
+        }));
+        exportWorkbook(exportFilename('Portfolio'), [{ name: 'Portfolio', rows }]);
+    };
+
     if (loading) return (
         <div className="h-[60vh] flex flex-col items-center justify-center gap-4 text-slate-400">
             <Loader2 className="w-10 h-10 animate-spin text-emerald-500" />
@@ -163,6 +179,14 @@ export default function Overview() {
                     <h2 className="text-4xl font-black text-slate-900 tracking-tight">Project Overview</h2>
                     <p className="text-slate-500 mt-1 font-medium">Consolidated enterprise performance intelligence</p>
                 </div>
+                <div className="flex items-center gap-3">
+                <button
+                    onClick={handleExport}
+                    disabled={projectMetrics.length === 0}
+                    className="text-sm font-semibold px-4 py-2.5 rounded-xl transition-all flex items-center gap-2 border shadow-sm text-emerald-600 bg-emerald-50 border-emerald-100 hover:bg-emerald-600 hover:text-white hover:border-emerald-600 hover:shadow-lg hover:shadow-emerald-200 hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-40 disabled:pointer-events-none"
+                >
+                    <Download className="w-4 h-4" /> Export
+                </button>
                 <div className="flex items-center gap-2 bg-white/40 backdrop-blur-md p-1.5 rounded-2xl border border-slate-200/50 shadow-sm">
                     {['Daily', 'Weekly', 'Monthly'].map(mode => (
                         <button 
@@ -177,6 +201,7 @@ export default function Overview() {
                             {mode}
                         </button>
                     ))}
+                </div>
                 </div>
             </div>
 

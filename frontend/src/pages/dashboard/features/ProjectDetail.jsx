@@ -1,7 +1,9 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { ArrowLeft, Lock, Plus, ChevronRight, ChevronDown, ListTodo, X, Calendar, DollarSign, Clock, Loader2, GitBranch, Pencil, Trash2, AlertTriangle, Check } from 'lucide-react';
+import { ArrowLeft, Lock, Plus, ChevronRight, ChevronDown, ListTodo, X, Calendar, DollarSign, Clock, Loader2, GitBranch, Pencil, Trash2, AlertTriangle, Check, Download } from 'lucide-react';
 import { formatCurrency, formatDate } from '../../../utils/evmHelpers';
 import { STATUS_STYLES, INPUT_CLASS } from '../../../utils/uiConstants';
+import { exportWorkbook, exportFilename } from '../../../utils/excelExport';
+import { taskToRow } from '../../../utils/taskSchema';
 import { apiFetch } from '../../../utils/api';
 import { load, save } from '../../../utils/localStore';
 
@@ -518,6 +520,21 @@ export default function ProjectDetail({ project, onBack }) {
 
     const currentStatus = isLocked ? 'active' : (project.status || 'planning');
 
+    // Tasks sheet uses the shared schema so it round-trips back through Excel Import.
+    const handleExport = () => {
+        const taskRows = tasks.map(taskToRow);
+        const wbsRows  = wbsNodes.map(n => ({
+            'WBS Code': n.wbs_code,
+            'Name':     wbsOverrides[n.id] || n.name,
+            'Level':    n.level,
+            'Parent':   wbsNodes.find(p => p.id === n.parent_id)?.wbs_code || '',
+        }));
+        exportWorkbook(exportFilename('Tasks', project.project_code), [
+            { name: 'Tasks', rows: taskRows },
+            { name: 'WBS',   rows: wbsRows },
+        ]);
+    };
+
     return (
         <div className="space-y-6">
 
@@ -540,22 +557,31 @@ export default function ProjectDetail({ project, onBack }) {
                         </div>
                     </div>
 
-                    {userRole === 'Project Manager' && (
-                        isLocked ? (
-                            <div className="flex items-center gap-2 px-5 py-2.5 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-xl font-semibold text-sm">
-                                <Lock className="w-4 h-4" /> Baseline Locked
-                            </div>
-                        ) : (
-                            <button
-                                onClick={() => { if (tasks.length > 0) { setLockError(''); setIsLockModalOpen(true); } }}
-                                disabled={tasks.length === 0}
-                                className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-sm transition-all shadow-lg shadow-amber-100 ${tasks.length > 0 ? 'bg-amber-500 hover:bg-amber-600 text-white cursor-pointer' : 'bg-amber-500 text-white opacity-50 cursor-not-allowed'}`}
-                            >
-                                <Lock className="w-4 h-4" />
-                                {tasks.length > 0 ? 'Lock Baseline' : 'Add tasks first'}
-                            </button>
-                        )
-                    )}
+                    <div className="flex items-center gap-3 shrink-0">
+                        <button
+                            onClick={handleExport}
+                            disabled={tasks.length === 0 && wbsNodes.length === 0}
+                            className="text-sm font-semibold px-4 py-2.5 rounded-xl transition-all flex items-center gap-2 border shadow-sm text-emerald-600 bg-emerald-50 border-emerald-100 hover:bg-emerald-600 hover:text-white hover:border-emerald-600 hover:shadow-lg hover:shadow-emerald-200 hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-40 disabled:pointer-events-none"
+                        >
+                            <Download className="w-4 h-4" /> Export
+                        </button>
+                        {userRole === 'Project Manager' && (
+                            isLocked ? (
+                                <div className="flex items-center gap-2 px-5 py-2.5 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-xl font-semibold text-sm">
+                                    <Lock className="w-4 h-4" /> Baseline Locked
+                                </div>
+                            ) : (
+                                <button
+                                    onClick={() => { if (tasks.length > 0) { setLockError(''); setIsLockModalOpen(true); } }}
+                                    disabled={tasks.length === 0}
+                                    className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-sm transition-all shadow-lg shadow-amber-100 ${tasks.length > 0 ? 'bg-amber-500 hover:bg-amber-600 text-white cursor-pointer' : 'bg-amber-500 text-white opacity-50 cursor-not-allowed'}`}
+                                >
+                                    <Lock className="w-4 h-4" />
+                                    {tasks.length > 0 ? 'Lock Baseline' : 'Add tasks first'}
+                                </button>
+                            )
+                        )}
+                    </div>
                 </div>
 
                 {/* Info chips */}

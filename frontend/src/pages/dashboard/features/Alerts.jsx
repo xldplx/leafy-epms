@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
-import { Bell, AlertTriangle, CheckCircle2, Settings } from 'lucide-react';
+import { Bell, AlertTriangle, CheckCircle2, Settings, Download } from 'lucide-react';
 import { computeAlerts } from '../../../utils/evmHelpers';
 import { INPUT_CLASS } from '../../../utils/uiConstants';
+import { exportWorkbook, exportFilename } from '../../../utils/excelExport';
 import { recordAudit } from '../../../utils/auditLog';
 import { apiFetch } from '../../../utils/api';
 
@@ -62,6 +63,18 @@ export default function Alerts() {
 
     const inputClass = INPUT_CLASS;
 
+    const handleExport = () => {
+        const rows = alerts.length ? alerts.map(a => ({
+            'Project':        a.project_name || a.project_code || '',
+            'Metric':         a.metric,
+            'Value':          typeof a.value === 'number' ? Number(a.value.toFixed(2)) : a.value,
+            'Threshold':      typeof a.threshold === 'number' ? Number(a.threshold.toFixed(2)) : a.threshold,
+            'Severity':       a.severity,
+            'Recommendation': a.recommendation,
+        })) : [{ 'Project': '—', 'Metric': 'No active alerts', 'Value': '', 'Threshold': '', 'Severity': '', 'Recommendation': 'All projects within configured thresholds.' }];
+        exportWorkbook(exportFilename('Alerts'), [{ name: 'Alerts', rows }]);
+    };
+
     const thresholdFields = [
         { key: 'cpi_amber', label: 'CPI — At Risk below' },
         { key: 'cpi_red',   label: 'CPI — Critical below' },
@@ -104,9 +117,17 @@ export default function Alerts() {
             )}
 
             {/* HEADER */}
-            <div>
-                <h2 className="text-3xl font-bold text-slate-800 tracking-tight">Early Warning Alerts</h2>
-                <p className="text-slate-500 mt-1">Real-time threshold monitoring across all projects</p>
+            <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+                <div>
+                    <h2 className="text-3xl font-bold text-slate-800 tracking-tight">Early Warning Alerts</h2>
+                    <p className="text-slate-500 mt-1">Real-time threshold monitoring across all projects</p>
+                </div>
+                <button
+                    onClick={handleExport}
+                    className="text-sm font-semibold px-4 py-2.5 rounded-xl transition-all flex items-center gap-2 border shadow-sm text-emerald-600 bg-emerald-50 border-emerald-100 hover:bg-emerald-600 hover:text-white hover:border-emerald-600 hover:shadow-lg hover:shadow-emerald-200 hover:-translate-y-0.5 active:translate-y-0"
+                >
+                    <Download className="w-4 h-4" /> Export
+                </button>
             </div>
 
             {/* SUMMARY CHIPS */}
