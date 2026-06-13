@@ -6,6 +6,7 @@ import { STATUS_STYLES } from '../../../utils/uiConstants';
 import { isValidProjectCode } from '../../../utils/validators';
 import { exportWorkbook, exportFilename } from '../../../utils/excelExport';
 import { recordAudit } from '../../../utils/auditLog';
+import ErrorState from '../../../components/ErrorState';
 import { apiFetch } from '../../../utils/api';
 
 export default function Projects() {
@@ -13,6 +14,7 @@ export default function Projects() {
     const [projects, setProjects]     = useState([]);
     const [projectEvm, setProjectEvm] = useState({});
     const [loading, setLoading]       = useState(true);
+    const [loadError, setLoadError]   = useState('');
 
     const [selectedProject, setSelectedProject] = useState(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -38,6 +40,7 @@ export default function Projects() {
 
     const fetchProjects = async () => {
         setLoading(true);
+        setLoadError('');
         try {
             const res   = await apiFetch('/projects');
             const projs = res.data || [];
@@ -54,7 +57,7 @@ export default function Projects() {
             }));
             setProjectEvm(evmMap);
         } catch (e) {
-            console.error(e);
+            setLoadError(e.message || 'Failed to load projects.');
         } finally {
             setLoading(false);
         }
@@ -189,6 +192,8 @@ export default function Projects() {
                 <div className="flex items-center justify-center h-48 gap-3 text-slate-400">
                     <Loader2 className="w-6 h-6 animate-spin" /> Loading projects...
                 </div>
+            ) : loadError ? (
+                <ErrorState message={loadError} onRetry={fetchProjects} />
             ) : projects.length > 0 ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {projects.map((project) => {
