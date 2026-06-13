@@ -12,6 +12,8 @@ import {
 import { computeEvm, computeAlerts, indexColor, formatCurrency } from '../../../utils/evmHelpers';
 import { generateSCurveData } from '../../../utils/cpmHelpers';
 import { STATUS_STYLES, CARD_CLASS } from '../../../utils/uiConstants';
+import EmptyState from '../../../components/EmptyState';
+import ErrorState from '../../../components/ErrorState';
 import { apiFetch } from '../../../utils/api';
 
 const COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444'];
@@ -46,9 +48,11 @@ export default function Overview() {
     const [projects, setProjects] = useState([]);
     const [allTasks, setAllTasks] = useState([]);
     const [thresholds, setThresholds] = useState({ cpi_amber: 1.00, cpi_red: 0.90, spi_amber: 1.00, spi_red: 0.90 });
+    const [error, setError] = useState(null);
 
-    useEffect(() => {
+    const loadData = () => {
         setLoading(true);
+        setError(null);
         Promise.all([
             apiFetch('/alerts/raw'), // returns projects[] and tasks[]
             apiFetch('/alerts/thresholds')
@@ -61,9 +65,11 @@ export default function Overview() {
                 setThresholds(thresh.data);
             }
         })
-        .catch(console.error)
+        .catch(e => setError(e.message || 'Failed to load portfolio data.'))
         .finally(() => setLoading(false));
-    }, []);
+    };
+
+    useEffect(() => { loadData(); }, []);
 
     // Per-project EVM (memoized)
     const projectMetrics = useMemo(() => projects.map(proj => {
@@ -73,7 +79,7 @@ export default function Overview() {
     }), [projects, allTasks]);
 
     // Portfolio aggregates (memoized)
-    const { totalAC, totalBAC, totalEV, totalPV, portfolioCPI, portfolioSPI } = useMemo(() => {
+    const { totalBAC, portfolioCPI, portfolioSPI } = useMemo(() => {
         const tEV = projectMetrics.reduce((s, p) => s + p.EV, 0);
         const tAC = projectMetrics.reduce((s, p) => s + p.AC, 0);
         const tPV = projectMetrics.reduce((s, p) => s + p.PV, 0);
@@ -139,6 +145,12 @@ export default function Overview() {
         </div>
     );
 
+    if (error) return (
+        <div className="py-10">
+            <ErrorState message={error} onRetry={loadData} />
+        </div>
+    );
+
     return (
         <div className="space-y-10 pb-12">
             {/* HEADER */}
@@ -200,7 +212,7 @@ export default function Overview() {
                 {/* SPI */}
                 <div className={`${cardClass} p-6 group hover:scale-[1.02]`}>
                     <div className="flex justify-between items-start mb-4">
-                        <div className={`p-3 rounded-xl shadow-inner transition-colors ${portfolioSPI >= 1 ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>
+                        <div className={`p-3 rounded-xl shadow-inner transition-colors ${portfolioSPI == null ? 'bg-slate-100 text-slate-400' : portfolioSPI >= 1 ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>
                             <Activity className="w-5 h-5" />
                         </div>
                         <div className={`px-2 py-1 rounded-lg border font-black text-[9px] uppercase tracking-wider ${spiColor.bg} ${spiColor.border} ${spiColor.text}`}>
@@ -210,14 +222,14 @@ export default function Overview() {
                     <h3 className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Avg. Schedule (SPI)</h3>
                     <p className={`text-2xl font-black tracking-tight mt-1 ${spiColor.text}`}>{portfolioSPI !== null ? portfolioSPI.toFixed(2) : '--'}</p>
                     <div className="mt-3 bg-slate-100/50 rounded-full h-1 overflow-hidden">
-                        <div className={`h-full rounded-full transition-all duration-1000 ${portfolioSPI >= 1 ? 'bg-emerald-500' : 'bg-red-500'}`} style={{ width: `${Math.min((portfolioSPI || 0) * 100, 100)}%` }} />
+                        <div className={`h-full rounded-full transition-all duration-1000 ${portfolioSPI == null ? 'bg-slate-200' : portfolioSPI >= 1 ? 'bg-emerald-500' : 'bg-red-500'}`} style={{ width: `${Math.min((portfolioSPI || 0) * 100, 100)}%` }} />
                     </div>
                 </div>
 
                 {/* CPI */}
                 <div className={`${cardClass} p-6 group hover:scale-[1.02]`}>
                     <div className="flex justify-between items-start mb-4">
-                        <div className={`p-3 rounded-xl shadow-inner transition-colors ${portfolioCPI >= 1 ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>
+                        <div className={`p-3 rounded-xl shadow-inner transition-colors ${portfolioCPI == null ? 'bg-slate-100 text-slate-400' : portfolioCPI >= 1 ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>
                             <TrendingUp className="w-5 h-5" />
                         </div>
                         <div className={`px-2 py-1 rounded-lg border font-black text-[9px] uppercase tracking-wider ${cpiColor.bg} ${cpiColor.border} ${cpiColor.text}`}>
@@ -227,7 +239,7 @@ export default function Overview() {
                     <h3 className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Avg. Cost (CPI)</h3>
                     <p className={`text-2xl font-black tracking-tight mt-1 ${cpiColor.text}`}>{portfolioCPI !== null ? portfolioCPI.toFixed(2) : '--'}</p>
                     <div className="mt-3 bg-slate-100/50 rounded-full h-1 overflow-hidden">
-                        <div className={`h-full rounded-full transition-all duration-1000 ${portfolioCPI >= 1 ? 'bg-emerald-500' : portfolioCPI >= 0.9 ? 'bg-amber-500' : 'bg-red-500'}`} style={{ width: `${Math.min((portfolioCPI || 0) * 100, 100)}%` }} />
+                        <div className={`h-full rounded-full transition-all duration-1000 ${portfolioCPI == null ? 'bg-slate-200' : portfolioCPI >= 1 ? 'bg-emerald-500' : portfolioCPI >= 0.9 ? 'bg-amber-500' : 'bg-red-500'}`} style={{ width: `${Math.min((portfolioCPI || 0) * 100, 100)}%` }} />
                     </div>
                 </div>
             </div>
@@ -261,6 +273,13 @@ export default function Overview() {
                         </div>
                     </div>
                     <div className="h-[300px] w-full">
+                        {sCurveData.length === 0 ? (
+                            <EmptyState
+                                icon={ChartIcon}
+                                title="No trend data yet"
+                                hint="Add projects with planned start/end dates and tasks to see the cumulative S-curve."
+                            />
+                        ) : (
                         <ResponsiveContainer width="100%" height="100%">
                             <AreaChart data={sCurveData}>
                                 <defs>
@@ -278,6 +297,7 @@ export default function Overview() {
                                 <Area type="monotone" dataKey="AC" name="Actual" stroke="#f59e0b" strokeWidth={2} fill="transparent" />
                             </AreaChart>
                         </ResponsiveContainer>
+                        )}
                     </div>
                 </div>
 
@@ -373,6 +393,13 @@ export default function Overview() {
                         </div>
                     </div>
                 </div>
+                {projectMetrics.length === 0 ? (
+                    <EmptyState
+                        icon={Activity}
+                        title="No projects to monitor"
+                        hint="Create a project to see live performance breakdowns here."
+                    />
+                ) : (
                 <div className="overflow-x-auto">
                     <table className="w-full text-left border-collapse">
                         <thead>
@@ -398,10 +425,10 @@ export default function Overview() {
                                             <div className="w-32">
                                                 <div className="flex justify-between text-[9px] font-black text-slate-400 uppercase mb-1.5">
                                                     <span>Done</span>
-                                                    <span>{p.overallPct.toFixed(1)}%</span>
+                                                    <span>{(Number.isFinite(p.overallPct) ? p.overallPct : 0).toFixed(1)}%</span>
                                                 </div>
                                                 <div className="h-1 bg-slate-100 rounded-full overflow-hidden">
-                                                    <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${Math.min(p.overallPct, 100)}%` }} />
+                                                    <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${Math.min(Number.isFinite(p.overallPct) ? p.overallPct : 0, 100)}%` }} />
                                                 </div>
                                             </div>
                                         </td>
@@ -432,6 +459,7 @@ export default function Overview() {
                         </tbody>
                     </table>
                 </div>
+                )}
             </div>
         </div>
     );
