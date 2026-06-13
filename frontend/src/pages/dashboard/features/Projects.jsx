@@ -136,7 +136,7 @@ export default function Projects() {
     };
 
     if (selectedProject) {
-        return <ProjectDetail project={selectedProject} onBack={() => { setSelectedProject(null); fetchProjects(); }} />;
+        return <ProjectDetail key={selectedProject.id} project={selectedProject} onBack={() => { setSelectedProject(null); fetchProjects(); }} />;
     }
 
     return (

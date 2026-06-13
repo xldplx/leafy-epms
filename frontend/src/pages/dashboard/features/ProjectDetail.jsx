@@ -154,18 +154,23 @@ export default function ProjectDetail({ project, onBack }) {
     const [wbsError, setWbsError] = useState('');
     const [savingWbs, setSavingWbs] = useState(false);
 
-    // Baseline
+    // Baseline. ProjectDetail remounts per project (keyed in Projects.jsx), so
+    // project-scoped state is seeded once from localStorage via lazy initializers
+    // instead of re-synced through prop-watching effects.
+    const baselineCacheKey = `epms.baseline.v1.${project.id}`;
     const [isLocked, setIsLocked]             = useState(false);
     const [isLockModalOpen, setIsLockModalOpen] = useState(false);
     const [baselineName, setBaselineName]      = useState('Baseline Rev.0');
-    const [baseline, setBaseline]              = useState(null);
+    const [baseline, setBaseline]              = useState(() => {
+        const cached = load(baselineCacheKey, null);
+        return cached && cached.name ? { name: cached.name, lockedAt: new Date(cached.lockedAt) } : null;
+    });
     const [lockingBaseline, setLockingBaseline] = useState(false);
     const [lockError, setLockError]             = useState('');
-    const baselineCacheKey = `epms.baseline.v1.${project.id}`;
 
     // WBS name overrides — local-only edits until backend PUT route exists.
     const wbsOverrideKey = `epms.wbs_name_overrides.v1.${project.id}`;
-    const [wbsOverrides, setWbsOverrides] = useState({});
+    const [wbsOverrides, setWbsOverrides] = useState(() => load(wbsOverrideKey, {}));
     const [editingWbsId, setEditingWbsId] = useState(null);
 
     const userRole = localStorage.getItem('userRole');
@@ -189,22 +194,6 @@ export default function ProjectDetail({ project, onBack }) {
     };
 
     useEffect(() => { fetchData(); }, [project.id]);
-
-    // Load WBS name overrides whenever the project changes.
-    useEffect(() => {
-        setWbsOverrides(load(wbsOverrideKey, {}));
-        setEditingWbsId(null);
-    }, [wbsOverrideKey]);
-
-    // Restore cached baseline metadata (name + lockedAt) so the banner survives refresh.
-    useEffect(() => {
-        const cached = load(baselineCacheKey, null);
-        if (cached && cached.name) {
-            setBaseline({ name: cached.name, lockedAt: new Date(cached.lockedAt) });
-        } else {
-            setBaseline(null);
-        }
-    }, [baselineCacheKey]);
 
     const renameWbsNode = (id, newName) => {
         setWbsOverrides(prev => {
