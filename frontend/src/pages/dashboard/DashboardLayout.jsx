@@ -19,6 +19,7 @@ import Materials    from './features/Materials';
 import Tools        from './features/Tools';
 import Budget       from './features/Budget';
 import SettingsPage from './features/Settings';
+import ErrorBoundary from '../../components/ErrorBoundary';
 
 const pageComponents = {
     'Overview':      Overview,
@@ -167,7 +168,9 @@ export default function DashboardLayout() {
             {/* MAIN */}
             <main className="flex-1 h-full overflow-y-auto p-8 lg:p-12 scroll-smooth">
                 <div className="animate-in fade-in duration-300 max-w-7xl mx-auto">
-                    <ActiveComponent />
+                    <ErrorBoundary key={activePage}>
+                        <ActiveComponent />
+                    </ErrorBoundary>
                 </div>
             </main>
         </div>
