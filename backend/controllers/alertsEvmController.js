@@ -9,7 +9,8 @@ function computeEvm(tasks, schedulePct) {
     const SPI = PV > 0 ? EV / PV : null;
     const EAC = CPI && CPI > 0 ? BAC / CPI : null;
     const overallPct = BAC > 0 ? (EV / BAC) * 100 : 0;
-    return { BAC, EV, AC, PV, CPI, SPI, EAC, overallPct,
+    return {
+        BAC, EV, AC, PV, CPI, SPI, EAC, overallPct,
         CV: EV - AC, SV: EV - PV,
         ETC: EAC !== null ? EAC - AC : null,
         VAC: EAC !== null ? BAC - EAC : null,
@@ -19,8 +20,32 @@ function computeEvm(tasks, schedulePct) {
     };
 }
 
-// GET /api/alerts/raw — returns projects[] and tasks[] with normalized numeric fields
-// so frontend computeAlerts() works identically as with dummy data
+// ── Bilingual recommendation messages ────────────────────────────────────────
+// Returns { en, id } so frontend can pick based on user language preference.
+// Frontend reads localStorage 'epms.language' and picks the right key.
+function makeRecommendation(type, extra = '') {
+    const map = {
+        'cpi_critical': {
+            en: 'Actual costs are significantly exceeding earned value. Review cost control measures immediately.',
+            id: 'Biaya aktual melebihi nilai yang diraih secara signifikan. Tinjau langkah pengendalian biaya segera.',
+        },
+        'cpi_warning': {
+            en: 'Cost performance is below target. Monitor spending and review upcoming task budgets.',
+            id: 'Kinerja biaya di bawah target. Pantau pengeluaran dan tinjau anggaran tugas mendatang.',
+        },
+        'spi_critical': {
+            en: `Project is critically behind schedule.${extra ? ' High-impact delayed tasks: ' + extra + '.' : ''} Escalate to management.`,
+            id: `Proyek sangat terlambat dari jadwal.${extra ? ' Tugas terdampak utama: ' + extra + '.' : ''} Eskalasi ke manajemen.`,
+        },
+        'spi_warning': {
+            en: 'Schedule performance is below target. Review upcoming milestones and task dependencies.',
+            id: 'Kinerja jadwal di bawah target. Tinjau tonggak mendatang dan ketergantungan tugas.',
+        },
+    };
+    return map[type] || { en: '', id: '' };
+}
+
+// GET /api/alerts/raw
 const getAlertsRaw = async (req, res) => {
     try {
         const { data: projects } = await supabase.from('projects')
@@ -57,7 +82,7 @@ const getThresholds = async (req, res) => {
             ? supabase.from('alert_thresholds').select('*').eq('project_id', project_id).single()
             : supabase.from('alert_thresholds').select('*').is('project_id', null).single();
         const { data } = await query;
-        res.json({ success: true, data: data || { cpi_amber:1.00, cpi_red:0.90, spi_amber:1.00, spi_red:0.90 } });
+        res.json({ success: true, data: data || { cpi_amber: 1.00, cpi_red: 0.90, spi_amber: 1.00, spi_red: 0.90 } });
     } catch (e) { res.status(500).json({ success: false, message: e.message }); }
 };
 
@@ -84,7 +109,7 @@ const getAlerts = async (req, res) => {
     const { project_id } = req.query;
     try {
         const { data: globalT } = await supabase.from('alert_thresholds').select('*').is('project_id', null).single();
-        const thresholds = globalT || { cpi_amber:1.00, cpi_red:0.90, spi_amber:1.00, spi_red:0.90 };
+        const thresholds = globalT || { cpi_amber: 1.00, cpi_red: 0.90, spi_amber: 1.00, spi_red: 0.90 };
 
         let projQ = supabase.from('projects').select('*');
         if (project_id) projQ = projQ.eq('id', project_id);
@@ -93,15 +118,32 @@ const getAlerts = async (req, res) => {
         const alerts = [];
         for (const proj of (projects || [])) {
             const { data: tasks } = await supabase.from('tasks')
-                .select('planned_cost,actual_cost,pct_complete,planned_hours,actual_hours')
+                .select('id,task_name,planned_cost,actual_cost,pct_complete,planned_hours,actual_hours,weight')
                 .eq('project_id', proj.id);
             if (!tasks || tasks.length === 0) continue;
+
             const { CPI, SPI } = computeEvm(tasks, proj.schedule_pct);
             const { cpi_amber, cpi_red, spi_amber, spi_red } = thresholds;
-            if (CPI !== null && CPI < cpi_red)   alerts.push({ id:`${proj.id}-cpi-critical`, project:proj, metric:'CPI', value:CPI, threshold:cpi_red,   severity:'critical', recommendation:'Actual costs exceeding earned value. Immediate review required.' });
-            else if (CPI !== null && CPI < cpi_amber) alerts.push({ id:`${proj.id}-cpi-warning`, project:proj, metric:'CPI', value:CPI, threshold:cpi_amber, severity:'warning',  recommendation:'Cost performance below target. Monitor upcoming budgets.' });
-            if (SPI !== null && SPI < spi_red)   alerts.push({ id:`${proj.id}-spi-critical`, project:proj, metric:'SPI', value:SPI, threshold:spi_red,   severity:'critical', recommendation:'Project critically behind schedule. Consider resource reallocation.' });
-            else if (SPI !== null && SPI < spi_amber) alerts.push({ id:`${proj.id}-spi-warning`, project:proj, metric:'SPI', value:SPI, threshold:spi_amber, severity:'warning',  recommendation:'Schedule performance below target. Review upcoming milestones.' });
+
+            if (CPI !== null && CPI < cpi_red) {
+                const rec = makeRecommendation('cpi_critical');
+                alerts.push({ id: `${proj.id}-cpi-critical`, project: proj, metric: 'CPI', value: CPI, threshold: cpi_red, severity: 'critical', recommendation: rec.en, recommendation_id: rec.id });
+            } else if (CPI !== null && CPI < cpi_amber) {
+                const rec = makeRecommendation('cpi_warning');
+                alerts.push({ id: `${proj.id}-cpi-warning`, project: proj, metric: 'CPI', value: CPI, threshold: cpi_amber, severity: 'warning', recommendation: rec.en, recommendation_id: rec.id });
+            }
+
+            if (SPI !== null && SPI < spi_red) {
+                const delayedTasks = tasks.filter(t => t.pct_complete < 100)
+                    .sort((a, b) => (b.planned_cost * (1 - b.pct_complete / 100)) - (a.planned_cost * (1 - a.pct_complete / 100)))
+                    .slice(0, 2);
+                const taskNames = delayedTasks.map(t => t.task_name).join(', ');
+                const rec = makeRecommendation('spi_critical', taskNames);
+                alerts.push({ id: `${proj.id}-spi-critical`, project: proj, metric: 'SPI', value: SPI, threshold: spi_red, severity: 'critical', recommendation: rec.en, recommendation_id: rec.id, affectedTasks: delayedTasks });
+            } else if (SPI !== null && SPI < spi_amber) {
+                const rec = makeRecommendation('spi_warning');
+                alerts.push({ id: `${proj.id}-spi-warning`, project: proj, metric: 'SPI', value: SPI, threshold: spi_amber, severity: 'warning', recommendation: rec.en, recommendation_id: rec.id });
+            }
         }
         res.json({ success: true, data: alerts, thresholds });
     } catch (e) { res.status(500).json({ success: false, message: e.message }); }
@@ -110,7 +152,7 @@ const getAlerts = async (req, res) => {
 const getPortfolioOverview = async (req, res) => {
     try {
         const { data: projects } = await supabase.from('projects').select('*').order('created_at', { ascending: false });
-        let totalEV=0, totalAC=0, totalPV=0, totalBAC=0;
+        let totalEV = 0, totalAC = 0, totalPV = 0, totalBAC = 0;
         const metrics = [];
         for (const proj of (projects || [])) {
             const { data: tasks } = await supabase.from('tasks').select('planned_cost,actual_cost,pct_complete,planned_hours,actual_hours').eq('project_id', proj.id);

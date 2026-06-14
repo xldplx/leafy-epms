@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Plus, Users, Search, X, Loader2, CheckCircle2 } from 'lucide-react';
 import { apiFetch } from '../../../utils/api';
+import { useTranslation } from '../../../utils/i18n';
 
 const STATUS_BADGE = {
     active:   'bg-emerald-50 text-emerald-700 border border-emerald-100',
@@ -8,51 +9,35 @@ const STATUS_BADGE = {
     on_leave: 'bg-amber-50 text-amber-700 border border-amber-100',
 };
 
-const fmtDate = (d) => d
-    ? new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
-    : '—';
+const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
 
 export default function Manpower() {
-    const [search, setSearch]       = useState('');
-    const [personnel, setPersonnel] = useState([]);
-
-    // Modal state
+    const { t } = useTranslation();
+    const [search, setSearch]         = useState('');
+    const [personnel, setPersonnel]   = useState([]);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [saving, setSaving]           = useState(false);
     const [formError, setFormError]     = useState('');
     const [successToast, setSuccessToast] = useState(false);
-    const [form, setForm] = useState({
-        employee_id:  '',
-        full_name:    '',
-        designation:  '',
-        zone:         '',
-        status:       'active',
-    });
+    const [form, setForm] = useState({ employee_id: '', full_name: '', designation: '', zone: '', status: 'active' });
 
-    const fetchPersonnel = () => {
-        apiFetch('/personnel').then(r => setPersonnel(r.data || [])).catch(console.error);
-    };
-
+    const fetchPersonnel = () => apiFetch('/personnel').then(r => setPersonnel(r.data || [])).catch(console.error);
     useEffect(() => { fetchPersonnel(); }, []);
-
-    // Close modal on Escape
     useEffect(() => {
         const handler = (e) => { if (e.key === 'Escape') setIsModalOpen(false); };
         if (isModalOpen) document.addEventListener('keydown', handler);
         return () => document.removeEventListener('keydown', handler);
     }, [isModalOpen]);
 
-    const filtered = useMemo(() =>
-        personnel.filter(p =>
-            p.full_name.toLowerCase().includes(search.toLowerCase()) ||
-            p.employee_id.toLowerCase().includes(search.toLowerCase())
-        ), [personnel, search]);
+    const filtered = useMemo(() => personnel.filter(p =>
+        p.full_name.toLowerCase().includes(search.toLowerCase()) ||
+        p.employee_id.toLowerCase().includes(search.toLowerCase())
+    ), [personnel, search]);
 
-    // Histogram — grouped by zone
     const weeklyData = useMemo(() => {
-        const zones    = [...new Set(personnel.map(p => p.zone || 'Unassigned'))];
+        const zones = [...new Set(personnel.map(p => p.zone || 'Unassigned'))];
         const maxCount = Math.max(...zones.map(z => personnel.filter(p => (p.zone || 'Unassigned') === z && p.status === 'active').length), 1);
-        const bars     = zones.slice(0, 12).map(z => {
+        const bars = zones.slice(0, 12).map(z => {
             const count = personnel.filter(p => (p.zone || 'Unassigned') === z && p.status === 'active').length;
             return { pct: (count / maxCount) * 100, label: z, count };
         });
@@ -65,20 +50,15 @@ export default function Manpower() {
     const handleSubmit = async (e) => {
         e.preventDefault();
         setFormError('');
-
-        if (!form.employee_id.trim()) { setFormError('Employee ID is required.'); return; }
-        if (!form.full_name.trim())   { setFormError('Full name is required.'); return; }
-
+        if (!form.employee_id.trim()) { setFormError(t('manpower.employeeId') + ' ' + t('common.required') + '.'); return; }
+        if (!form.full_name.trim())   { setFormError(t('manpower.fullName') + ' ' + t('common.required') + '.'); return; }
         setSaving(true);
         try {
             const res = await apiFetch('/personnel', {
                 method: 'POST',
                 body: JSON.stringify({
-                    employee_id:  form.employee_id.trim(),
-                    full_name:    form.full_name.trim(),
-                    designation:  form.designation.trim() || null,
-                    zone:         form.zone.trim()        || null,
-                    status:       form.status,
+                    employee_id: form.employee_id.trim(), full_name: form.full_name.trim(),
+                    designation: form.designation.trim() || null, zone: form.zone.trim() || null, status: form.status,
                 }),
             });
             if (!res.success) { setFormError(res.message || 'Failed to add personnel.'); return; }
@@ -87,42 +67,34 @@ export default function Manpower() {
             setSuccessToast(true);
             setTimeout(() => setSuccessToast(false), 3000);
             fetchPersonnel();
-        } catch (err) {
-            setFormError(err.message || 'Server error.');
-        } finally {
-            setSaving(false);
-        }
+        } catch (err) { setFormError(err.message || 'Server error.');
+        } finally { setSaving(false); }
     };
 
     return (
         <div className="space-y-8">
-
-            {/* SUCCESS TOAST */}
             {successToast && (
                 <div className="fixed top-6 right-6 z-50 bg-emerald-600 text-white px-5 py-3 rounded-xl shadow-lg shadow-emerald-200 flex items-center gap-2 text-sm font-semibold animate-in slide-in-from-top-2 fade-in duration-200">
-                    <CheckCircle2 className="w-4 h-4" /> Personnel added successfully
+                    <CheckCircle2 className="w-4 h-4" /> {t('manpower.addedSuccess')}
                 </div>
             )}
 
-            {/* HEADER */}
             <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
                 <div>
-                    <h2 className="text-3xl font-bold text-slate-800 tracking-tight">Manpower Resources</h2>
-                    <p className="text-slate-500 mt-1">Daily attendance & allocation by zone</p>
+                    <h2 className="text-3xl font-bold text-slate-800 tracking-tight">{t('manpower.title')}</h2>
+                    <p className="text-slate-500 mt-1">{t('manpower.subtitle')}</p>
                 </div>
-                <button
-                    onClick={() => setIsModalOpen(true)}
+                <button onClick={() => setIsModalOpen(true)}
                     className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2.5 rounded-xl font-semibold shadow-lg shadow-emerald-200 transition-all transform hover:-translate-y-0.5 flex items-center gap-2">
-                    <Plus className="w-5 h-5" />
-                    Add Personnel
+                    <Plus className="w-5 h-5" /> {t('manpower.addPersonnel')}
                 </button>
             </div>
 
-            {/* MANPOWER HISTOGRAM CARD */}
+            {/* HISTOGRAM */}
             <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm">
                 <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
-                    Resource Loading
-                    <span className="text-xs font-normal text-slate-400 bg-slate-100 px-2 py-0.5 rounded">Histogram</span>
+                    {t('manpower.resourceLoading')}
+                    <span className="text-xs font-normal text-slate-400 bg-slate-100 px-2 py-0.5 rounded">{t('manpower.histogram')}</span>
                 </h3>
                 <div className="h-64 flex items-end justify-between gap-2 md:gap-4 border-b border-slate-100 pb-2">
                     {weeklyData.map((bar, index) => (
@@ -132,13 +104,9 @@ export default function Manpower() {
                                     {bar.label}: {bar.count}
                                 </div>
                             )}
-                            <div
-                                style={{ height: `${Math.max(bar.pct, bar.count > 0 ? 4 : 0)}%` }}
-                                className="w-full bg-emerald-100 rounded-t-lg transition-all duration-300 relative overflow-hidden min-h-[4px]"
-                            >
-                                {bar.count > 0 && (
-                                    <div className="absolute bottom-0 left-0 right-0 bg-emerald-500 transition-all duration-500" style={{ height: '100%' }} />
-                                )}
+                            <div style={{ height: `${Math.max(bar.pct, bar.count > 0 ? 4 : 0)}%` }}
+                                className="w-full bg-emerald-100 rounded-t-lg transition-all duration-300 relative overflow-hidden min-h-[4px]">
+                                {bar.count > 0 && <div className="absolute bottom-0 left-0 right-0 bg-emerald-500 h-full" />}
                             </div>
                             <span className="text-[10px] text-slate-300 text-center mt-2 font-mono truncate">
                                 {bar.label !== `W${index + 1}` ? bar.label.substring(0, 4) : `W${index + 1}`}
@@ -147,66 +115,59 @@ export default function Manpower() {
                     ))}
                 </div>
                 {!hasData ? (
-                    <div className="text-center text-xs text-slate-400 mt-2 italic">No resource loading data available</div>
+                    <div className="text-center text-xs text-slate-400 mt-2 italic">{t('manpower.noData')}</div>
                 ) : (
                     <div className="text-center text-xs text-slate-400 mt-2">
-                        Active personnel by zone — {personnel.filter(p => p.status === 'active').length} active of {personnel.length} total
+                        {t('manpower.activeOf')} — {personnel.filter(p => p.status === 'active').length} {t('manpower.activeTotal')} {personnel.length} {t('common.total')}
                     </div>
                 )}
             </div>
 
-            {/* DETAILED LIST TABLE */}
+            {/* TABLE */}
             <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
                 <div className="p-6 border-b border-slate-50 flex justify-between items-center">
-                    <h3 className="font-bold text-slate-700">Active Personnel List</h3>
+                    <h3 className="font-bold text-slate-700">{t('manpower.personnelList')}</h3>
                     <div className="relative">
                         <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                        <input
-                            type="text"
-                            placeholder="Search ID or Name..."
-                            value={search}
+                        <input type="text" placeholder={t('manpower.searchId')} value={search}
                             onChange={e => setSearch(e.target.value)}
-                            className="text-sm bg-slate-50 border border-slate-200 rounded-lg pl-9 pr-3 py-1.5 outline-none focus:border-emerald-500 transition-colors"
-                        />
+                            className="text-sm bg-slate-50 border border-slate-200 rounded-lg pl-9 pr-3 py-1.5 outline-none focus:border-emerald-500 transition-colors" />
                     </div>
                 </div>
-
                 <div className="overflow-x-auto">
                     <table className="w-full text-left border-collapse">
                         <thead>
                             <tr className="bg-slate-50/80 text-xs uppercase tracking-wider text-slate-500 font-bold">
-                                <th className="px-6 py-4">Employee ID</th>
-                                <th className="px-6 py-4">Full Name</th>
-                                <th className="px-6 py-4">Designation</th>
-                                <th className="px-6 py-4">Zone</th>
-                                <th className="px-6 py-4">Last Check-in</th>
-                                <th className="px-6 py-4">Status</th>
+                                <th className="px-6 py-4">{t('manpower.employeeId')}</th>
+                                <th className="px-6 py-4">{t('manpower.fullName')}</th>
+                                <th className="px-6 py-4">{t('manpower.designation')}</th>
+                                <th className="px-6 py-4">{t('manpower.zone')}</th>
+                                <th className="px-6 py-4">{t('manpower.lastCheckin')}</th>
+                                <th className="px-6 py-4">{t('common.status')}</th>
                                 <th className="px-6 py-4"></th>
                             </tr>
                         </thead>
                         <tbody className="text-sm font-medium text-slate-600 divide-y divide-slate-50">
-                            {filtered.length > 0 ? (
-                                filtered.map((person) => (
-                                    <tr key={person.id} className="hover:bg-slate-50/50 transition-colors">
-                                        <td className="px-6 py-4 font-mono text-xs text-slate-500">{person.employee_id}</td>
-                                        <td className="px-6 py-4 font-semibold text-slate-700">{person.full_name}</td>
-                                        <td className="px-6 py-4 text-slate-500">{person.designation || '—'}</td>
-                                        <td className="px-6 py-4 text-slate-500">{person.zone || '—'}</td>
-                                        <td className="px-6 py-4 text-slate-400 text-xs">{fmtDate(person.last_checkin)}</td>
-                                        <td className="px-6 py-4">
-                                            <span className={`text-[10px] font-bold uppercase px-2.5 py-1 rounded-lg ${STATUS_BADGE[person.status] || STATUS_BADGE.inactive}`}>
-                                                {(person.status || 'inactive').replace('_', ' ')}
-                                            </span>
-                                        </td>
-                                        <td className="px-6 py-4" />
-                                    </tr>
-                                ))
-                            ) : (
+                            {filtered.length > 0 ? filtered.map(person => (
+                                <tr key={person.id} className="hover:bg-slate-50/50 transition-colors">
+                                    <td className="px-6 py-4 font-mono text-xs text-slate-500">{person.employee_id}</td>
+                                    <td className="px-6 py-4 font-semibold text-slate-700">{person.full_name}</td>
+                                    <td className="px-6 py-4 text-slate-500">{person.designation || '—'}</td>
+                                    <td className="px-6 py-4 text-slate-500">{person.zone || '—'}</td>
+                                    <td className="px-6 py-4 text-slate-400 text-xs">{fmtDate(person.last_checkin)}</td>
+                                    <td className="px-6 py-4">
+                                        <span className={`text-[10px] font-bold uppercase px-2.5 py-1 rounded-lg ${STATUS_BADGE[person.status] || STATUS_BADGE.inactive}`}>
+                                            {person.status === 'active' ? t('manpower.statusActive') : person.status === 'on_leave' ? t('manpower.statusOnLeave') : t('manpower.statusInactive')}
+                                        </span>
+                                    </td>
+                                    <td className="px-6 py-4" />
+                                </tr>
+                            )) : (
                                 <tr>
                                     <td colSpan="7" className="px-6 py-12 text-center text-slate-400">
                                         <div className="flex flex-col items-center justify-center gap-2">
                                             <Users className="w-12 h-12 text-slate-200" />
-                                            <p>No personnel records found.</p>
+                                            <p>{t('manpower.noPersonnel')}</p>
                                         </div>
                                     </td>
                                 </tr>
@@ -214,93 +175,63 @@ export default function Manpower() {
                         </tbody>
                     </table>
                 </div>
-
                 <div className="bg-slate-50 p-4 flex justify-center border-t border-slate-100">
-                    <span className="text-xs text-slate-400">Showing {filtered.length} of {personnel.length} records</span>
+                    <span className="text-xs text-slate-400">{t('common.showing')} {filtered.length} {t('common.of')} {personnel.length}</span>
                 </div>
             </div>
 
-            {/* ADD PERSONNEL MODAL */}
+            {/* MODAL */}
             {isModalOpen && (
                 <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50" onClick={() => setIsModalOpen(false)}>
-                    <div role="dialog" aria-label="Add personnel" className="bg-white rounded-3xl p-8 w-full max-w-md shadow-2xl border border-slate-100 animate-in fade-in duration-200" onClick={e => e.stopPropagation()}>
-
+                    <div role="dialog" className="bg-white rounded-3xl p-8 w-full max-w-md shadow-2xl border border-slate-100 animate-in fade-in duration-200" onClick={e => e.stopPropagation()}>
                         <div className="flex items-center justify-between mb-6">
-                            <h3 className="text-xl font-bold text-slate-800">Add Personnel</h3>
-                            <button onClick={() => setIsModalOpen(false)} aria-label="Close" className="text-slate-400 hover:text-slate-600 transition-colors">
-                                <X className="w-5 h-5" />
-                            </button>
+                            <h3 className="text-xl font-bold text-slate-800">{t('manpower.addPersonnel')}</h3>
+                            <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-slate-600 transition-colors"><X className="w-5 h-5" /></button>
                         </div>
-
                         {formError && (
-                            <div className="p-3 mb-4 rounded-lg bg-red-50 border border-red-100 text-red-600 text-xs text-center font-bold uppercase">
-                                {formError}
-                            </div>
+                            <div className="p-3 mb-4 rounded-lg bg-red-50 border border-red-100 text-red-600 text-xs text-center font-bold uppercase">{formError}</div>
                         )}
-
                         <form onSubmit={handleSubmit} className="space-y-4">
-                            <div className="space-y-1">
-                                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider ml-1">Employee ID <span className="text-red-500">*</span></label>
-                                <input
-                                    type="text" required value={form.employee_id}
-                                    onChange={e => setForm({ ...form, employee_id: e.target.value })}
-                                    placeholder="e.g. EMP-2026-001"
-                                    className="w-full px-4 py-3 bg-white/50 border border-slate-200 rounded-lg outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all text-slate-700 text-sm"
-                                />
-                            </div>
-
-                            <div className="space-y-1">
-                                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider ml-1">Full Name <span className="text-red-500">*</span></label>
-                                <input
-                                    type="text" required value={form.full_name}
-                                    onChange={e => setForm({ ...form, full_name: e.target.value })}
-                                    placeholder="e.g. Budi Santoso"
-                                    className="w-full px-4 py-3 bg-white/50 border border-slate-200 rounded-lg outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all text-slate-700 text-sm"
-                                />
-                            </div>
-
-                            <div className="space-y-1">
-                                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider ml-1">Designation</label>
-                                <input
-                                    type="text" value={form.designation}
-                                    onChange={e => setForm({ ...form, designation: e.target.value })}
-                                    placeholder="e.g. Site Supervisor"
-                                    className="w-full px-4 py-3 bg-white/50 border border-slate-200 rounded-lg outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all text-slate-700 text-sm"
-                                />
-                            </div>
-
+                            {[
+                                { key: 'employee_id', label: t('manpower.employeeId'), placeholder: 'e.g. EMP-2026-001', required: true },
+                                { key: 'full_name',   label: t('manpower.fullName'),   placeholder: 'e.g. Budi Santoso',   required: true },
+                                { key: 'designation', label: t('manpower.designation'), placeholder: 'e.g. Site Supervisor', required: false },
+                            ].map(field => (
+                                <div key={field.key} className="space-y-1">
+                                    <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider ml-1">
+                                        {field.label} {field.required && <span className="text-red-500">*</span>}
+                                    </label>
+                                    <input type="text" required={field.required} value={form[field.key]}
+                                        onChange={e => setForm({ ...form, [field.key]: e.target.value })}
+                                        placeholder={field.placeholder}
+                                        className="w-full px-4 py-3 bg-white/50 border border-slate-200 rounded-lg outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all text-slate-700 text-sm" />
+                                </div>
+                            ))}
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-1">
-                                    <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider ml-1">Zone</label>
-                                    <input
-                                        type="text" value={form.zone}
-                                        onChange={e => setForm({ ...form, zone: e.target.value })}
+                                    <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider ml-1">{t('manpower.zone')}</label>
+                                    <input type="text" value={form.zone} onChange={e => setForm({ ...form, zone: e.target.value })}
                                         placeholder="e.g. Zone A"
-                                        className="w-full px-4 py-3 bg-white/50 border border-slate-200 rounded-lg outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all text-slate-700 text-sm"
-                                    />
+                                        className="w-full px-4 py-3 bg-white/50 border border-slate-200 rounded-lg outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all text-slate-700 text-sm" />
                                 </div>
                                 <div className="space-y-1">
-                                    <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider ml-1">Status</label>
-                                    <select
-                                        value={form.status}
-                                        onChange={e => setForm({ ...form, status: e.target.value })}
-                                        className="w-full px-4 py-3 bg-white/50 border border-slate-200 rounded-lg outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all text-slate-700 text-sm"
-                                    >
-                                        <option value="active">Active</option>
-                                        <option value="inactive">Inactive</option>
-                                        <option value="on_leave">On Leave</option>
+                                    <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider ml-1">{t('common.status')}</label>
+                                    <select value={form.status} onChange={e => setForm({ ...form, status: e.target.value })}
+                                        className="w-full px-4 py-3 bg-white/50 border border-slate-200 rounded-lg outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all text-slate-700 text-sm">
+                                        <option value="active">{t('manpower.statusActive')}</option>
+                                        <option value="inactive">{t('manpower.statusInactive')}</option>
+                                        <option value="on_leave">{t('manpower.statusOnLeave')}</option>
                                     </select>
                                 </div>
                             </div>
-
                             <div className="flex gap-3 pt-4">
                                 <button type="button" onClick={() => setIsModalOpen(false)}
                                     className="flex-1 px-6 py-3 bg-slate-100 text-slate-600 rounded-xl font-semibold hover:bg-slate-200 transition-all">
-                                    Cancel
+                                    {t('common.cancel')}
                                 </button>
                                 <button type="submit" disabled={saving}
                                     className="flex-1 px-6 py-3 bg-emerald-600 text-white rounded-xl font-semibold shadow-lg shadow-emerald-200 hover:bg-emerald-700 transition-all flex items-center justify-center gap-2 disabled:opacity-60">
-                                    {saving ? <><Loader2 className="w-4 h-4 animate-spin" /> Saving...</> : 'Add Personnel'}
+                                    {saving ? <><Loader2 className="w-4 h-4 animate-spin" /> {t('common.saving')}</> : t('manpower.addPersonnel')}
                                 </button>
                             </div>
                         </form>

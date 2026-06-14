@@ -29,6 +29,17 @@ export const authApi = {
     getMe: () => apiFetch('/me'),
 };
 
+// ─── USERS (User Management) ──────────────────────────────────────────────────
+export const usersApi = {
+    getAll:      ()            => apiFetch('/users'),
+    getById:     (id)          => apiFetch(`/users/${id}`),
+    create:      (payload)     => apiFetch('/users', { method: 'POST', body: JSON.stringify(payload) }),
+    update:      (id, payload) => apiFetch(`/users/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
+    deactivate:  (id)          => apiFetch(`/users/${id}/deactivate`, { method: 'PATCH' }),
+    activate:    (id)          => apiFetch(`/users/${id}/activate`,   { method: 'PATCH' }),
+    delete:      (id)          => apiFetch(`/users/${id}`, { method: 'DELETE' }),
+};
+
 // ─── PROJECTS ─────────────────────────────────────────────────────────────────
 export const projectsApi = {
     getAll:  ()            => apiFetch('/projects'),
@@ -74,7 +85,6 @@ export const personnelApi = {
 
 // ─── ALERTS & THRESHOLDS ──────────────────────────────────────────────────────
 export const alertsApi = {
-    // Returns { projects[], tasks[] } — same shape as dummyProjectsEvm + dummyTaskData
     getAlertsRaw:     ()          => apiFetch('/alerts/raw'),
     getAlerts:        (projectId) => apiFetch(`/alerts${projectId ? `?project_id=${projectId}` : ''}`),
     getThresholds:    (projectId) => apiFetch(`/alerts/thresholds${projectId ? `?project_id=${projectId}` : ''}`),
@@ -97,12 +107,13 @@ export const equipmentApi = {
 
 // ─── CONSUMABLES ──────────────────────────────────────────────────────────────
 export const consumablesApi = {
-    getAll:  (filters = {}) => apiFetch(`/consumables${Object.keys(filters).length ? '?' + new URLSearchParams(filters) : ''}`),
-    create:  (payload)      => apiFetch('/consumables', { method: 'POST', body: JSON.stringify(payload) }),
-    update:  (id, payload)  => apiFetch(`/consumables/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
-    delete:  (id)           => apiFetch(`/consumables/${id}`, { method: 'DELETE' }),
+    getAll:       ()              => apiFetch('/consumables'),
+    create:       (payload)       => apiFetch('/consumables', { method: 'POST', body: JSON.stringify(payload) }),
+    update:       (id, payload)   => apiFetch(`/consumables/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
+    delete:       (id)            => apiFetch(`/consumables/${id}`, { method: 'DELETE' }),
+    getLogs:      (projectId)     => apiFetch(`/consumable-logs?project_id=${projectId}`),
+    logUsage:     (payload)       => apiFetch('/consumable-logs', { method: 'POST', body: JSON.stringify(payload) }),
 };
-
 // ─── MATERIALS ────────────────────────────────────────────────────────────────
 export const materialsApi = {
     getAll:        (filters = {}) => apiFetch(`/materials${Object.keys(filters).length ? '?' + new URLSearchParams(filters) : ''}`),
