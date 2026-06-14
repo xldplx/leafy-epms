@@ -1,29 +1,20 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { 
-    Activity, TrendingUp, AlertTriangle, BarChart3, 
-    LineChart as ChartIcon, ArrowUpRight, ArrowDownRight, 
-    Target, Loader2, Layers, Briefcase, CheckCircle2,
-    Calendar, Clock, DollarSign
-} from 'lucide-react';
-import { 
-    LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, 
-    Legend, ResponsiveContainer, AreaChart, Area, PieChart, Pie, Cell
-} from 'recharts';
+import { Activity, TrendingUp, AlertTriangle, BarChart3, LineChart as ChartIcon, Target, Loader2, Layers, Briefcase, CheckCircle2, Calendar, DollarSign } from 'lucide-react';
+import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, PieChart, Pie, Cell } from 'recharts';
 import { computeEvm, computeAlerts, indexColor, formatCurrency } from '../../../utils/evmHelpers';
 import { generateSCurveData } from '../../../utils/cpmHelpers';
 import { STATUS_STYLES, CARD_CLASS } from '../../../utils/uiConstants';
 import { apiFetch } from '../../../utils/api';
+import { useTranslation } from '../../../utils/i18n';
 
 const COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444'];
 
-// --- CUSTOM TOOLTIP FOR OVERVIEW ---
 function OverviewTooltip({ active, payload, label }) {
     if (!active || !payload?.length) return null;
     return (
-        <div className="bg-white/80 backdrop-blur-xl border border-white/40 rounded-2xl shadow-2xl p-4 text-[11px] min-w-52 ring-1 ring-slate-900/5 animate-in fade-in zoom-in duration-200">
+        <div className="bg-white/80 backdrop-blur-xl border border-white/40 rounded-2xl shadow-2xl p-4 text-[11px] min-w-52 ring-1 ring-slate-900/5">
             <p className="font-black text-slate-800 mb-3 flex items-center gap-2 border-b border-slate-100 pb-2">
-                <Target className="w-3 h-3 text-emerald-500" />
-                {label}
+                <Target className="w-3 h-3 text-emerald-500" />{label}
             </p>
             <div className="space-y-2.5">
                 {payload.map(p => (
@@ -40,52 +31,38 @@ function OverviewTooltip({ active, payload, label }) {
     );
 }
 
-// --- MAIN OVERVIEW COMPONENT ---
 export default function Overview() {
-    const [loading, setLoading] = useState(true);
-    const [projects, setProjects] = useState([]);
-    const [allTasks, setAllTasks] = useState([]);
+    const { t } = useTranslation();
+    const [loading, setLoading]       = useState(true);
+    const [projects, setProjects]     = useState([]);
+    const [allTasks, setAllTasks]     = useState([]);
     const [thresholds, setThresholds] = useState({ cpi_amber: 1.00, cpi_red: 0.90, spi_amber: 1.00, spi_red: 0.90 });
+    const [viewMode, setViewMode]     = useState('Daily');
 
     useEffect(() => {
         setLoading(true);
-        Promise.all([
-            apiFetch('/alerts/raw'), // returns projects[] and tasks[]
-            apiFetch('/alerts/thresholds')
-        ]).then(([raw, thresh]) => {
-            if (raw.success) {
-                setProjects(raw.projects || []);
-                setAllTasks(raw.tasks || []);
-            }
-            if (thresh.success && thresh.data) {
-                setThresholds(thresh.data);
-            }
-        })
-        .catch(console.error)
-        .finally(() => setLoading(false));
+        Promise.all([apiFetch('/alerts/raw'), apiFetch('/alerts/thresholds')])
+            .then(([raw, thresh]) => {
+                if (raw.success) { setProjects(raw.projects || []); setAllTasks(raw.tasks || []); }
+                if (thresh.success && thresh.data) setThresholds(thresh.data);
+            })
+            .catch(console.error)
+            .finally(() => setLoading(false));
     }, []);
 
-    // Per-project EVM (memoized)
     const projectMetrics = useMemo(() => projects.map(proj => {
         const tasks = allTasks.filter(t => t.project_id === proj.id);
-        const evm = computeEvm(tasks, proj.schedule_pct);
-        return { ...proj, ...evm };
+        return { ...proj, ...computeEvm(tasks, proj.schedule_pct) };
     }), [projects, allTasks]);
 
-    // Portfolio aggregates (memoized)
-    const { totalAC, totalBAC, totalEV, totalPV, portfolioCPI, portfolioSPI } = useMemo(() => {
+    const { totalBAC, portfolioCPI, portfolioSPI } = useMemo(() => {
         const tEV = projectMetrics.reduce((s, p) => s + p.EV, 0);
         const tAC = projectMetrics.reduce((s, p) => s + p.AC, 0);
         const tPV = projectMetrics.reduce((s, p) => s + p.PV, 0);
         const tBAC = projectMetrics.reduce((s, p) => s + p.BAC, 0);
-        return {
-            totalAC: tAC, totalBAC: tBAC, totalEV: tEV, totalPV: tPV,
-            portfolioCPI: tAC > 0 ? tEV / tAC : null,
-            portfolioSPI: tPV > 0 ? tEV / tPV : null,
-        };
+        return { totalBAC: tBAC, portfolioCPI: tAC > 0 ? tEV / tAC : null, portfolioSPI: tPV > 0 ? tEV / tPV : null };
     }, [projectMetrics]);
 
-    // S-Curve Data for Portfolio (Aggregated from all projects)
     const rawSCurveData = useMemo(() => {
         const dated = projects.filter(p => p.planned_start && p.planned_end);
         if (!dated.length || !allTasks.length) return [];
@@ -94,34 +71,24 @@ export default function Overview() {
         return generateSCurveData(allTasks, minDate.toISOString(), maxDate.toISOString());
     }, [projects, allTasks]);
 
-    const [viewMode, setViewMode] = useState('Daily'); // 'Daily', 'Weekly', 'Monthly'
-
     const sCurveData = useMemo(() => {
         if (!rawSCurveData.length) return [];
         if (viewMode === 'Daily') return rawSCurveData;
-
+        const interval = viewMode === t('overview.weekly') || viewMode === 'Weekly' ? 7 : 30;
         const grouped = [];
-        const interval = viewMode === 'Weekly' ? 7 : 30;
-
         for (let i = 0; i < rawSCurveData.length; i += interval) {
             const chunk = rawSCurveData.slice(i, i + interval);
-            const last = chunk[chunk.length - 1];
-            grouped.push({
-                ...last,
-                date: last.date // Keep the last date of the period as label
-            });
+            grouped.push({ ...chunk[chunk.length - 1] });
         }
         return grouped;
-    }, [rawSCurveData, viewMode]);
+    }, [rawSCurveData, viewMode, t]);
 
-    // Project status distribution
     const statusCounts = useMemo(() => {
         const counts = { active: 0, planning: 0, completed: 0, on_hold: 0 };
         projects.forEach(p => { if (counts[p.status] !== undefined) counts[p.status]++; });
         return counts;
     }, [projects]);
 
-    // Alerts (memoized)
     const { alerts, criticalCount, warningCount } = useMemo(() => {
         const a = computeAlerts(projects, allTasks, thresholds);
         return { alerts: a, criticalCount: a.filter(x => x.severity === 'critical').length, warningCount: a.filter(x => x.severity === 'warning').length };
@@ -130,12 +97,16 @@ export default function Overview() {
     const cpiColor = indexColor(portfolioCPI);
     const spiColor = indexColor(portfolioSPI);
 
-    const cardClass = CARD_CLASS;
+    const VIEW_MODES = [
+        { key: 'Daily',   label: t('overview.daily') },
+        { key: 'Weekly',  label: t('overview.weekly') },
+        { key: 'Monthly', label: t('overview.monthly') },
+    ];
 
     if (loading) return (
         <div className="h-[60vh] flex flex-col items-center justify-center gap-4 text-slate-400">
             <Loader2 className="w-10 h-10 animate-spin text-emerald-500" />
-            <p className="font-bold uppercase tracking-[0.2em] text-xs">Syncing Portfolio Data...</p>
+            <p className="font-bold uppercase tracking-[0.2em] text-xs">{t('overview.syncingData')}</p>
         </div>
     );
 
@@ -146,23 +117,18 @@ export default function Overview() {
                 <div>
                     <div className="flex items-center gap-2 mb-1">
                         <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-600/80">Portfolio Live</span>
+                        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-600/80">{t('overview.portfolioLive')}</span>
                     </div>
-                    <h2 className="text-4xl font-black text-slate-900 tracking-tight">Project Overview</h2>
-                    <p className="text-slate-500 mt-1 font-medium">Consolidated enterprise performance intelligence</p>
+                    <h2 className="text-4xl font-black text-slate-900 tracking-tight">{t('overview.title')}</h2>
+                    <p className="text-slate-500 mt-1 font-medium">{t('overview.subtitle')}</p>
                 </div>
                 <div className="flex items-center gap-2 bg-white/40 backdrop-blur-md p-1.5 rounded-2xl border border-slate-200/50 shadow-sm">
-                    {['Daily', 'Weekly', 'Monthly'].map(mode => (
-                        <button 
-                            key={mode}
-                            onClick={() => setViewMode(mode)}
+                    {VIEW_MODES.map(({ key, label }) => (
+                        <button key={key} onClick={() => setViewMode(key)}
                             className={`px-5 py-2 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all ${
-                                viewMode === mode 
-                                ? 'bg-white text-emerald-700 shadow-md shadow-emerald-500/5 border border-emerald-100' 
-                                : 'text-slate-400 hover:text-slate-700'
-                            }`}
-                        >
-                            {mode}
+                                viewMode === key ? 'bg-white text-emerald-700 shadow-md border border-emerald-100' : 'text-slate-400 hover:text-slate-700'
+                            }`}>
+                            {label}
                         </button>
                     ))}
                 </div>
@@ -170,61 +136,38 @@ export default function Overview() {
 
             {/* KPI CARDS */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                {/* Total BAC */}
-                <div className={`${cardClass} p-6 group hover:scale-[1.02]`}>
-                    <div className="flex justify-between items-start mb-4">
-                        <div className="p-3 bg-slate-100 rounded-xl text-slate-500 shadow-inner">
-                            <Briefcase className="w-5 h-5" />
-                        </div>
-                    </div>
-                    <h3 className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Portfolio Budget</h3>
+                <div className={`${CARD_CLASS} p-6 group hover:scale-[1.02]`}>
+                    <div className="p-3 bg-slate-100 rounded-xl text-slate-500 shadow-inner w-fit mb-4"><Briefcase className="w-5 h-5" /></div>
+                    <h3 className="text-slate-400 text-[10px] font-black uppercase tracking-widest">{t('overview.portfolioBudget')}</h3>
                     <p className="text-2xl font-black text-slate-800 tracking-tight mt-1">{formatCurrency(totalBAC)}</p>
-                    <p className="text-[10px] text-slate-400 font-bold mt-2 uppercase tracking-tighter">Total BAC Across Projects</p>
+                    <p className="text-[10px] text-slate-400 font-bold mt-2 uppercase tracking-tighter">{t('overview.totalBac')}</p>
                 </div>
-
-                {/* Total Projects */}
-                <div className={`${cardClass} p-6 group hover:scale-[1.02]`}>
-                    <div className="flex justify-between items-start mb-4">
-                        <div className="p-3 bg-emerald-50 rounded-xl text-emerald-600 shadow-inner">
-                            <Layers className="w-5 h-5" />
-                        </div>
-                    </div>
-                    <h3 className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Total Projects</h3>
+                <div className={`${CARD_CLASS} p-6 group hover:scale-[1.02]`}>
+                    <div className="p-3 bg-emerald-50 rounded-xl text-emerald-600 shadow-inner w-fit mb-4"><Layers className="w-5 h-5" /></div>
+                    <h3 className="text-slate-400 text-[10px] font-black uppercase tracking-widest">{t('overview.totalProjects')}</h3>
                     <p className="text-2xl font-black text-slate-800 tracking-tight mt-1">{projects.length}</p>
                     <div className="flex gap-2 mt-2">
-                        <span className="text-[9px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded-md border border-emerald-100">{statusCounts.active} Active</span>
-                        <span className="text-[9px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded-md border border-blue-100">{statusCounts.planning} Planning</span>
+                        <span className="text-[9px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded-md border border-emerald-100">{statusCounts.active} {t('status.active')}</span>
+                        <span className="text-[9px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded-md border border-blue-100">{statusCounts.planning} {t('status.planning')}</span>
                     </div>
                 </div>
-
-                {/* SPI */}
-                <div className={`${cardClass} p-6 group hover:scale-[1.02]`}>
+                <div className={`${CARD_CLASS} p-6 group hover:scale-[1.02]`}>
                     <div className="flex justify-between items-start mb-4">
-                        <div className={`p-3 rounded-xl shadow-inner transition-colors ${portfolioSPI >= 1 ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>
-                            <Activity className="w-5 h-5" />
-                        </div>
-                        <div className={`px-2 py-1 rounded-lg border font-black text-[9px] uppercase tracking-wider ${spiColor.bg} ${spiColor.border} ${spiColor.text}`}>
-                            {spiColor.label}
-                        </div>
+                        <div className={`p-3 rounded-xl shadow-inner ${portfolioSPI >= 1 ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}><Activity className="w-5 h-5" /></div>
+                        <div className={`px-2 py-1 rounded-lg border font-black text-[9px] uppercase ${spiColor.bg} ${spiColor.border} ${spiColor.text}`}>{spiColor.label}</div>
                     </div>
-                    <h3 className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Avg. Schedule (SPI)</h3>
+                    <h3 className="text-slate-400 text-[10px] font-black uppercase tracking-widest">{t('overview.avgSchedule')}</h3>
                     <p className={`text-2xl font-black tracking-tight mt-1 ${spiColor.text}`}>{portfolioSPI !== null ? portfolioSPI.toFixed(2) : '--'}</p>
                     <div className="mt-3 bg-slate-100/50 rounded-full h-1 overflow-hidden">
                         <div className={`h-full rounded-full transition-all duration-1000 ${portfolioSPI >= 1 ? 'bg-emerald-500' : 'bg-red-500'}`} style={{ width: `${Math.min((portfolioSPI || 0) * 100, 100)}%` }} />
                     </div>
                 </div>
-
-                {/* CPI */}
-                <div className={`${cardClass} p-6 group hover:scale-[1.02]`}>
+                <div className={`${CARD_CLASS} p-6 group hover:scale-[1.02]`}>
                     <div className="flex justify-between items-start mb-4">
-                        <div className={`p-3 rounded-xl shadow-inner transition-colors ${portfolioCPI >= 1 ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>
-                            <TrendingUp className="w-5 h-5" />
-                        </div>
-                        <div className={`px-2 py-1 rounded-lg border font-black text-[9px] uppercase tracking-wider ${cpiColor.bg} ${cpiColor.border} ${cpiColor.text}`}>
-                            {cpiColor.label}
-                        </div>
+                        <div className={`p-3 rounded-xl shadow-inner ${portfolioCPI >= 1 ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}><TrendingUp className="w-5 h-5" /></div>
+                        <div className={`px-2 py-1 rounded-lg border font-black text-[9px] uppercase ${cpiColor.bg} ${cpiColor.border} ${cpiColor.text}`}>{cpiColor.label}</div>
                     </div>
-                    <h3 className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Avg. Cost (CPI)</h3>
+                    <h3 className="text-slate-400 text-[10px] font-black uppercase tracking-widest">{t('overview.avgCost')}</h3>
                     <p className={`text-2xl font-black tracking-tight mt-1 ${cpiColor.text}`}>{portfolioCPI !== null ? portfolioCPI.toFixed(2) : '--'}</p>
                     <div className="mt-3 bg-slate-100/50 rounded-full h-1 overflow-hidden">
                         <div className={`h-full rounded-full transition-all duration-1000 ${portfolioCPI >= 1 ? 'bg-emerald-500' : portfolioCPI >= 0.9 ? 'bg-amber-500' : 'bg-red-500'}`} style={{ width: `${Math.min((portfolioCPI || 0) * 100, 100)}%` }} />
@@ -233,31 +176,25 @@ export default function Overview() {
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                {/* PORTFOLIO S-CURVE */}
-                <div className={`${cardClass} p-8 lg:col-span-2`}>
+                {/* S-CURVE */}
+                <div className={`${CARD_CLASS} p-8 lg:col-span-2`}>
                     <div className="flex items-center justify-between mb-8">
                         <div className="flex items-center gap-4">
-                            <div className="p-3 bg-emerald-500 text-white rounded-xl shadow-lg shadow-emerald-200">
-                                <ChartIcon className="w-5 h-5" />
-                            </div>
+                            <div className="p-3 bg-emerald-500 text-white rounded-xl shadow-lg shadow-emerald-200"><ChartIcon className="w-5 h-5" /></div>
                             <div>
-                                <h3 className="text-lg font-black text-slate-800 tracking-tight">Cumulative S-Curve</h3>
-                                <p className="text-xs text-slate-400 font-bold uppercase tracking-tighter mt-0.5">{viewMode} Trend Tracking</p>
+                                <h3 className="text-lg font-black text-slate-800 tracking-tight">{t('overview.cumulativeCurve')}</h3>
+                                <p className="text-xs text-slate-400 font-bold uppercase tracking-tighter mt-0.5">
+                                    {VIEW_MODES.find(m => m.key === viewMode)?.label} {t('overview.trendTracking')}
+                                </p>
                             </div>
                         </div>
                         <div className="hidden sm:flex items-center gap-4 bg-slate-50 p-3 rounded-xl border border-slate-100">
-                            <div className="flex items-center gap-2">
-                                <div className="w-2 h-2 rounded-full bg-slate-300" />
-                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">PV</span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                                <div className="w-2 h-2 rounded-full bg-emerald-500" />
-                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">EV</span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                                <div className="w-2 h-2 rounded-full bg-amber-400" />
-                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">AC</span>
-                            </div>
+                            {[['bg-slate-300', 'PV', t('overview.planned')], ['bg-emerald-500', 'EV', t('overview.earned')], ['bg-amber-400', 'AC', t('overview.actual')]].map(([color, key, label]) => (
+                                <div key={key} className="flex items-center gap-2">
+                                    <div className={`w-2 h-2 rounded-full ${color}`} />
+                                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{key}</span>
+                                </div>
+                            ))}
                         </div>
                     </div>
                     <div className="h-[300px] w-full">
@@ -270,106 +207,88 @@ export default function Overview() {
                                     </linearGradient>
                                 </defs>
                                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-                                <XAxis dataKey="date" hide={true} />
+                                <XAxis dataKey="date" hide />
                                 <YAxis tick={{ fontSize: 10, fontWeight: 800, fill: '#94a3b8' }} tickLine={false} axisLine={false} tickFormatter={v => `${(v / 1e6).toFixed(0)}M`} />
                                 <Tooltip content={<OverviewTooltip />} />
-                                <Area type="monotone" dataKey="PV" name="Planned" stroke="#cbd5e1" strokeWidth={2} strokeDasharray="5 5" fill="transparent" />
-                                <Area type="monotone" dataKey="EV" name="Earned" stroke="#10b981" strokeWidth={3} fill="url(#colorEV)" />
-                                <Area type="monotone" dataKey="AC" name="Actual" stroke="#f59e0b" strokeWidth={2} fill="transparent" />
+                                <Area type="monotone" dataKey="PV" name={t('overview.planned')} stroke="#cbd5e1" strokeWidth={2} strokeDasharray="5 5" fill="transparent" />
+                                <Area type="monotone" dataKey="EV" name={t('overview.earned')} stroke="#10b981" strokeWidth={3} fill="url(#colorEV)" />
+                                <Area type="monotone" dataKey="AC" name={t('overview.actual')} stroke="#f59e0b" strokeWidth={2} fill="transparent" />
                             </AreaChart>
                         </ResponsiveContainer>
                     </div>
                 </div>
 
-                {/* DISTRIBUTION & ALERTS */}
+                {/* RIGHT COLUMN */}
                 <div className="space-y-6">
                     {/* Status Distribution */}
-                    <div className={`${cardClass} p-6`}>
-                        <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-6">Status Breakdown</h4>
+                    <div className={`${CARD_CLASS} p-6`}>
+                        <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-6">{t('overview.statusBreakdown')}</h4>
                         <div className="h-[180px] w-full relative">
                             <ResponsiveContainer width="100%" height="100%">
                                 <PieChart>
-                                    <Pie 
-                                        data={[
-                                            { name: 'Active', value: statusCounts.active },
-                                            { name: 'Planning', value: statusCounts.planning },
-                                            { name: 'Completed', value: statusCounts.completed },
-                                            { name: 'On Hold', value: statusCounts.on_hold }
-                                        ]} 
-                                        innerRadius={50} outerRadius={70} paddingAngle={8} dataKey="value"
-                                    >
-                                        {COLORS.map((entry, index) => (
-                                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} strokeWidth={0} />
-                                        ))}
+                                    <Pie data={[
+                                        { name: t('status.active'), value: statusCounts.active },
+                                        { name: t('status.planning'), value: statusCounts.planning },
+                                        { name: t('status.completed'), value: statusCounts.completed },
+                                        { name: t('status.onHold'), value: statusCounts.on_hold },
+                                    ]} innerRadius={50} outerRadius={70} paddingAngle={8} dataKey="value">
+                                        {COLORS.map((c, i) => <Cell key={i} fill={c} strokeWidth={0} />)}
                                     </Pie>
                                 </PieChart>
                             </ResponsiveContainer>
                             <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
                                 <span className="text-2xl font-black text-slate-800">{projects.length}</span>
-                                <span className="text-[8px] font-black text-slate-400 uppercase tracking-tighter">Total</span>
+                                <span className="text-[8px] font-black text-slate-400 uppercase tracking-tighter">{t('common.total')}</span>
                             </div>
                         </div>
                         <div className="grid grid-cols-2 gap-3 mt-4">
-                            <div className="flex items-center gap-2">
-                                <div className="w-1.5 h-1.5 rounded-full bg-[#10b981]" />
-                                <span className="text-[9px] font-bold text-slate-500 uppercase">{statusCounts.active} Active</span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                                <div className="w-1.5 h-1.5 rounded-full bg-[#3b82f6]" />
-                                <span className="text-[9px] font-bold text-slate-500 uppercase">{statusCounts.planning} Planning</span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                                <div className="w-1.5 h-1.5 rounded-full bg-[#f59e0b]" />
-                                <span className="text-[9px] font-bold text-slate-500 uppercase">{statusCounts.completed} Completed</span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                                <div className="w-1.5 h-1.5 rounded-full bg-[#ef4444]" />
-                                <span className="text-[9px] font-bold text-slate-500 uppercase">{statusCounts.on_hold} On Hold</span>
-                            </div>
+                            {[['#10b981', statusCounts.active, t('status.active')], ['#3b82f6', statusCounts.planning, t('status.planning')],
+                              ['#f59e0b', statusCounts.completed, t('status.completed')], ['#ef4444', statusCounts.on_hold, t('status.onHold')]].map(([color, count, label]) => (
+                                <div key={label} className="flex items-center gap-2">
+                                    <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: color }} />
+                                    <span className="text-[9px] font-bold text-slate-500 uppercase">{count} {label}</span>
+                                </div>
+                            ))}
                         </div>
                     </div>
 
                     {/* Quick Alerts */}
-                    <div className={`${cardClass} p-6 bg-slate-900 text-white border-0`}>
+                    <div className={`${CARD_CLASS} p-6 bg-slate-900 text-white border-0`}>
                         <div className="flex items-center justify-between mb-4">
-                            <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Active Alerts</h4>
+                            <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{t('overview.activeAlerts')}</h4>
                             <AlertTriangle className={`w-4 h-4 ${alerts.length > 0 ? 'text-red-500 animate-pulse' : 'text-emerald-500'}`} />
                         </div>
-                        <div className="space-y-4">
-                            {alerts.length > 0 ? (
-                                <>
-                                    <div className="flex items-center justify-between">
-                                        <span className="text-3xl font-black text-white">{alerts.length}</span>
-                                        <div className="text-right">
-                                            <p className="text-[10px] font-black text-red-500 uppercase">{criticalCount} Critical</p>
-                                            <p className="text-[10px] font-black text-amber-500 uppercase">{warningCount} Warning</p>
-                                        </div>
+                        {alerts.length > 0 ? (
+                            <div className="space-y-4">
+                                <div className="flex items-center justify-between">
+                                    <span className="text-3xl font-black text-white">{alerts.length}</span>
+                                    <div className="text-right">
+                                        <p className="text-[10px] font-black text-red-500 uppercase">{criticalCount} {t('alerts.critical')}</p>
+                                        <p className="text-[10px] font-black text-amber-500 uppercase">{warningCount} {t('alerts.atRisk')}</p>
                                     </div>
-                                    <p className="text-[10px] text-slate-400 font-medium leading-relaxed">
-                                        System has detected {alerts.length} performance anomalies that require executive attention.
-                                    </p>
-                                </>
-                            ) : (
-                                <div className="flex flex-col items-center py-4 gap-2">
-                                    <CheckCircle2 className="w-8 h-8 text-emerald-500 opacity-50" />
-                                    <p className="text-[10px] font-black text-emerald-500 uppercase tracking-widest">Portfolio Healthy</p>
                                 </div>
-                            )}
-                        </div>
+                                <p className="text-[10px] text-slate-400 font-medium leading-relaxed">
+                                    {t('overview.anomaliesDetected').replace('{count}', alerts.length)}
+                                </p>
+                            </div>
+                        ) : (
+                            <div className="flex flex-col items-center py-4 gap-2">
+                                <CheckCircle2 className="w-8 h-8 text-emerald-500 opacity-50" />
+                                <p className="text-[10px] font-black text-emerald-500 uppercase tracking-widest">{t('overview.portfolioHealthy')}</p>
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>
 
             {/* PROJECT HEALTH TABLE */}
-            <div className={`${cardClass}`}>
+            <div className={CARD_CLASS}>
                 <div className="p-8 border-b border-slate-50 bg-slate-50/30">
                     <div className="flex items-center gap-4">
-                        <div className="p-3 bg-white rounded-xl shadow-sm text-slate-500">
-                            <Activity className="w-5 h-5" />
-                        </div>
+                        <div className="p-3 bg-white rounded-xl shadow-sm text-slate-500"><Activity className="w-5 h-5" /></div>
                         <div>
-                            <h3 className="text-lg font-black text-slate-800 tracking-tight">Project Health Monitor</h3>
-                            <p className="text-xs text-slate-400 font-bold uppercase tracking-tighter mt-0.5">Live performance breakdown per project</p>
+                            <h3 className="text-lg font-black text-slate-800 tracking-tight">{t('overview.healthMonitor')}</h3>
+                            <p className="text-xs text-slate-400 font-bold uppercase tracking-tighter mt-0.5">{t('overview.livePerformance')}</p>
                         </div>
                     </div>
                 </div>
@@ -377,11 +296,11 @@ export default function Overview() {
                     <table className="w-full text-left border-collapse">
                         <thead>
                             <tr className="bg-slate-50/50 text-[10px] uppercase tracking-[0.2em] text-slate-400 font-black">
-                                <th className="px-8 py-5">Project Details</th>
-                                <th className="px-6 py-5">Performance</th>
-                                <th className="px-6 py-5">Schedule (SPI)</th>
-                                <th className="px-6 py-5">Cost (CPI)</th>
-                                <th className="px-8 py-5 text-right">Status</th>
+                                <th className="px-8 py-5">{t('overview.projectDetails')}</th>
+                                <th className="px-6 py-5">{t('overview.performance')}</th>
+                                <th className="px-6 py-5">{t('overview.avgSchedule')}</th>
+                                <th className="px-6 py-5">{t('overview.avgCost')}</th>
+                                <th className="px-8 py-5 text-right">{t('common.status')}</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-50">
@@ -397,7 +316,7 @@ export default function Overview() {
                                         <td className="px-6 py-6">
                                             <div className="w-32">
                                                 <div className="flex justify-between text-[9px] font-black text-slate-400 uppercase mb-1.5">
-                                                    <span>Done</span>
+                                                    <span>{t('overview.done')}</span>
                                                     <span>{p.overallPct.toFixed(1)}%</span>
                                                 </div>
                                                 <div className="h-1 bg-slate-100 rounded-full overflow-hidden">
@@ -408,17 +327,13 @@ export default function Overview() {
                                         <td className="px-6 py-6">
                                             <div className="flex items-center gap-3">
                                                 <span className={`text-sm font-black ${spiC.text}`}>{p.SPI !== null ? p.SPI.toFixed(2) : '--'}</span>
-                                                <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded border ${spiC.bg} ${spiC.border} ${spiC.text}`}>
-                                                    {spiC.label}
-                                                </span>
+                                                <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded border ${spiC.bg} ${spiC.border} ${spiC.text}`}>{spiC.label}</span>
                                             </div>
                                         </td>
                                         <td className="px-6 py-6">
                                             <div className="flex items-center gap-3">
                                                 <span className={`text-sm font-black ${cpiC.text}`}>{p.CPI !== null ? p.CPI.toFixed(2) : '--'}</span>
-                                                <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded border ${cpiC.bg} ${cpiC.border} ${cpiC.text}`}>
-                                                    {cpiC.label}
-                                                </span>
+                                                <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded border ${cpiC.bg} ${cpiC.border} ${cpiC.text}`}>{cpiC.label}</span>
                                             </div>
                                         </td>
                                         <td className="px-8 py-6 text-right">
