@@ -15,6 +15,7 @@ const personnel   = require('./controllers/personnelController');
 const alertsEvm   = require('./controllers/alertsEvmController');
 const users       = require('./controllers/usersController');
 const consumables = require('./controllers/consumablesController');
+const budget      = require('./controllers/budgetController');
 
 const app = express();
 app.use(cors());
@@ -27,7 +28,7 @@ app.get('/api/health', (_, res) => res.json({ ok: true, ts: new Date().toISOStri
 app.post('/api/login', auth.login);
 app.get ('/api/me',    authenticate, auth.getMe);
 
-// ── Users (User Management) ───────────────────────────────────────────────────
+// ── Users ─────────────────────────────────────────────────────────────────────
 app.get   ('/api/users',                authenticate, authorize('Project Manager'), users.getAllUsers);
 app.get   ('/api/users/:id',            authenticate, authorize('Project Manager'), users.getUserById);
 app.post  ('/api/users',                authenticate, authorize('Project Manager'), users.createUser);
@@ -75,6 +76,12 @@ app.delete('/api/consumables/:id', authenticate, authorize('Project Manager'), c
 // ── Consumable Logs ───────────────────────────────────────────────────────────
 app.get ('/api/consumable-logs', authenticate, consumables.getLogs);
 app.post('/api/consumable-logs', authenticate, authorize('Project Manager','Planner','Site Engineer'), consumables.logConsumption);
+
+// ── Budget ────────────────────────────────────────────────────────────────────
+app.get   ('/api/budget',     authenticate, budget.getBudgetByProject);
+app.post  ('/api/budget',     authenticate, authorize('Project Manager','Cost Engineer'), budget.createBudgetCategory);
+app.put   ('/api/budget/:id', authenticate, authorize('Project Manager','Cost Engineer'), budget.updateBudgetCategory);
+app.delete('/api/budget/:id', authenticate, authorize('Project Manager'), budget.deleteBudgetCategory);
 
 // ── Alerts & EVM ─────────────────────────────────────────────────────────────
 app.get('/api/alerts/raw',        authenticate, alertsEvm.getAlertsRaw);
