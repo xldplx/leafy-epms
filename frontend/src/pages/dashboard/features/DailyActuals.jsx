@@ -65,25 +65,43 @@ export default function DailyActuals() {
     const handleSubmit = async () => {
         if (!selectedProjectId || !entryDate) { setSubmitError(t('daily.selectProject') + ' and date.'); return; }
         setSubmitError('');
+
         const entries = projectTasks
-            .filter(t => actuals[t.id]?.actual_hours > 0 || actuals[t.id]?.actual_cost > 0 || actuals[t.id]?.pct_complete > 0 || actuals[t.id]?.photo)
-            .map(t => ({
-                task_id:      t.id,
-                actual_hours: actuals[t.id]?.actual_hours || 0,
-                actual_cost:  actuals[t.id]?.actual_cost  || 0,
-                pct_complete: actuals[t.id]?.pct_complete || 0,
-                photo_url:    actuals[t.id]?.photo?.url   || null,
+            .filter(tk => actuals[tk.id]?.actual_hours > 0 || actuals[tk.id]?.actual_cost > 0 || actuals[tk.id]?.pct_complete > 0 || actuals[tk.id]?.photo)
+            .map(tk => ({
+                task_id:      tk.id,
+                actual_hours: actuals[tk.id]?.actual_hours || 0,
+                actual_cost:  actuals[tk.id]?.actual_cost  || 0,
+                pct_complete: actuals[tk.id]?.pct_complete || 0,
+                photo_url:    actuals[tk.id]?.photo?.url   || null,
             }));
+
+        // Simpan info project SEBELUM state di-reset
+        const submittedProjectName = selectedProject?.project_name || '';
+        const submittedProjectCode = selectedProject?.project_code || '';
+        const submittedDate        = entryDate;
+
         setIsSubmitting(true);
         try {
             await apiFetch(`/projects/${selectedProjectId}/daily-actuals`, {
                 method: 'POST',
-                body: JSON.stringify({ entry_date: entryDate, entries }),
+                body: JSON.stringify({ entry_date: submittedDate, entries }),
             });
-            const entry = { id: Date.now(), project_name: selectedProject.project_name, project_code: selectedProject.project_code, date: entryDate, task_count: entries.length };
-            setSubmittedEntries([entry, ...submittedEntries]);
+
+            // Tambah ke session log dengan data yang sudah disimpan
+            const newEntry = {
+                id:           Date.now(),
+                project_name: submittedProjectName,
+                project_code: submittedProjectCode,
+                date:         submittedDate,
+                task_count:   entries.length,
+            };
+            setSubmittedEntries(prev => [newEntry, ...prev]);
             setIsSubmitted(true);
-            setActuals({}); setSelectedProjectId(''); setEntryDate('');
+
+            // Reset form tapi JANGAN reset selectedProjectId agar log tetap terlihat
+            setActuals({});
+            setEntryDate('');
             setTimeout(() => setIsSubmitted(false), 3000);
         } catch (e) { setSubmitError(e.message || 'Failed to submit.');
         } finally { setIsSubmitting(false); }
