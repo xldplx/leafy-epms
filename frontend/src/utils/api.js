@@ -124,3 +124,10 @@ export const materialsApi = {
     createReceipt: (payload)      => apiFetch('/materials/receipts', { method: 'POST', body: JSON.stringify(payload) }),
     verifyReceipt: (id)           => apiFetch(`/materials/receipts/${id}`, { method: 'PUT', body: JSON.stringify({ verified: true }) }),
 };
+// ─── BUDGET ──────────────────────────────────────────────────────────────────────
+export const budgetApi = {
+    getByProject: (projectId)     => apiFetch(`/budget?project_id=${projectId}`),
+    create:       (payload)       => apiFetch('/budget', { method: 'POST', body: JSON.stringify(payload) }),
+    update:       (id, payload)   => apiFetch(`/budget/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
+    delete:       (id)            => apiFetch(`/budget/${id}`, { method: 'DELETE' }),
+};

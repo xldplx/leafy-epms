@@ -161,7 +161,9 @@ function UserManagementTab({ t }) {
         try {
             const token = localStorage.getItem('token');
             if (!token) return null;
-            return JSON.parse(atob(token.split('.')[1])).id;
+            const payload = JSON.parse(atob(token.split('.')[1]));
+            // parseInt ensures integer comparison with user.id from Supabase
+            return parseInt(payload.id);
         } catch { return null; }
     }, []);
 
@@ -259,7 +261,9 @@ function UserManagementTab({ t }) {
 
     const handleToggleActive = async (user) => {
         try {
-            const endpoint = user.is_active ? `/users/${user.id}/deactivate` : `/users/${user.id}/activate`;
+            const endpoint = user.is_active
+                ? `/users/${user.id}/deactivate`
+                : `/users/${user.id}/activate`;
             await apiFetch(endpoint, { method: 'PATCH' });
             showToast(`"${user.username}" ${user.is_active ? t('settings.users.deactivatedSuccess') : t('settings.users.activatedSuccess')}`);
             fetchUsers();
@@ -396,7 +400,7 @@ function UserManagementTab({ t }) {
                                 </thead>
                                 <tbody className="text-sm font-medium text-slate-600 divide-y divide-slate-50">
                                     {filtered.length > 0 ? filtered.map(user => {
-                                        const isSelf = user.id === currentUserId;
+                                        const isSelf = parseInt(user.id) === currentUserId;
                                         return (
                                             <tr key={user.id} className={`transition-colors ${!user.is_active ? 'opacity-50' : 'hover:bg-slate-50/50'}`}>
                                                 <td className="px-6 py-4">
