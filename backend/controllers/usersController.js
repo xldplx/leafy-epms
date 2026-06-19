@@ -80,9 +80,7 @@ const createUser = async (req, res) => {
 // ── PUT /api/users/:id ────────────────────────────────────────────────────────
 const updateUser = async (req, res) => {
     const targetId = parseInt(req.params.id);
-
-    if (targetId === req.user.id)
-        return res.status(403).json({ success: false, message: 'Use /api/me to edit your own profile.' });
+    const isSelf   = targetId === req.user.id;
 
     const updates = {};
 
@@ -92,6 +90,9 @@ const updateUser = async (req, res) => {
         updates.username = req.body.username.trim();
     }
     if (req.body.role !== undefined) {
+        // PM tidak boleh mengubah role akunnya sendiri
+        if (isSelf)
+            return res.status(403).json({ success: false, message: 'You cannot change your own role.' });
         if (!VALID_ROLES.includes(req.body.role))
             return res.status(400).json({ success: false, message: `Role must be one of: ${VALID_ROLES.join(', ')}.` });
         updates.role = req.body.role;

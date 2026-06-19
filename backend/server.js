@@ -5,7 +5,9 @@ const express = require('express');
 const cors    = require('cors');
 const { PORT } = require('./config/constants');
 const { authenticate, authorize } = require('./middleware/auth');
+const { requestLogger, logger }   = require('./utils/logger');
 
+// Controllers
 const auth        = require('./controllers/authController');
 const projects    = require('./controllers/projectsController');
 const tasks       = require('./controllers/tasksController');
@@ -16,17 +18,24 @@ const alertsEvm   = require('./controllers/alertsEvmController');
 const users       = require('./controllers/usersController');
 const consumables = require('./controllers/consumablesController');
 const budget      = require('./controllers/budgetController');
+const tools       = require('./controllers/toolsController');
+const audit       = require('./controllers/auditController');
 
 const app = express();
+
+// ── Middleware ────────────────────────────────────────────────────────────────
 app.use(cors());
 app.use(express.json());
+app.use(requestLogger); // Structured JSON logging with requestId
 
 // ── Health ────────────────────────────────────────────────────────────────────
 app.get('/api/health', (_, res) => res.json({ ok: true, ts: new Date().toISOString() }));
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
-app.post('/api/login', auth.login);
-app.get ('/api/me',    authenticate, auth.getMe);
+app.post('/api/login',   auth.login);
+app.post('/api/refresh', auth.refreshToken);
+app.post('/api/logout',  authenticate, auth.logout);
+app.get ('/api/me',      authenticate, auth.getMe);
 
 // ── Users ─────────────────────────────────────────────────────────────────────
 app.get   ('/api/users',                authenticate, authorize('Project Manager'), users.getAllUsers);
@@ -78,10 +87,24 @@ app.get ('/api/consumable-logs', authenticate, consumables.getLogs);
 app.post('/api/consumable-logs', authenticate, authorize('Project Manager','Planner','Site Engineer'), consumables.logConsumption);
 
 // ── Budget ────────────────────────────────────────────────────────────────────
-app.get   ('/api/budget',     authenticate, budget.getBudgetByProject);
-app.post  ('/api/budget',     authenticate, authorize('Project Manager','Cost Engineer'), budget.createBudgetCategory);
-app.put   ('/api/budget/:id', authenticate, authorize('Project Manager','Cost Engineer'), budget.updateBudgetCategory);
-app.delete('/api/budget/:id', authenticate, authorize('Project Manager'), budget.deleteBudgetCategory);
+app.get   ('/api/budget',          authenticate, budget.getBudgetByProject);
+app.post  ('/api/budget',          authenticate, authorize('Project Manager','Cost Engineer'), budget.createBudgetCategory);
+app.patch ('/api/budget/sync-all', authenticate, authorize('Project Manager','Cost Engineer'), budget.syncAllActuals);
+app.put   ('/api/budget/:id',      authenticate, authorize('Project Manager','Cost Engineer'), budget.updateBudgetCategory);
+app.patch ('/api/budget/:id/sync', authenticate, authorize('Project Manager','Cost Engineer'), budget.syncActualFromTasks);
+app.delete('/api/budget/:id',      authenticate, authorize('Project Manager'), budget.deleteBudgetCategory);
+
+// ── Tools ─────────────────────────────────────────────────────────────────────
+app.get   ('/api/tools',              authenticate, tools.getAllTools);
+app.post  ('/api/tools',              authenticate, authorize('Project Manager','Planner','Site Engineer'), tools.createTool);
+app.put   ('/api/tools/:id',          authenticate, authorize('Project Manager','Planner','Site Engineer'), tools.updateTool);
+app.delete('/api/tools/:id',          authenticate, authorize('Project Manager'), tools.deleteTool);
+app.patch ('/api/tools/:id/checkout', authenticate, authorize('Project Manager','Planner','Site Engineer'), tools.checkoutTool);
+app.patch ('/api/tools/:id/return',   authenticate, authorize('Project Manager','Planner','Site Engineer'), tools.returnTool);
+
+// ── Audit Log ─────────────────────────────────────────────────────────────────
+app.get('/api/audit',      authenticate, authorize('Project Manager'), audit.getAuditLogs);
+app.get('/api/audit/meta', authenticate, authorize('Project Manager'), audit.getAuditMeta);
 
 // ── Alerts & EVM ─────────────────────────────────────────────────────────────
 app.get('/api/alerts/raw',        authenticate, alertsEvm.getAlertsRaw);
@@ -91,9 +114,71 @@ app.get('/api/alerts',            authenticate, alertsEvm.getAlerts);
 app.get('/api/evm/overview',      authenticate, alertsEvm.getPortfolioOverview);
 app.get('/api/evm/:projectId',    authenticate, alertsEvm.getProjectEvm);
 
-// ── 404 & Error ───────────────────────────────────────────────────────────────
-app.use((req, res) => res.status(404).json({ success: false, message: `${req.method} ${req.path} not found.` }));
-app.use((err, req, res, next) => { console.error(err.stack); res.status(500).json({ success: false, message: 'Server error.' }); });
+// ── 404 ───────────────────────────────────────────────────────────────────────
+app.use((req, res) => {
+    res.status(404).json({ success: false, message: `${req.method} ${req.path} not found.` });
+});
 
-app.listen(PORT, () => console.log(`🚀 EPMS backend on http://localhost:${PORT}`));
+// ── Global Error Handler ──────────────────────────────────────────────────────
+app.use((err, req, res, next) => {
+    logger.error('Unhandled error', {
+        requestId: req.requestId,
+        error:     err.message,
+        stack:     err.stack,
+        route:     req.originalUrl,
+        user:      req.user?.username || 'anonymous',
+    });
+
+    // Sentry-style capture (if SENTRY_DSN set, errors are captured via logger output)
+    if (process.env.NODE_ENV === 'production') {
+        res.status(500).json({ success: false, message: 'Internal server error.' });
+    } else {
+        res.status(500).json({ success: false, message: err.message, stack: err.stack });
+    }
+});
+
+// ── Start Server ──────────────────────────────────────────────────────────────
+const server = app.listen(PORT, () => {
+    logger.info(`🚀 EPMS backend started`, { port: PORT, env: process.env.NODE_ENV || 'development' });
+});
+
+// ── Graceful Shutdown ─────────────────────────────────────────────────────────
+let isShuttingDown = false;
+
+const shutdown = (signal) => {
+    if (isShuttingDown) return;
+    isShuttingDown = true;
+
+    logger.info(`Graceful shutdown initiated`, { signal });
+
+    // Stop accepting new connections
+    server.close((err) => {
+        if (err) {
+            logger.error('Error during graceful shutdown', { error: err.message });
+            process.exit(1);
+        }
+        logger.info('All connections drained. Shutting down.');
+        process.exit(0);
+    });
+
+    // Force shutdown after 10s if drain hangs
+    setTimeout(() => {
+        logger.warn('Forcing shutdown after timeout.');
+        process.exit(1);
+    }, 10_000);
+};
+
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT',  () => shutdown('SIGINT'));
+
+// Catch uncaught exceptions — log and exit cleanly
+process.on('uncaughtException', (err) => {
+    logger.error('Uncaught exception', { error: err.message, stack: err.stack });
+    shutdown('uncaughtException');
+});
+
+process.on('unhandledRejection', (reason) => {
+    logger.error('Unhandled promise rejection', { reason: String(reason) });
+});
+
 module.exports = app;

@@ -88,11 +88,11 @@ export default function DashboardLayout() {
     return (
         <div className="h-screen bg-[#f8fafc] flex font-sans text-slate-600 selection:bg-emerald-100 selection:text-emerald-700 overflow-hidden relative">
             {/* BACKGROUND DECORATION */}
-            <div className="absolute top-[-10%] left-[-5%] w-[40%] h-[40%] bg-emerald-100/30 blur-[120px] rounded-full z-0" />
-            <div className="absolute bottom-[-10%] right-[-5%] w-[40%] h-[40%] bg-blue-100/20 blur-[120px] rounded-full z-0" />
+            <div className="absolute top-[-10%] left-[-5%] w-[40%] h-[40%] bg-emerald-100/30 blur-[120px] rounded-full z-0 pointer-events-none" />
+            <div className="absolute bottom-[-10%] right-[-5%] w-[40%] h-[40%] bg-blue-100/20 blur-[120px] rounded-full z-0 pointer-events-none" />
 
             {/* SIDEBAR */}
-            <aside className="w-72 bg-white/70 backdrop-blur-2xl border-r border-white/40 flex flex-col h-full z-20 shadow-[4px_0_24px_rgba(0,0,0,0.02)] shrink-0">
+            <aside className="w-72 bg-white/70 backdrop-blur-2xl border-r border-white/40 flex flex-col h-full shadow-[4px_0_24px_rgba(0,0,0,0.02)] shrink-0 relative">
 
                 {/* BRAND */}
                 <div className="h-24 flex items-center px-8 border-b border-slate-100/50 shrink-0">
@@ -187,7 +187,7 @@ export default function DashboardLayout() {
             </aside>
 
             {/* MAIN CONTENT */}
-            <main className="flex-1 h-full overflow-y-auto p-8 lg:p-12 scroll-smooth">
+            <main className="flex-1 min-h-0 overflow-y-auto p-8 lg:p-12 scroll-smooth">
                 <div className="animate-in fade-in duration-300 max-w-7xl mx-auto">
                     <ActiveComponent />
                 </div>
