@@ -10,7 +10,7 @@ import { load, save } from '../../../utils/localStore';
 // Recursive WBS node component
 function WbsNode({
     node, allNodes, expandedNodes, toggleExpand, selectedWbsId, setSelectedWbsId,
-    overrides, canRename, editingId, setEditingId, onRename, taskCounts,
+    overrides, canRename, editingId, setEditingId, onRename, onDelete, taskCounts,
 }) {
     const children    = allNodes.filter(n => n.parent_id === node.id);
     const hasChildren = children.length > 0;
@@ -109,6 +109,17 @@ function WbsNode({
                                 <Pencil className="w-3 h-3" />
                             </button>
                         )}
+                        {canRename && !hasChildren && (
+                            <button
+                                type="button"
+                                onClick={(e) => { e.stopPropagation(); onDelete(node.id); }}
+                                title="Delete node"
+                                aria-label="Delete node"
+                                className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded text-slate-400 hover:text-red-600 hover:bg-red-50"
+                            >
+                                <Trash2 className="w-3 h-3" />
+                            </button>
+                        )}
                     </>
                 )}
             </div>
@@ -126,6 +137,7 @@ function WbsNode({
                     editingId={editingId}
                     setEditingId={setEditingId}
                     onRename={onRename}
+                    onDelete={onDelete}
                     taskCounts={taskCounts}
                 />
             ))}
@@ -230,7 +242,7 @@ export default function ProjectDetail({ project, onBack }) {
     const [editingTaskId, setEditingTaskId]     = useState(null);
     const [taskForm, setTaskForm] = useState({
         task_name: '', wbs_id: '', planned_start: '', planned_end: '',
-        planned_cost: '', planned_hours: '', weight: '',
+        planned_cost: '', planned_hours: '', weight: '', predecessors: [],
     });
     const [taskError, setTaskError]   = useState('');
     const [savingTask, setSavingTask] = useState(false);
@@ -264,6 +276,9 @@ export default function ProjectDetail({ project, onBack }) {
     const wbsOverrideKey = `epms.wbs_name_overrides.v1.${project.id}`;
     const [wbsOverrides, setWbsOverrides] = useState(() => load(wbsOverrideKey, {}));
     const [editingWbsId, setEditingWbsId] = useState(null);
+    const [deletingWbsId, setDeletingWbsId]   = useState(null);
+    const [deletingWbs, setDeletingWbs]       = useState(false);
+    const [deleteWbsError, setDeleteWbsError] = useState('');
 
     const userRole = localStorage.getItem('userRole');
     const canEdit  = userRole === 'Project Manager' || userRole === 'Planner';
@@ -271,14 +286,24 @@ export default function ProjectDetail({ project, onBack }) {
     const fetchData = async () => {
         setLoadingTasks(true);
         try {
-            const [taskRes, wbsRes] = await Promise.all([
+            const [taskRes, wbsRes, baselineRes] = await Promise.all([
                 apiFetch(`/projects/${project.id}/tasks`),
                 apiFetch(`/projects/${project.id}/wbs`),
+                apiFetch(`/projects/${project.id}/tasks/baseline`).catch(() => ({ success: false })),
             ]);
             const fetchedTasks = taskRes.data || [];
             setTasks(fetchedTasks);
             setWbsNodes(wbsRes.data || []);
             setIsLocked(fetchedTasks.some(t => t.is_baseline_locked));
+            // Prefer baseline metadata from the DB (name / who / when); fall back to local cache.
+            if (baselineRes?.success && baselineRes.data) {
+                const b = baselineRes.data;
+                setBaseline({
+                    name:     b.baseline_name || 'Baseline Rev.0',
+                    lockedAt: b.locked_at ? new Date(b.locked_at) : null,
+                    lockedBy: b.locked_by || null,
+                });
+            }
             const roots = (wbsRes.data || []).filter(n => n.parent_id === null);
             setExpandedNodes(new Set(roots.map(n => n.id)));
         } catch (e) { console.error(e); }
@@ -287,19 +312,46 @@ export default function ProjectDetail({ project, onBack }) {
 
     useEffect(() => { fetchData(); }, [project.id]);
 
-    const renameWbsNode = (id, newName) => {
-        setWbsOverrides(prev => {
-            const next = { ...prev };
-            const trimmed = (newName || '').trim();
-            const original = wbsNodes.find(n => n.id === id)?.name;
-            if (!trimmed || trimmed === original) {
-                delete next[id];
-            } else {
-                next[id] = trimmed;
-            }
-            save(wbsOverrideKey, next);
-            return next;
+    const renameWbsNode = async (id, newName) => {
+        const trimmed = (newName || '').trim();
+        const original = wbsNodes.find(n => n.id === id)?.name;
+        const clearOverride = () => setWbsOverrides(prev => {
+            if (!(id in prev)) return prev;
+            const next = { ...prev }; delete next[id]; save(wbsOverrideKey, next); return next;
         });
+        // Empty or unchanged → no API call; just drop any stale local override.
+        if (!trimmed || trimmed === original) { clearOverride(); return; }
+        // Optimistic update, then persist to the DB. Revert via refetch on failure.
+        setWbsNodes(prev => prev.map(n => (n.id === id ? { ...n, name: trimmed } : n)));
+        clearOverride();
+        try {
+            const res = await apiFetch(`/projects/${project.id}/wbs/${id}`, {
+                method: 'PUT', body: JSON.stringify({ name: trimmed }),
+            });
+            if (!res.success) throw new Error(res.message || 'Failed to rename WBS node.');
+        } catch (e) {
+            console.error(e);
+            fetchData(); // revert to server truth on failure
+        }
+    };
+
+    const requestDeleteWbs = (id) => { setDeleteWbsError(''); setDeletingWbsId(id); };
+
+    const handleDeleteWbs = async () => {
+        if (deletingWbsId == null) return;
+        setDeleteWbsError('');
+        setDeletingWbs(true);
+        try {
+            const res = await apiFetch(`/projects/${project.id}/wbs/${deletingWbsId}`, { method: 'DELETE' });
+            if (!res.success) { setDeleteWbsError(res.message || 'Failed to delete WBS node.'); return; }
+            if (selectedWbsId === deletingWbsId) setSelectedWbsId(null);
+            setDeletingWbsId(null);
+            fetchData();
+        } catch (e) {
+            setDeleteWbsError(e.message || 'Server error.');
+        } finally {
+            setDeletingWbs(false);
+        }
     };
 
     // Close modals on Escape
@@ -311,6 +363,7 @@ export default function ProjectDetail({ project, onBack }) {
                 setIsLockModalOpen(false);
                 setIsWbsModalOpen(false);
                 setDeletingTaskId(null);
+                setDeletingWbsId(null);
             }
         };
         document.addEventListener('keydown', handler);
@@ -319,8 +372,15 @@ export default function ProjectDetail({ project, onBack }) {
 
     const resetTaskForm = () => setTaskForm({
         task_name: '', wbs_id: '', planned_start: '', planned_end: '',
-        planned_cost: '', planned_hours: '', weight: '',
+        planned_cost: '', planned_hours: '', weight: '', predecessors: [],
     });
+
+    const togglePredecessor = (id) => setTaskForm(f => ({
+        ...f,
+        predecessors: f.predecessors.includes(id)
+            ? f.predecessors.filter(p => p !== id)
+            : [...f.predecessors, id],
+    }));
 
     const closeTaskModal = () => {
         setIsTaskModalOpen(false);
@@ -336,7 +396,7 @@ export default function ProjectDetail({ project, onBack }) {
         const preset = selectedWbsId && leafNodes.some(n => n.id === selectedWbsId) ? String(selectedWbsId) : '';
         setTaskForm({
             task_name: '', wbs_id: preset, planned_start: '', planned_end: '',
-            planned_cost: '', planned_hours: '', weight: '',
+            planned_cost: '', planned_hours: '', weight: '', predecessors: [],
         });
         setIsTaskModalOpen(true);
     };
@@ -352,6 +412,7 @@ export default function ProjectDetail({ project, onBack }) {
             planned_cost:  task.planned_cost  != null ? String(task.planned_cost)  : '',
             planned_hours: task.planned_hours != null ? String(task.planned_hours) : '',
             weight:        task.weight        != null ? String(task.weight)        : '',
+            predecessors:  Array.isArray(task.predecessors) ? task.predecessors : [],
         });
         setIsTaskModalOpen(true);
     };
@@ -368,6 +429,14 @@ export default function ProjectDetail({ project, onBack }) {
 
     const leafNodes = wbsNodes.filter(n => !wbsNodes.some(m => m.parent_id === n.id));
     const rootNodes = wbsNodes.filter(n => n.parent_id === null);
+
+    // Predecessor candidates = every other task in the project (exclude self when editing).
+    const otherTasks = tasks.filter(t => t.id !== editingTaskId);
+    // Auto-computed task duration shown read-only in the modal (same formula sent to the API).
+    const taskDurationDays = (taskForm.planned_start && taskForm.planned_end
+        && new Date(taskForm.planned_end) >= new Date(taskForm.planned_start))
+        ? Math.round((new Date(taskForm.planned_end) - new Date(taskForm.planned_start)) / (1000 * 60 * 60 * 24))
+        : null;
 
     const getDescendantIds = (nodeId, visited = new Set()) => {
         if (visited.has(nodeId)) return [];
@@ -478,6 +547,7 @@ export default function ProjectDetail({ project, onBack }) {
                 planned_cost:     parseFloat(taskForm.planned_cost)  || 0,
                 planned_hours:    parseFloat(taskForm.planned_hours) || 0,
                 weight:           parseFloat(taskForm.weight)        || 0,
+                predecessors:     taskForm.predecessors || [],
             });
             const res = editingTaskId
                 ? await apiFetch(`/tasks/${editingTaskId}`,             { method: 'PUT',  body })
@@ -513,6 +583,7 @@ export default function ProjectDetail({ project, onBack }) {
     };
 
     const deletingTaskName = tasks.find(t => t.id === deletingTaskId)?.task_name;
+    const deletingWbsNode  = wbsNodes.find(n => n.id === deletingWbsId);
 
     // ── Lock Baseline ─────────────────────────────────────────────────────────
     const handleLockBaseline = async () => {
@@ -526,7 +597,7 @@ export default function ProjectDetail({ project, onBack }) {
             });
             if (!res.success) { setLockError(res.message || 'Failed to lock baseline.'); return; }
             const lockedAt = new Date();
-            setBaseline({ name, lockedAt });
+            setBaseline({ name, lockedAt, lockedBy: localStorage.getItem('userName') || null });
             save(baselineCacheKey, { name, lockedAt: lockedAt.toISOString() });
             setIsLocked(true);
             setIsLockModalOpen(false);
@@ -627,7 +698,9 @@ export default function ProjectDetail({ project, onBack }) {
                             <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700/80">Active Baseline</span>
                             <span className="text-sm font-bold text-emerald-800">{baseline.name}</span>
                             <span className="text-[11px] text-emerald-700/80">
-                                {tasks.length} tasks · locked {baseline.lockedAt.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                {tasks.length} tasks
+                                {baseline.lockedBy ? ` · by ${baseline.lockedBy}` : ''}
+                                {baseline.lockedAt ? ` · locked ${baseline.lockedAt.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}` : ''}
                             </span>
                         </div>
                     </div>
@@ -692,6 +765,7 @@ export default function ProjectDetail({ project, onBack }) {
                                     editingId={editingWbsId}
                                     setEditingId={setEditingWbsId}
                                     onRename={renameWbsNode}
+                                    onDelete={requestDeleteWbs}
                                     taskCounts={taskCounts}
                                 />
                             ))}
@@ -982,6 +1056,17 @@ export default function ProjectDetail({ project, onBack }) {
                                 </div>
                             </div>
 
+                            {(taskForm.planned_start && taskForm.planned_end) && (
+                                <div className="flex items-center gap-2 text-xs text-slate-500 ml-1">
+                                    <Clock className="w-3.5 h-3.5 text-slate-400" />
+                                    Duration:
+                                    <span className="font-bold text-slate-700">
+                                        {taskDurationDays != null ? `${taskDurationDays} day${taskDurationDays === 1 ? '' : 's'}` : '—'}
+                                    </span>
+                                    <span className="text-slate-300">(auto)</span>
+                                </div>
+                            )}
+
                             <div className="grid grid-cols-3 gap-3">
                                 <div className="space-y-1">
                                     <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider ml-1">Cost (IDR)</label>
@@ -1008,6 +1093,31 @@ export default function ProjectDetail({ project, onBack }) {
                                     />
                                 </div>
                             </div>
+
+                            {otherTasks.length > 0 && (
+                                <div className="space-y-1">
+                                    <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider ml-1">
+                                        Predecessors <span className="text-slate-300">(optional)</span>
+                                    </label>
+                                    <div className="max-h-32 overflow-y-auto border border-slate-200 rounded-lg p-2 bg-white/50 space-y-0.5">
+                                        {otherTasks.map(t => (
+                                            <label key={t.id} className="flex items-center gap-2 px-2 py-1 rounded hover:bg-slate-50 cursor-pointer text-sm">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={taskForm.predecessors.includes(t.id)}
+                                                    onChange={() => togglePredecessor(t.id)}
+                                                    className="accent-emerald-600"
+                                                />
+                                                <span className="font-mono text-[10px] text-slate-400 shrink-0">{t.wbs_code}</span>
+                                                <span className="truncate text-slate-700">{t.task_name}</span>
+                                            </label>
+                                        ))}
+                                    </div>
+                                    {taskForm.predecessors.length > 0 && (
+                                        <p className="text-[11px] text-slate-400 ml-1">{taskForm.predecessors.length} selected — drives CPM in Analytics</p>
+                                    )}
+                                </div>
+                            )}
 
                             <div className="flex gap-3 pt-4">
                                 <button type="button" onClick={closeTaskModal}
@@ -1057,6 +1167,42 @@ export default function ProjectDetail({ project, onBack }) {
                                 {deletingTask
                                     ? <><Loader2 className="w-4 h-4 animate-spin" /> Deleting...</>
                                     : <><Trash2 className="w-4 h-4" /> Delete</>}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ── DELETE WBS NODE CONFIRM MODAL ──────────────────────────────── */}
+            {deletingWbsId !== null && (
+                <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50" onClick={() => !deletingWbs && setDeletingWbsId(null)}>
+                    <div role="dialog" aria-label="Delete WBS node" className="bg-white rounded-3xl p-8 w-full max-w-md shadow-2xl border border-slate-100 animate-in fade-in duration-200" onClick={e => e.stopPropagation()}>
+                        <div className="flex items-center gap-3 mb-2">
+                            <div className="p-2.5 bg-red-50 rounded-xl text-red-600"><AlertTriangle className="w-5 h-5" /></div>
+                            <h3 className="text-xl font-bold text-slate-800">Delete WBS Node</h3>
+                        </div>
+                        <p className="text-sm text-slate-500 mb-6 leading-relaxed">
+                            Permanently remove{' '}
+                            <strong className="text-slate-700">
+                                {deletingWbsNode ? `${deletingWbsNode.wbs_code} — ${wbsOverrides[deletingWbsNode.id] || deletingWbsNode.name}` : 'this node'}
+                            </strong>?
+                            {taskCounts[deletingWbsId] > 0 && (
+                                <span className="block mt-2 text-amber-600 font-semibold">This node has {taskCounts[deletingWbsId]} task(s). Reassign or delete them first.</span>
+                            )}
+                        </p>
+                        {deleteWbsError && (
+                            <div className="p-3 mb-4 rounded-lg bg-red-50/80 border border-red-100 text-red-600 text-xs text-center font-bold uppercase">
+                                {deleteWbsError}
+                            </div>
+                        )}
+                        <div className="flex gap-3">
+                            <button onClick={() => setDeletingWbsId(null)} disabled={deletingWbs}
+                                className="flex-1 px-6 py-3 bg-slate-100 text-slate-600 rounded-xl font-semibold hover:bg-slate-200 transition-all disabled:opacity-60">
+                                Cancel
+                            </button>
+                            <button onClick={handleDeleteWbs} disabled={deletingWbs}
+                                className="flex-1 px-6 py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl font-semibold shadow-lg shadow-red-100 transition-all flex items-center justify-center gap-2 disabled:opacity-60">
+                                {deletingWbs ? <><Loader2 className="w-4 h-4 animate-spin" /> Deleting...</> : <><Trash2 className="w-4 h-4" /> Delete</>}
                             </button>
                         </div>
                     </div>
