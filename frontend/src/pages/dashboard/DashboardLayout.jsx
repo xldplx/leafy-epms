@@ -28,6 +28,7 @@ export default function DashboardLayout() {
     const { t } = useTranslation();
 
     const [activePage, setActivePage]     = useState('Overview');
+    const [pendingProjectId, setPendingProjectId] = useState(null);
     const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
     const menuRef = useRef(null);
 
@@ -37,6 +38,12 @@ export default function DashboardLayout() {
     const handleLogout = () => {
         localStorage.clear();
         navigate('/login');
+    };
+
+    // Cross-page navigation (e.g. an Alert deep-linking into its project).
+    const navigateTo = (page, projectId = null) => {
+        if (projectId != null) setPendingProjectId(projectId);
+        setActivePage(page);
     };
 
     useEffect(() => {
@@ -191,7 +198,11 @@ export default function DashboardLayout() {
             <main className="flex-1 min-h-0 overflow-y-auto p-8 lg:p-12 scroll-smooth">
                 <div className="animate-in fade-in duration-300 max-w-7xl mx-auto">
                     <ErrorBoundary key={activePage}>
-                        <ActiveComponent />
+                        <ActiveComponent
+                            onNavigate={navigateTo}
+                            initialProjectId={activePage === 'Projects' ? pendingProjectId : null}
+                            onConsumeInitial={() => setPendingProjectId(null)}
+                        />
                     </ErrorBoundary>
                 </div>
             </main>

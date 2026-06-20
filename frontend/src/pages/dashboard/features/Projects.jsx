@@ -9,7 +9,15 @@ import { recordAudit } from '../../../utils/auditLog';
 import ErrorState from '../../../components/ErrorState';
 import { apiFetch } from '../../../utils/api';
 
-export default function Projects() {
+// Status-driven top accent so the portfolio scans by health at a glance.
+const STATUS_ACCENT = {
+    active:    'border-t-emerald-400',
+    planning:  'border-t-blue-400',
+    completed: 'border-t-slate-400',
+    on_hold:   'border-t-amber-400',
+};
+
+export default function Projects({ initialProjectId = null, onConsumeInitial }) {
     // Real data from API — replaces seedProjects, dummyProjectsEvm, dummyTaskData
     const [projects, setProjects]     = useState([]);
     const [projectEvm, setProjectEvm] = useState({});
@@ -69,6 +77,18 @@ export default function Projects() {
     };
 
     useEffect(() => { fetchProjects(); }, []);
+
+    // Deep-link from an Alert: once projects load, open the requested one, then
+    // tell the parent to clear the request so manual nav still shows the list.
+    useEffect(() => {
+        if (initialProjectId == null || projects.length === 0) return;
+        const target = projects.find(p => Number(p.id) === Number(initialProjectId));
+        if (target) {
+            setSelectedProject(target);
+            onConsumeInitial?.();
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [initialProjectId, projects]);
 
     // Close modal on Escape key
     useEffect(() => {
@@ -277,7 +297,7 @@ export default function Projects() {
                         <div
                             key={project.id}
                             onClick={() => setSelectedProject(project)}
-                            className="group bg-white p-6 rounded-3xl border border-slate-100 shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1 cursor-pointer"
+                            className={`group bg-white p-6 rounded-3xl border border-slate-100 border-t-4 ${STATUS_ACCENT[project.status] || STATUS_ACCENT.planning} shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1 cursor-pointer`}
                         >
                             {/* Top Row: Icon + Status */}
                             <div className="flex justify-between items-start mb-4">

@@ -283,6 +283,7 @@ export const translations = {
         // ── Alerts Page ───────────────────────────────────────────────────────
         'alerts.title':             'Early Warning Alerts',
         'alerts.subtitle':          'Real-time threshold monitoring across all projects',
+        'alerts.openProject':       'Open project',
         'alerts.allHealthy':        'All projects are within configured thresholds',
         'alerts.activeAlerts':      'Active Alerts',
         'alerts.alert':             'Alert',
@@ -796,6 +797,7 @@ export const translations = {
         // ── Halaman Peringatan ────────────────────────────────────────────────
         'alerts.title':             'Peringatan Dini',
         'alerts.subtitle':          'Pemantauan ambang batas real-time di seluruh proyek',
+        'alerts.openProject':       'Buka proyek',
         'alerts.allHealthy':        'Semua proyek dalam ambang batas yang dikonfigurasi',
         'alerts.activeAlerts':      'Peringatan Aktif',
         'alerts.alert':             'Peringatan',

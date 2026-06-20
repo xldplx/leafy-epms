@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
-import { Bell, AlertTriangle, CheckCircle2, Settings } from 'lucide-react';
+import { Bell, AlertTriangle, CheckCircle2, Settings, ChevronRight } from 'lucide-react';
 import { computeAlerts } from '../../../utils/evmHelpers';
 import { INPUT_CLASS } from '../../../utils/uiConstants';
 import { apiFetch } from '../../../utils/api';
 import { useTranslation } from '../../../utils/i18n';
 
-export default function Alerts() {
+export default function Alerts({ onNavigate }) {
     const { t } = useTranslation();
     const [thresholds, setThresholds] = useState({ cpi_amber: '1.00', cpi_red: '0.90', spi_amber: '1.00', spi_red: '0.90' });
     const [thresholdToast, setThresholdToast] = useState(false);
@@ -132,7 +132,13 @@ export default function Alerts() {
             {alerts.length > 0 ? (
                 <div className="space-y-3">
                     {[...alerts].sort((a, b) => (b.severity === 'critical' ? 1 : 0) - (a.severity === 'critical' ? 1 : 0) || a.project.project_name.localeCompare(b.project.project_name)).map(alert => (
-                        <div key={alert.id} className={`bg-white rounded-3xl border p-6 flex items-start gap-4 ${alert.severity === 'critical' ? 'border-red-100' : 'border-amber-100'}`}>
+                        <div key={alert.id}
+                            onClick={() => alert.project?.id != null && onNavigate?.('Projects', alert.project.id)}
+                            role="button" tabIndex={0}
+                            onKeyDown={(e) => { if ((e.key === 'Enter' || e.key === ' ') && alert.project?.id != null) { e.preventDefault(); onNavigate?.('Projects', alert.project.id); } }}
+                            title={t('alerts.openProject')}
+                            className={`group bg-white rounded-3xl border p-6 flex items-start gap-4 cursor-pointer transition-all hover:shadow-md ${alert.severity === 'critical' ? 'border-red-100 hover:border-red-200' : 'border-amber-100 hover:border-amber-200'}`}
+                        >
                             <div className={`p-2.5 rounded-xl shrink-0 ${alert.severity === 'critical' ? 'bg-red-50 text-red-600' : 'bg-amber-50 text-amber-600'}`}>
                                 <AlertTriangle className="w-5 h-5" />
                             </div>
@@ -142,9 +148,12 @@ export default function Alerts() {
                                         <p className="font-bold text-slate-800">{alert.project.project_name}</p>
                                         <p className="font-mono text-xs text-slate-400 mt-0.5">{alert.project.project_code}</p>
                                     </div>
-                                    <span className={`text-[10px] font-bold uppercase px-2.5 py-1 rounded-lg border shrink-0 ${alert.severity === 'critical' ? 'bg-red-50 text-red-600 border-red-100' : 'bg-amber-50 text-amber-600 border-amber-100'}`}>
-                                        {alert.severity === 'critical' ? t('alerts.critical') : t('alerts.atRisk')}
-                                    </span>
+                                    <div className="flex items-center gap-2 shrink-0">
+                                        <span className={`text-[10px] font-bold uppercase px-2.5 py-1 rounded-lg border ${alert.severity === 'critical' ? 'bg-red-50 text-red-600 border-red-100' : 'bg-amber-50 text-amber-600 border-amber-100'}`}>
+                                            {alert.severity === 'critical' ? t('alerts.critical') : t('alerts.atRisk')}
+                                        </span>
+                                        <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-emerald-500 transition-colors" />
+                                    </div>
                                 </div>
                                 <p className="text-sm text-slate-500 mt-2 leading-relaxed font-medium">{alert.recommendation}</p>
                                 {alert.affectedTasks?.length > 0 && (
