@@ -1,11 +1,12 @@
 import { useState, useEffect, useMemo } from 'react';
 import {
     Plus, Wallet, X, Loader2, CheckCircle2, TrendingUp, TrendingDown,
-    DollarSign, Activity, Pencil, Trash2, AlertTriangle, RefreshCw, Link2
+    DollarSign, Activity, Pencil, Trash2, AlertTriangle, RefreshCw, Link2, Download
 } from 'lucide-react';
 import { formatCurrency } from '../../../utils/evmHelpers';
 import { INPUT_CLASS } from '../../../utils/uiConstants';
 import { apiFetch } from '../../../utils/api';
+import { exportWorkbook, exportFilename } from '../../../utils/excelExport';
 import { useTranslation } from '../../../utils/i18n';
 
 const VALID_TYPES = ['CAPEX', 'OPEX'];
@@ -160,6 +161,19 @@ export default function Budget() {
         finally { setSyncingAll(false); }
     };
 
+    // ── Export ────────────────────────────────────────────────────────────────
+    const handleExport = () => {
+        const rows = categories.map((c) => ({
+            'Category':      c.category,
+            'Type':          c.type,
+            'WBS':           c.wbs?.wbs_code || '',
+            'Planned (IDR)': Number(c.planned) || 0,
+            'Actual (IDR)':  Number(c.actual) || 0,
+            'Variance':      (Number(c.planned) || 0) - (Number(c.actual) || 0),
+        }));
+        exportWorkbook(exportFilename('Budget', selectedProject?.project_code), [{ name: 'Budget', rows }]);
+    };
+
     // ── Render row ────────────────────────────────────────────────────────────
     const renderRow = (row) => {
         const variance = (Number(row.planned) || 0) - (Number(row.actual) || 0);
@@ -246,6 +260,13 @@ export default function Budget() {
                     <p className="text-slate-500 mt-1">{t('budget.subtitle')}</p>
                 </div>
                 <div className="flex items-center gap-3">
+                    <button
+                        onClick={handleExport}
+                        disabled={categories.length === 0}
+                        className="text-sm font-semibold px-4 py-2.5 rounded-xl transition-all flex items-center gap-2 border shadow-sm text-emerald-600 bg-emerald-50 border-emerald-100 hover:bg-emerald-600 hover:text-white hover:border-emerald-600 hover:shadow-lg hover:shadow-emerald-200 hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-40 disabled:pointer-events-none"
+                    >
+                        <Download className="w-4 h-4" /> {t('common.export')}
+                    </button>
                     {canEdit && selectedProjectId && categories.length > 0 && (
                         <button onClick={handleSyncAll} disabled={syncingAll}
                             className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-sm border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 transition-all disabled:opacity-60">

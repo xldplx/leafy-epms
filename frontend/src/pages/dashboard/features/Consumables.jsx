@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Package, Plus, Search, X, Loader2, CheckCircle2, AlertTriangle, Droplet, Activity, Layers, History, ChevronDown, ChevronRight, Trash2 } from 'lucide-react';
+import { Package, Plus, Search, X, Loader2, CheckCircle2, AlertTriangle, Droplet, Activity, Layers, History, ChevronDown, ChevronRight, Trash2, Download } from 'lucide-react';
 import { apiFetch } from '../../../utils/api';
+import { exportWorkbook, exportFilename } from '../../../utils/excelExport';
 import { useTranslation } from '../../../utils/i18n';
 
 const CATEGORIES = ['Fuel', 'Lubricant', 'Welding', 'Cleaning', 'Other'];
@@ -96,6 +97,29 @@ export default function Consumables() {
     const handleProjectChange = (e) => {
         setSelectedProjectId(e.target.value);
         fetchLogs(e.target.value);
+    };
+
+    // ── Excel export ───────────────────────────────────────────────────────────
+    const handleExport = () => {
+        const itemRows = items.map(it => ({
+            Name:                it.name,
+            Category:            it.category,
+            Unit:                it.unit,
+            'Current Stock':     it.current_stock,
+            'Reorder Threshold': it.reorder_threshold,
+            'Last Used':         it.last_used_at,
+        }));
+        const logRows = logs.map(l => ({
+            Date:       l.date,
+            Consumable: l.consumables?.name || `Item #${l.item_id}`,
+            Quantity:   l.qty,
+            Unit:       l.consumables?.unit || '',
+            Note:       l.note,
+        }));
+        exportWorkbook(exportFilename('Consumables'), [
+            { name: 'Consumables', rows: itemRows },
+            { name: 'Usage Logs', rows: logRows },
+        ]);
     };
 
     // ── KPI ──────────────────────────────────────────────────────────────────
@@ -269,11 +293,17 @@ export default function Consumables() {
                         </button>
                     ))}
                 </div>
-                <div className="relative">
-                    <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                    <input type="text" placeholder={t('consumables.searchPlaceholder')} value={search} onChange={e => setSearch(e.target.value)}
-                        className="text-sm bg-white border border-slate-200 rounded-xl pl-9 pr-9 py-2 outline-none focus:border-emerald-500 transition-colors min-w-[240px] shadow-sm" />
-                    {search && <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"><X className="w-3.5 h-3.5" /></button>}
+                <div className="flex items-center gap-3">
+                    <div className="relative">
+                        <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                        <input type="text" placeholder={t('consumables.searchPlaceholder')} value={search} onChange={e => setSearch(e.target.value)}
+                            className="text-sm bg-white border border-slate-200 rounded-xl pl-9 pr-9 py-2 outline-none focus:border-emerald-500 transition-colors min-w-[240px] shadow-sm" />
+                        {search && <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"><X className="w-3.5 h-3.5" /></button>}
+                    </div>
+                    <button onClick={handleExport} disabled={items.length === 0}
+                        className="text-sm font-semibold px-4 py-2 rounded-xl transition-all flex items-center gap-2 border shadow-sm text-emerald-600 bg-emerald-50 border-emerald-100 hover:bg-emerald-600 hover:text-white hover:border-emerald-600 hover:shadow-lg hover:shadow-emerald-200 hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-40 disabled:pointer-events-none">
+                        <Download className="w-4 h-4" /> Export
+                    </button>
                 </div>
             </div>
 

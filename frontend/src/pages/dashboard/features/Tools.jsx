@@ -1,10 +1,11 @@
 import { useState, useEffect, useMemo } from 'react';
 import {
     Plus, Hammer, Search, X, Loader2, CheckCircle2, Wrench,
-    AlertTriangle, Package, RotateCcw, Pencil, Trash2
+    AlertTriangle, Package, RotateCcw, Pencil, Trash2, Download
 } from 'lucide-react';
 import { apiFetch } from '../../../utils/api';
 import { useTranslation } from '../../../utils/i18n';
+import { exportWorkbook, exportFilename } from '../../../utils/excelExport';
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
 const fmtDate  = (d) => d ? new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
@@ -181,6 +182,19 @@ export default function Tools() {
         finally { setDeletingTool(false); }
     };
 
+    // ── Export ────────────────────────────────────────────────────────────────
+    const handleExport = () => {
+        const rows = tools.map(tl => ({
+            Name:            tl.name,
+            Category:        tl.category,
+            Condition:       tl.condition,
+            Status:          tl.status,
+            'Assigned To':   tl.assigned_to,
+            'Checkout Date': tl.checkout_date,
+        }));
+        exportWorkbook(exportFilename('Tools'), [{ name: 'Tools', rows }]);
+    };
+
     const conditionLabel = (c) => c === 'good' ? t('tools.conditionGood') : c === 'fair' ? t('tools.conditionFair') : t('tools.conditionRepair');
     const inputCls = "w-full px-4 py-3 bg-white/50 border border-slate-200 rounded-lg outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all text-slate-700 text-sm";
 
@@ -202,12 +216,18 @@ export default function Tools() {
                     <h2 className="text-3xl font-bold text-slate-800 tracking-tight">{t('tools.title')}</h2>
                     <p className="text-slate-500 mt-1">{t('tools.subtitle')}</p>
                 </div>
-                {canEdit && (
-                    <button onClick={openAddModal}
-                        className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2.5 rounded-xl font-semibold shadow-lg shadow-emerald-200 transition-all transform hover:-translate-y-0.5 flex items-center gap-2">
-                        <Plus className="w-5 h-5" /> {t('tools.addTool')}
+                <div className="flex items-center gap-3">
+                    <button onClick={handleExport} disabled={tools.length === 0}
+                        className="bg-white hover:bg-slate-50 text-slate-600 border border-slate-200 px-6 py-2.5 rounded-xl font-semibold shadow-sm transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
+                        <Download className="w-5 h-5" /> {t('common.export')}
                     </button>
-                )}
+                    {canEdit && (
+                        <button onClick={openAddModal}
+                            className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2.5 rounded-xl font-semibold shadow-lg shadow-emerald-200 transition-all transform hover:-translate-y-0.5 flex items-center gap-2">
+                            <Plus className="w-5 h-5" /> {t('tools.addTool')}
+                        </button>
+                    )}
+                </div>
             </div>
 
             {/* KPI */}
