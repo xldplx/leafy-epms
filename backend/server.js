@@ -56,10 +56,12 @@ app.delete('/api/projects/:id', authenticate, authorize('Project Manager'), proj
 // ── WBS ───────────────────────────────────────────────────────────────────────
 app.get   ('/api/projects/:projectId/wbs',     authenticate, wbs.getWbsByProject);
 app.post  ('/api/projects/:projectId/wbs',     authenticate, authorize('Project Manager','Planner'), wbs.createWbsNode);
+app.put   ('/api/projects/:projectId/wbs/:id', authenticate, authorize('Project Manager','Planner'), wbs.updateWbsNode);
 app.delete('/api/projects/:projectId/wbs/:id', authenticate, authorize('Project Manager'), wbs.deleteWbsNode);
 
 // ── Tasks ─────────────────────────────────────────────────────────────────────
 app.get   ('/api/projects/:projectId/tasks',          authenticate, tasks.getTasksByProject);
+app.get   ('/api/projects/:projectId/tasks/baseline', authenticate, tasks.getBaselineInfo);
 app.post  ('/api/projects/:projectId/tasks',          authenticate, authorize('Project Manager','Planner'), tasks.createTask);
 app.post  ('/api/projects/:projectId/tasks/import',   authenticate, authorize('Project Manager','Planner'), tasks.bulkImportTasks);
 app.post  ('/api/projects/:projectId/tasks/baseline', authenticate, authorize('Project Manager'), tasks.lockBaseline);
