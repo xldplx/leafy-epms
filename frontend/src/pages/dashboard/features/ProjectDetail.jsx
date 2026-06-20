@@ -21,8 +21,6 @@ function WbsNode({
     const isEditing   = editingId === node.id;
     const [draft, setDraft] = useState(displayName);
 
-    useEffect(() => { if (isEditing) setDraft(displayName); }, [isEditing, displayName]);
-
     const commit = () => {
         const trimmed = draft.trim();
         // Reject empty submissions but allow reverting to original by clearing.
@@ -101,7 +99,7 @@ function WbsNode({
                         {canRename && (
                             <button
                                 type="button"
-                                onClick={(e) => { e.stopPropagation(); setEditingId(node.id); }}
+                                onClick={(e) => { e.stopPropagation(); setDraft(displayName); setEditingId(node.id); }}
                                 title="Rename"
                                 aria-label="Rename node"
                                 className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded text-slate-400 hover:text-emerald-600 hover:bg-emerald-50"
@@ -310,6 +308,7 @@ export default function ProjectDetail({ project, onBack }) {
         finally { setLoadingTasks(false); }
     };
 
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- refetch only when the project changes
     useEffect(() => { fetchData(); }, [project.id]);
 
     const renameWbsNode = async (id, newName) => {
