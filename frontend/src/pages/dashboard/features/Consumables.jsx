@@ -16,6 +16,7 @@ export default function Consumables() {
     const [logs, setLogs]                           = useState([]);
     const [loadingItems, setLoadingItems]           = useState(true);
     const [loadingLogs, setLoadingLogs]             = useState(false);
+    const [logsError, setLogsError]                 = useState('');
     const [projects, setProjects]                   = useState([]);
     const [isLoadingProjects, setIsLoadingProjects] = useState(true);
     const [selectedProjectId, setSelectedProjectId] = useState('');
@@ -63,10 +64,11 @@ export default function Consumables() {
     const fetchLogs = async (projectId) => {
         if (!projectId) { setLogs([]); return; }
         setLoadingLogs(true);
+        setLogsError('');
         try {
             const res = await apiFetch(`/consumable-logs?project_id=${projectId}`);
             setLogs(res.data || []);
-        } catch (e) { console.error(e); }
+        } catch (e) { setLogsError(e.message || 'Failed to load usage logs.'); }
         finally { setLoadingLogs(false); }
     };
 
@@ -400,6 +402,12 @@ export default function Consumables() {
                         {loadingLogs ? (
                             <div className="flex items-center justify-center py-8 gap-2 text-slate-400">
                                 <Loader2 className="w-5 h-5 animate-spin" />
+                            </div>
+                        ) : logsError ? (
+                            <div className="p-12 flex flex-col items-center justify-center gap-2 text-slate-400">
+                                <AlertTriangle className="w-10 h-10 text-red-300" />
+                                <p className="text-sm">{logsError}</p>
+                                <button onClick={() => fetchLogs(selectedProjectId)} className="text-xs font-bold text-emerald-600 hover:text-emerald-700">{t('common.retry')}</button>
                             </div>
                         ) : logs.length > 0 ? (
                             <table className="w-full text-left border-collapse">

@@ -630,9 +630,13 @@ const summarizeDetail = (detail) => {
 };
 
 function AuditLogTab({ t }) {
+    const PAGE = 50;
     const [logs, setLogs]       = useState([]);
+    const [total, setTotal]     = useState(0);
+    const [offset, setOffset]   = useState(0);
     const [meta, setMeta]       = useState({ usernames: [], actions: [], resource_types: [] });
     const [loading, setLoading] = useState(true);
+    const [loadingMore, setLoadingMore] = useState(false);
     const [error, setError]     = useState('');
 
     const [fUser, setFUser]         = useState('');
@@ -641,23 +645,46 @@ function AuditLogTab({ t }) {
     const [fFrom, setFFrom]         = useState('');
     const [fTo, setFTo]             = useState('');
 
+    const buildParams = (nextOffset, limit = PAGE) => {
+        const params = new URLSearchParams();
+        if (fUser)     params.set('username', fUser);
+        if (fAction)   params.set('action', fAction);
+        if (fResource) params.set('resource_type', fResource);
+        if (fFrom)     params.set('date_from', fFrom);
+        if (fTo)       params.set('date_to', fTo);
+        params.set('limit', String(limit));
+        params.set('offset', String(nextOffset));
+        return params.toString();
+    };
+
+    // Resets to the first page — used on mount, filter change, and retry.
     const fetchLogs = async () => {
         setLoading(true);
         setError('');
         try {
-            const params = new URLSearchParams();
-            if (fUser)     params.set('username', fUser);
-            if (fAction)   params.set('action', fAction);
-            if (fResource) params.set('resource_type', fResource);
-            if (fFrom)     params.set('date_from', fFrom);
-            if (fTo)       params.set('date_to', fTo);
-            const qs = params.toString();
-            const res = await apiFetch(`/audit${qs ? `?${qs}` : ''}`);
+            const res = await apiFetch(`/audit?${buildParams(0)}`);
             setLogs(res.data || []);
+            setTotal(res.total || 0);
+            setOffset(0);
         } catch (e) {
             setError(e.message || 'Failed to load audit log.');
         } finally {
             setLoading(false);
+        }
+    };
+
+    const loadMore = async () => {
+        const next = offset + PAGE;
+        setLoadingMore(true);
+        try {
+            const res = await apiFetch(`/audit?${buildParams(next)}`);
+            setLogs(prev => [...prev, ...(res.data || [])]);
+            setTotal(res.total || 0);
+            setOffset(next);
+        } catch (e) {
+            setError(e.message || 'Failed to load more entries.');
+        } finally {
+            setLoadingMore(false);
         }
     };
 
@@ -673,8 +700,14 @@ function AuditLogTab({ t }) {
     const clearFilters = () => { setFUser(''); setFAction(''); setFResource(''); setFFrom(''); setFTo(''); };
     const hasFilters = fUser || fAction || fResource || fFrom || fTo;
 
-    const handleExport = () => {
-        const rows = logs.map(l => ({
+    const handleExport = async () => {
+        // Export all matching entries (up to the backend cap), not just the loaded page.
+        let source = logs;
+        try {
+            const res = await apiFetch(`/audit?${buildParams(0, 500)}`);
+            if (res?.data) source = res.data;
+        } catch { /* fall back to currently loaded rows */ }
+        const rows = source.map(l => ({
             Time:          fmtDateTime(l.created_at),
             User:          l.username,
             Action:        l.action,
@@ -780,7 +813,14 @@ function AuditLogTab({ t }) {
                             </table>
                         </div>
                         <div className="bg-slate-50 px-6 py-3 border-t border-slate-100 flex justify-between items-center">
-                            <span className="text-xs text-slate-400">{t('common.showing')} {logs.length}</span>
+                            <span className="text-xs text-slate-400">{t('common.showing')} {logs.length} {t('common.of')} {total}</span>
+                            {logs.length < total && (
+                                <button onClick={loadMore} disabled={loadingMore}
+                                    className="text-xs font-bold text-emerald-600 hover:text-emerald-700 disabled:opacity-50 flex items-center gap-1.5">
+                                    {loadingMore && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                                    {t('common.loadMore')}
+                                </button>
+                            )}
                         </div>
                     </>
                 )}
