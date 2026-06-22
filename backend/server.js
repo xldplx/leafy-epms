@@ -1,5 +1,8 @@
 const path = require('path');
-require('dotenv').config({ path: path.join(__dirname, '.env') });
+// Only look for a local .env file if we aren't running inside Vercel production
+if (!process.env.VERCEL) {
+    require('dotenv').config({ path: path.join(__dirname, '.env') });
+}
 
 const express = require('express');
 const cors    = require('cors');
@@ -26,7 +29,28 @@ const equipment   = require('./controllers/equipmentController');
 const app = express();
 
 // ── Middleware ────────────────────────────────────────────────────────────────
-app.use(cors());
+const allowedOrigins = [
+    'https://leafy-epms.vercel.app',
+    'http://localhost:5173', // Vite standard local port
+    'http://localhost:3000'
+];
+
+app.use(cors({
+    origin: function (origin, callback) {
+        // Allow server-to-server requests or REST tools like Postman (no origin)
+        if (!origin) return callback(null, true);
+        
+        if (allowedOrigins.indexOf(origin) !== -1) {
+            callback(null, true);
+        } else {
+            callback(new Error('Not allowed by CORS'));
+        }
+    },
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization']
+}));
+
 app.use(express.json());
 app.use(requestLogger); // Structured JSON logging with requestId
 
@@ -40,7 +64,7 @@ app.post('/api/logout',  authenticate, auth.logout);
 app.get ('/api/me',      authenticate, auth.getMe);
 
 // ── Users ─────────────────────────────────────────────────────────────────────
-app.get   ('/api/users',                authenticate, authorize('Project Manager'), users.getAllUsers);
+app.get   ('/api/users',            authenticate, authorize('Project Manager'), users.getAllUsers);
 app.get   ('/api/users/:id',            authenticate, authorize('Project Manager'), users.getUserById);
 app.post  ('/api/users',                authenticate, authorize('Project Manager'), users.createUser);
 app.put   ('/api/users/:id',            authenticate, authorize('Project Manager'), users.updateUser);
@@ -91,7 +115,7 @@ app.get ('/api/consumable-logs', authenticate, consumables.getLogs);
 app.post('/api/consumable-logs', authenticate, authorize('Project Manager','Planner','Site Engineer'), consumables.logConsumption);
 
 // ── Budget ────────────────────────────────────────────────────────────────────
-app.get   ('/api/budget',          authenticate, budget.getBudgetByProject);
+app.get   ('/api/budget',          budget.getBudgetByProject);
 app.post  ('/api/budget',          authenticate, authorize('Project Manager','Cost Engineer'), budget.createBudgetCategory);
 app.patch ('/api/budget/sync-all', authenticate, authorize('Project Manager','Cost Engineer'), budget.syncAllActuals);
 app.put   ('/api/budget/:id',      authenticate, authorize('Project Manager','Cost Engineer'), budget.updateBudgetCategory);
@@ -99,7 +123,7 @@ app.patch ('/api/budget/:id/sync', authenticate, authorize('Project Manager','Co
 app.delete('/api/budget/:id',      authenticate, authorize('Project Manager'), budget.deleteBudgetCategory);
 
 // ── Tools ─────────────────────────────────────────────────────────────────────
-app.get   ('/api/tools',              authenticate, tools.getAllTools);
+app.get   ('/api/tools',              tools.getAllTools);
 app.post  ('/api/tools',              authenticate, authorize('Project Manager','Planner','Site Engineer'), tools.createTool);
 app.put   ('/api/tools/:id',          authenticate, authorize('Project Manager','Planner','Site Engineer'), tools.updateTool);
 app.delete('/api/tools/:id',          authenticate, authorize('Project Manager'), tools.deleteTool);
@@ -145,7 +169,6 @@ app.use((err, req, res, next) => {
         user:      req.user?.username || 'anonymous',
     });
 
-    // Sentry-style capture (if SENTRY_DSN set, errors are captured via logger output)
     if (process.env.NODE_ENV === 'production') {
         res.status(500).json({ success: false, message: 'Internal server error.' });
     } else {
@@ -167,7 +190,6 @@ const shutdown = (signal) => {
 
     logger.info(`Graceful shutdown initiated`, { signal });
 
-    // Stop accepting new connections
     server.close((err) => {
         if (err) {
             logger.error('Error during graceful shutdown', { error: err.message });
@@ -177,7 +199,6 @@ const shutdown = (signal) => {
         process.exit(0);
     });
 
-    // Force shutdown after 10s if drain hangs
     setTimeout(() => {
         logger.warn('Forcing shutdown after timeout.');
         process.exit(1);
@@ -187,7 +208,6 @@ const shutdown = (signal) => {
 process.on('SIGTERM', () => shutdown('SIGTERM'));
 process.on('SIGINT',  () => shutdown('SIGINT'));
 
-// Catch uncaught exceptions — log and exit cleanly
 process.on('uncaughtException', (err) => {
     logger.error('Uncaught exception', { error: err.message, stack: err.stack });
     shutdown('uncaughtException');
