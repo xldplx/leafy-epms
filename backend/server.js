@@ -20,6 +20,8 @@ const consumables = require('./controllers/consumablesController');
 const budget      = require('./controllers/budgetController');
 const tools       = require('./controllers/toolsController');
 const audit       = require('./controllers/auditController');
+const materials   = require('./controllers/materialsController');
+const equipment   = require('./controllers/equipmentController');
 
 const app = express();
 
@@ -103,6 +105,18 @@ app.put   ('/api/tools/:id',          authenticate, authorize('Project Manager',
 app.delete('/api/tools/:id',          authenticate, authorize('Project Manager'), tools.deleteTool);
 app.patch ('/api/tools/:id/checkout', authenticate, authorize('Project Manager','Planner','Site Engineer'), tools.checkoutTool);
 app.patch ('/api/tools/:id/return',   authenticate, authorize('Project Manager','Planner','Site Engineer'), tools.returnTool);
+
+// ── Materials ───────────────────────────────────────────────────────────────────
+app.get   ('/api/materials',     authenticate, materials.getAllMaterials);
+app.post  ('/api/materials',     authenticate, authorize('Project Manager','Planner'), materials.createMaterial);
+app.put   ('/api/materials/:id', authenticate, authorize('Project Manager','Planner'), materials.updateMaterial);
+app.delete('/api/materials/:id', authenticate, authorize('Project Manager'), materials.deleteMaterial);
+
+// ── Equipment ───────────────────────────────────────────────────────────────
+app.get   ('/api/equipment',     authenticate, equipment.getAllEquipment);
+app.post  ('/api/equipment',     authenticate, authorize('Project Manager','Planner'), equipment.createEquipment);
+app.put   ('/api/equipment/:id', authenticate, authorize('Project Manager','Planner'), equipment.updateEquipment);
+app.delete('/api/equipment/:id', authenticate, authorize('Project Manager'), equipment.deleteEquipment);
 
 // ── Audit Log ─────────────────────────────────────────────────────────────────
 app.get('/api/audit',      authenticate, authorize('Project Manager'), audit.getAuditLogs);
