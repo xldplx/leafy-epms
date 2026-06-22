@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
     LayoutDashboard, Users, LogOut, ChevronUp, User, Settings,
     FolderKanban, ClipboardList, BarChart3, Bell, Upload,
-    Wrench, Package, Hammer, Wallet
+    Wrench, Package, Hammer, Wallet, FileText
 } from 'lucide-react';
 import { useTranslation } from '../../utils/i18n';
 
@@ -21,6 +21,7 @@ import Materials    from './features/Materials';
 import Tools        from './features/Tools';
 import Budget       from './features/Budget';
 import SettingsPage from './features/Settings';
+import Report       from './features/Report';
 import ErrorBoundary from '../../components/ErrorBoundary';
 
 export default function DashboardLayout() {
@@ -65,6 +66,7 @@ export default function DashboardLayout() {
         { id: 'Daily Actuals',  labelKey: 'nav.dailyActuals',  icon: <ClipboardList className="w-5 h-5" />,   allowedRoles: ['Project Manager','Planner','Site Engineer'] },
         { id: 'Plan vs Actual', labelKey: 'nav.planVsActual',  icon: <BarChart3 className="w-5 h-5" />,       allowedRoles: ['Project Manager','Planner','Cost Engineer','Management'] },
         { id: 'Alerts',         labelKey: 'nav.alerts',        icon: <Bell className="w-5 h-5" />,            allowedRoles: ['Project Manager','Planner','Cost Engineer','Management'] },
+        { id: 'Report',         labelKey: 'nav.report',        icon: <FileText className="w-5 h-5" />,        allowedRoles: ['Project Manager','Planner','Cost Engineer','Management'] },
         { id: 'Excel Import',   labelKey: 'nav.excelImport',   icon: <Upload className="w-5 h-5" />,          allowedRoles: ['Project Manager','Planner','Cost Engineer','Site Engineer','Management'] },
         { id: 'Equipment',      labelKey: 'nav.equipment',     icon: <Wrench className="w-5 h-5" />,          allowedRoles: ['Project Manager','Planner','Site Engineer'] },
         { id: 'Consumables',    labelKey: 'nav.consumables',   icon: <Package className="w-5 h-5" />,         allowedRoles: ['Project Manager','Planner','Site Engineer'] },
@@ -82,6 +84,7 @@ export default function DashboardLayout() {
         'Daily Actuals':  DailyActuals,
         'Plan vs Actual': PlanVsActual,
         'Alerts':         Alerts,
+        'Report':         Report,
         'Excel Import':   ExcelImport,
         'Equipment':      Equipment,
         'Consumables':    Consumables,
