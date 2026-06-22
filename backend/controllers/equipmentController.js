@@ -18,7 +18,7 @@ const getAllEquipment = async (req, res) => {
 
 // POST /api/equipment
 const createEquipment = async (req, res) => {
-    const { project_id, name, type, operator, location, status, last_service, utilization } = req.body;
+    const { project_id, name, type, operator, location, status, last_service, utilization, planned_utilization, actual_utilization } = req.body;
     if (!project_id) return res.status(400).json({ success: false, message: 'project_id is required.' });
     if (!name?.trim()) return res.status(400).json({ success: false, message: 'name is required.' });
 
@@ -31,7 +31,9 @@ const createEquipment = async (req, res) => {
             location: location?.trim() || null,
             status: status || 'available',
             last_service: last_service || null,
-            utilization: parseFloat(utilization) || 0
+            utilization: parseFloat(utilization) || 0,
+            planned_utilization: parseFloat(planned_utilization) || 0,
+            actual_utilization: parseFloat(actual_utilization) || 0
         }]).select().single();
         
         if (error) return res.status(500).json({ success: false, message: error.message });
@@ -53,6 +55,8 @@ const updateEquipment = async (req, res) => {
     if (req.body.status !== undefined) updates.status = req.body.status;
     if (req.body.last_service !== undefined) updates.last_service = req.body.last_service;
     if (req.body.utilization !== undefined) updates.utilization = parseFloat(req.body.utilization) || 0;
+    if (req.body.planned_utilization !== undefined) updates.planned_utilization = parseFloat(req.body.planned_utilization) || 0;
+    if (req.body.actual_utilization !== undefined) updates.actual_utilization = parseFloat(req.body.actual_utilization) || 0;
 
     if (Object.keys(updates).length === 0) return res.status(400).json({ success: false, message: 'No valid fields to update.' });
 

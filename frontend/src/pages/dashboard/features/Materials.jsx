@@ -2,7 +2,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import {
     Plus, Search, X, Loader2, CheckCircle2, AlertTriangle,
-    Package, Pencil, Trash2, Download, Layers
+    Package, Pencil, Trash2, Download, Layers, Activity
 } from 'lucide-react';
 import { apiFetch } from '../../../utils/api';
 import { useTranslation } from '../../../utils/i18n';
@@ -272,6 +272,59 @@ export default function Materials({ onNavigate, initialProjectId, onConsumeIniti
                             </div>
                         );
                     })}
+                </div>
+            </div>
+
+            {/* Plan vs Actual Variance */}
+            <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm">
+                <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
+                    <Activity className="w-5 h-5" /> Plan vs Actual Variance
+                </h3>
+                <div className="h-64 flex items-end justify-between gap-2 md:gap-4 border-b border-slate-100 pb-2">
+                    {filtered.slice(0, 12).map((m, idx) => {
+                        const planned = parseFloat(m.planned_qty) || 0;
+                        const actual = parseFloat(m.actual_qty) || 0;
+                        const maxVal = Math.max(...filtered.map(x => Math.max(parseFloat(x.planned_qty) || 0, parseFloat(x.actual_qty) || 0)), 1);
+                        const plannedPct = (planned / maxVal) * 100;
+                        const actualPct = (actual / maxVal) * 100;
+                        const variance = actual - planned;
+                        return (
+                            <div key={idx} className="flex-1 flex flex-col justify-end group relative h-full">
+                                {(planned > 0 || actual > 0) && (
+                                    <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-[9px] font-bold px-2 py-1 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-10">
+                                        {m.name}: {planned} (planned) vs {actual} (actual)
+                                    </div>
+                                )}
+                                <div className="flex flex-col gap-1 h-full justify-end">
+                                    {/* Planned */}
+                                    <div style={{ height: `${Math.max(plannedPct, planned > 0 ? 4 : 0)}%` }}
+                                        className="w-full bg-slate-200 rounded-t-lg transition-all duration-300 relative overflow-hidden min-h-[4px]">
+                                        {planned > 0 && <div className="absolute bottom-0 left-0 right-0 bg-slate-500 h-full" />}
+                                    </div>
+                                    {/* Actual */}
+                                    <div style={{ height: `${Math.max(actualPct, actual > 0 ? 4 : 0)}%` }}
+                                        className={`w-full rounded-t-lg transition-all duration-300 relative overflow-hidden min-h-[4px] ${variance >= 0 ? 'bg-emerald-100' : 'bg-red-100'}`}>
+                                        {actual > 0 && <div className={`absolute bottom-0 left-0 right-0 h-full ${variance >= 0 ? 'bg-emerald-500' : 'bg-red-500'}`} />}
+                                    </div>
+                                </div>
+                                <span className="text-[10px] text-slate-300 text-center mt-2 font-mono truncate">{m.unit}</span>
+                            </div>
+                        );
+                    })}
+                </div>
+                <div className="flex items-center gap-6 mt-4 text-xs text-slate-500 font-semibold">
+                    <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 bg-slate-500 rounded"></div>
+                        <span>Planned</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 bg-emerald-500 rounded"></div>
+                        <span>Actual (Over/On Plan)</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 bg-red-500 rounded"></div>
+                        <span>Actual (Under Plan)</span>
+                    </div>
                 </div>
             </div>
 

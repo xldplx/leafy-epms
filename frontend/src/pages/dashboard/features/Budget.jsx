@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import {
     Plus, Wallet, X, Loader2, CheckCircle2, TrendingUp, TrendingDown,
-    DollarSign, Activity, Pencil, Trash2, AlertTriangle, RefreshCw, Link2, Download
+    DollarSign, Activity as ActivityIcon, Pencil, Trash2, AlertTriangle, RefreshCw, Link2, Download
 } from 'lucide-react';
 import { formatCurrency } from '../../../utils/evmHelpers';
 import { INPUT_CLASS } from '../../../utils/uiConstants';
@@ -299,39 +299,92 @@ export default function Budget() {
                 <>
                     {/* KPI STRIP */}
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                        {[
-                            { icon: <DollarSign className="w-5 h-5" />, bg: 'bg-slate-100', cls: 'text-slate-500', label: t('budget.totalPlanned'), value: formatCurrency(totalPlanned), valCls: 'text-slate-800' },
-                            { icon: <Activity className="w-5 h-5" />,   bg: 'bg-blue-50',   cls: 'text-blue-600',  label: t('budget.totalActual'),  value: formatCurrency(totalActual),  valCls: 'text-slate-800' },
-                            {
-                                icon: totalVariance >= 0 ? <TrendingUp className="w-5 h-5" /> : <TrendingDown className="w-5 h-5" />,
-                                bg: totalVariance >= 0 ? 'bg-emerald-50' : 'bg-red-50',
-                                cls: totalVariance >= 0 ? 'text-emerald-600' : 'text-red-600',
-                                label: t('budget.variance'),
-                                value: `${totalVariance >= 0 ? '+' : '−'}${formatCurrency(Math.abs(totalVariance))}`,
-                                valCls: totalVariance >= 0 ? 'text-emerald-600' : 'text-red-600',
-                            },
-                            {
-                                icon: <Wallet className="w-5 h-5" />,
-                                bg: usagePct > 100 ? 'bg-red-50' : usagePct >= 90 ? 'bg-amber-50' : 'bg-emerald-50',
-                                cls: usagePct > 100 ? 'text-red-600' : usagePct >= 90 ? 'text-amber-600' : 'text-emerald-600',
-                                label: t('budget.percentUsed'),
-                                value: `${usagePct.toFixed(1)}%`,
-                                valCls: usagePct > 100 ? 'text-red-600' : usagePct >= 90 ? 'text-amber-600' : 'text-slate-800',
-                            },
-                        ].map((kpi, i) => (
-                            <div key={i} className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
-                                <div className={`p-3 ${kpi.bg} rounded-xl ${kpi.cls} w-fit mb-4`}>{kpi.icon}</div>
-                                <h3 className="text-slate-400 text-[10px] font-black uppercase tracking-widest">{kpi.label}</h3>
-                                <p className={`text-xl font-black tracking-tight mt-1 font-mono ${kpi.valCls}`}>{kpi.value}</p>
-                                {kpi.label === t('budget.percentUsed') && (
-                                    <div className="mt-3 bg-slate-100 rounded-full h-1 overflow-hidden">
-                                        <div className={`h-full rounded-full transition-all duration-1000 ${usagePct > 100 ? 'bg-red-500' : usagePct >= 90 ? 'bg-amber-500' : 'bg-emerald-500'}`}
-                                            style={{ width: `${Math.min(usagePct, 100)}%` }} />
+                    {[
+                        { icon: <DollarSign className="w-5 h-5" />, bg: 'bg-slate-100', cls: 'text-slate-500', label: t('budget.totalPlanned'), value: formatCurrency(totalPlanned), valCls: 'text-slate-800' },
+                        { icon: <ActivityIcon className="w-5 h-5" />, bg: 'bg-blue-50', cls: 'text-blue-600', label: t('budget.totalActual'), value: formatCurrency(totalActual), valCls: 'text-slate-800' },
+                        {
+                            icon: totalVariance >= 0 ? <TrendingUp className="w-5 h-5" /> : <TrendingDown className="w-5 h-5" />,
+                            bg: totalVariance >= 0 ? 'bg-emerald-50' : 'bg-red-50',
+                            cls: totalVariance >= 0 ? 'text-emerald-600' : 'text-red-600',
+                            label: t('budget.variance'),
+                            value: `${totalVariance >= 0 ? '+' : '−'}${formatCurrency(Math.abs(totalVariance))}`,
+                            valCls: totalVariance >= 0 ? 'text-emerald-600' : 'text-red-600',
+                        },
+                        {
+                            icon: <Wallet className="w-5 h-5" />,
+                            bg: usagePct > 100 ? 'bg-red-50' : usagePct >= 90 ? 'bg-amber-50' : 'bg-emerald-50',
+                            cls: usagePct > 100 ? 'text-red-600' : usagePct >= 90 ? 'text-amber-600' : 'text-emerald-600',
+                            label: t('budget.percentUsed'),
+                            value: `${usagePct.toFixed(1)}%`,
+                            valCls: usagePct > 100 ? 'text-red-600' : usagePct >= 90 ? 'text-amber-600' : 'text-slate-800',
+                        },
+                    ].map((kpi, i) => (
+                        <div key={i} className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
+                            <div className={`p-3 ${kpi.bg} rounded-xl ${kpi.cls} w-fit mb-4`}>{kpi.icon}</div>
+                            <h3 className="text-slate-400 text-[10px] font-black uppercase tracking-widest">{kpi.label}</h3>
+                            <p className={`text-xl font-black tracking-tight mt-1 font-mono ${kpi.valCls}`}>{kpi.value}</p>
+                            {kpi.label === t('budget.percentUsed') && (
+                                <div className="mt-3 bg-slate-100 rounded-full h-1 overflow-hidden">
+                                    <div className={`h-full rounded-full transition-all duration-1000 ${usagePct > 100 ? 'bg-red-500' : usagePct >= 90 ? 'bg-amber-500' : 'bg-emerald-500'}`}
+                                        style={{ width: `${Math.min(usagePct, 100)}%` }} />
+                                </div>
+                            )}
+                        </div>
+                    ))}
+                </div>
+
+                {/* Plan vs Actual Variance */}
+                <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm">
+                    <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
+                        <ActivityIcon className="w-5 h-5" /> Plan vs Actual Variance
+                    </h3>
+                    <div className="h-64 flex items-end justify-between gap-2 md:gap-4 border-b border-slate-100 pb-2">
+                        {[...capexRows, ...opexRows].slice(0, 12).map((item, idx) => {
+                            const planned = parseFloat(item.planned) || 0;
+                            const actual = parseFloat(item.actual) || 0;
+                            const maxVal = Math.max(...[...capexRows, ...opexRows].map(x => Math.max(parseFloat(x.planned) || 0, parseFloat(x.actual) || 0)), 1);
+                            const plannedPct = (planned / maxVal) * 100;
+                            const actualPct = (actual / maxVal) * 100;
+                            const variance = actual - planned;
+                            return (
+                                <div key={idx} className="flex-1 flex flex-col justify-end group relative h-full">
+                                    {(planned > 0 || actual > 0) && (
+                                        <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-[9px] font-bold px-2 py-1 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-10">
+                                            {item.category}: {formatCurrency(planned)} (planned) vs {formatCurrency(actual)} (actual)
+                                        </div>
+                                    )}
+                                    <div className="flex flex-col gap-1 h-full justify-end">
+                                        {/* Planned */}
+                                        <div style={{ height: `${Math.max(plannedPct, planned > 0 ? 4 : 0)}%` }}
+                                            className="w-full bg-slate-200 rounded-t-lg transition-all duration-300 relative overflow-hidden min-h-[4px]">
+                                            {planned > 0 && <div className="absolute bottom-0 left-0 right-0 bg-slate-500 h-full" />}
+                                        </div>
+                                        {/* Actual */}
+                                        <div style={{ height: `${Math.max(actualPct, actual > 0 ? 4 : 0)}%` }}
+                                            className={`w-full rounded-t-lg transition-all duration-300 relative overflow-hidden min-h-[4px] ${variance >= 0 ? 'bg-emerald-100' : 'bg-red-100'}`}>
+                                            {actual > 0 && <div className={`absolute bottom-0 left-0 right-0 h-full ${variance >= 0 ? 'bg-emerald-500' : 'bg-red-500'}`} />}
+                                        </div>
                                     </div>
-                                )}
-                            </div>
-                        ))}
+                                    <span className="text-[10px] text-slate-300 text-center mt-2 font-mono truncate">{item.type}</span>
+                                </div>
+                            );
+                        })}
                     </div>
+                    <div className="flex items-center gap-6 mt-4 text-xs text-slate-500 font-semibold">
+                        <div className="flex items-center gap-2">
+                            <div className="w-3 h-3 bg-slate-500 rounded"></div>
+                            <span>Planned</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <div className="w-3 h-3 bg-emerald-500 rounded"></div>
+                            <span>Actual (Under Budget / On Budget)</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <div className="w-3 h-3 bg-red-500 rounded"></div>
+                            <span>Actual (Over Budget)</span>
+                        </div>
+                    </div>
+                </div>
 
                     {/* SYNC INFO */}
                     <div className="flex items-center gap-2 px-4 py-3 bg-blue-50 border border-blue-100 rounded-2xl text-sm text-blue-700">
