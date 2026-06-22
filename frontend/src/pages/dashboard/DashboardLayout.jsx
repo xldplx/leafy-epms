@@ -22,6 +22,7 @@ import Tools        from './features/Tools';
 import Budget       from './features/Budget';
 import SettingsPage from './features/Settings';
 import Report       from './features/Report';
+import MyProfile    from './features/MyProfile';
 import ErrorBoundary from '../../components/ErrorBoundary';
 
 export default function DashboardLayout() {
@@ -92,6 +93,7 @@ export default function DashboardLayout() {
         'Tools':          Tools,
         'Budget':         Budget,
         'Settings':       SettingsPage,
+        'MyProfile':      MyProfile,
     };
 
     const ActiveComponent = PAGE_COMPONENTS[activePage] || Overview;
@@ -139,32 +141,16 @@ export default function DashboardLayout() {
                     ))}
                 </nav>
 
-                {/* SETTINGS — semua role bisa akses */}
-                <div className="px-4 pb-2 shrink-0">
-                    <div className="h-px bg-slate-100/70 mb-2" />
-                    <button onClick={() => setActivePage('Settings')}
-                        className={`w-full flex items-center gap-3.5 px-4 py-3.5 rounded-2xl text-sm font-bold transition-all duration-300 group ${
-                            activePage === 'Settings'
-                                ? 'bg-emerald-600 text-white shadow-[0_8px_20px_-4px_rgba(16,185,129,0.3)] translate-x-1'
-                                : 'text-slate-500 hover:bg-white hover:text-slate-800 hover:shadow-sm'
-                        }`}
-                    >
-                        <span className={`transition-transform duration-300 group-hover:scale-110 ${activePage === 'Settings' ? 'text-white' : 'text-slate-400 group-hover:text-emerald-500'}`}>
-                            <Settings className="w-5 h-5" />
-                        </span>
-                        <span className="tracking-tight">{t('nav.settings')}</span>
-                        {activePage === 'Settings' && (
-                            <div className="ml-auto w-1.5 h-1.5 rounded-full bg-white/40 animate-pulse" />
-                        )}
-                    </button>
-                </div>
+
 
                 {/* USER PROFILE */}
                 <div className="p-4 border-t border-slate-100/50 relative shrink-0" ref={menuRef}>
                     {isUserMenuOpen && (
                         <div className="absolute bottom-[calc(100%-10px)] left-4 right-4 bg-white border border-slate-200 shadow-xl shadow-slate-200/50 rounded-xl overflow-hidden animate-in slide-in-from-bottom-2 fade-in duration-200 z-50">
                             <div className="p-2 space-y-1">
-                                <button className="w-full flex items-center gap-3 px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 rounded-lg transition-colors text-left">
+                                <button
+                                    onClick={() => { setActivePage('MyProfile'); setIsUserMenuOpen(false); }}
+                                    className="w-full flex items-center gap-3 px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 rounded-lg transition-colors text-left">
                                     <User className="w-4 h-4 text-slate-400" /> My Profile
                                 </button>
                                 <button
