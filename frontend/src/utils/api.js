@@ -1,9 +1,6 @@
-/**
- * api.js — Central API client
- * Location: frontend/src/utils/api.js
- */
-
-const BASE_URL = 'http://localhost:5000/api';
+const BASE_URL = import.meta.env.PROD
+    ? 'https://leafy-epms-backend-8yvw4paho-xldplxs-projects.vercel.app/api'
+    : 'http://localhost:5000/api';
 
 function getToken() { return localStorage.getItem('token'); }
 
