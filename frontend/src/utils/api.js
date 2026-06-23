@@ -1,9 +1,6 @@
-/**
- * api.js — Central API client
- * Location: frontend/src/utils/api.js
- */
-
-const BASE_URL = 'http://localhost:5000/api';
+const BASE_URL = import.meta.env.PROD
+    ? 'https://leafy-epms-backend-8yvw4paho-xldplxs-projects.vercel.app/api'
+    : 'http://localhost:5000/api';
 
 function getToken() { return localStorage.getItem('token'); }
 
@@ -130,4 +127,16 @@ export const budgetApi = {
     create:       (payload)       => apiFetch('/budget', { method: 'POST', body: JSON.stringify(payload) }),
     update:       (id, payload)   => apiFetch(`/budget/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
     delete:       (id)            => apiFetch(`/budget/${id}`, { method: 'DELETE' }),
+    syncOne:      (id)            => apiFetch(`/budget/${id}/sync`, { method: 'PATCH' }),
+    syncAll:      (projectId)     => apiFetch(`/budget/sync-all?project_id=${projectId}`, { method: 'PATCH' }),
+};
+
+// ─── TOOLS ───────────────────────────────────────────────────────────────────────
+export const toolsApi = {
+    getAll:    ()              => apiFetch('/tools'),
+    create:    (payload)       => apiFetch('/tools', { method: 'POST', body: JSON.stringify(payload) }),
+    update:    (id, payload)   => apiFetch(`/tools/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
+    delete:    (id)            => apiFetch(`/tools/${id}`, { method: 'DELETE' }),
+    checkout:  (id, payload)   => apiFetch(`/tools/${id}/checkout`, { method: 'PATCH', body: JSON.stringify(payload) }),
+    return:    (id, payload)   => apiFetch(`/tools/${id}/return`,   { method: 'PATCH', body: JSON.stringify(payload || {}) }),
 };

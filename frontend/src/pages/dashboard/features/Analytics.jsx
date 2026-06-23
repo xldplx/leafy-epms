@@ -41,7 +41,7 @@ function GanttChart({ tasks = [], cpmResults = [], t }) {
     const today = new Date();
 
     if (!tasks || tasks.length === 0) return (
-        <div className="h-full flex flex-col items-center justify-center text-slate-400 gap-4 bg-slate-50/50 rounded-3xl border-2 border-dashed border-slate-200">
+        <div className="h-full flex flex-col items-center justify-center text-slate-400 gap-4 bg-white rounded-3xl border border-slate-100 shadow-sm">
             <AlertCircle className="w-12 h-12 opacity-20" />
             <p className="font-bold uppercase tracking-widest text-xs">{t('analytics.noSchedule')}</p>
         </div>
@@ -49,7 +49,7 @@ function GanttChart({ tasks = [], cpmResults = [], t }) {
 
     const allDates = tasks.flatMap(task => [new Date(task.planned_start), new Date(task.planned_end)]).filter(d => !isNaN(d.getTime()));
     if (allDates.length === 0) return (
-        <div className="h-full flex flex-col items-center justify-center text-slate-400 gap-4 bg-slate-50/50 rounded-3xl border-2 border-dashed border-slate-200">
+        <div className="h-full flex flex-col items-center justify-center text-slate-400 gap-4 bg-white rounded-3xl border border-slate-100 shadow-sm">
             <AlertCircle className="w-12 h-12 opacity-20" />
             <p className="font-bold uppercase tracking-widest text-xs">{t('analytics.invalidDates')}</p>
         </div>
@@ -73,64 +73,90 @@ function GanttChart({ tasks = [], cpmResults = [], t }) {
         cur.setMonth(cur.getMonth() + 1);
     }
 
+    // Generate daily grid lines
+    const days = [];
+    let dayCur = new Date(minDate);
+    while (dayCur <= maxDate) {
+        days.push({ x: getX(dayCur) });
+        dayCur.setDate(dayCur.getDate() + 1);
+    }
+
     const cpmMap = Object.fromEntries(cpmResults.map(c => [c.id, c]));
 
     return (
-        <div className="flex flex-col h-full bg-white rounded-[2rem] overflow-hidden border border-slate-200/60 shadow-xl shadow-slate-200/20">
-            <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-white/80 backdrop-blur-md sticky top-0 z-30">
-                <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl">
-                    <button onClick={() => setZoom(Math.max(1, zoom - 0.25))} className="p-2 hover:bg-white rounded-lg text-slate-500 transition-all active:scale-90 shadow-sm">
-                        <ZoomOut className="w-4 h-4" />
+        <div className="flex flex-col h-full bg-white rounded-3xl overflow-hidden border border-slate-100 shadow-sm">
+            <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-white z-30">
+                <div className="flex items-center gap-2 bg-slate-50 p-2 rounded-2xl border border-slate-100">
+                    <button onClick={() => setZoom(Math.max(1, zoom - 0.25))} className="p-3 hover:bg-white rounded-xl text-slate-500 transition-all active:scale-95 shadow-sm">
+                        <ZoomOut className="w-5 h-5" />
                     </button>
-                    <span className="text-[10px] font-black text-slate-600 px-3 min-w-[80px] text-center uppercase tracking-tighter">Zoom {Math.round(zoom * 100)}%</span>
-                    <button onClick={() => setZoom(Math.min(4, zoom + 0.25))} className="p-2 hover:bg-white rounded-lg text-slate-500 transition-all active:scale-90 shadow-sm">
-                        <ZoomIn className="w-4 h-4" />
+                    <span className="text-[10px] font-bold text-slate-600 px-4 min-w-[100px] text-center uppercase tracking-tighter">Zoom {Math.round(zoom * 100)}%</span>
+                    <button onClick={() => setZoom(Math.min(4, zoom + 0.25))} className="p-3 hover:bg-white rounded-xl text-slate-500 transition-all active:scale-95 shadow-sm">
+                        <ZoomIn className="w-5 h-5" />
                     </button>
                 </div>
                 <div className="flex items-center gap-6">
-                    <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-sm bg-red-500 shadow-sm shadow-red-200" /><span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{t('evm.critical')}</span></div>
-                    <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-sm bg-emerald-500 shadow-sm shadow-emerald-200" /><span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{t('analytics.stable')}</span></div>
+                    <div className="flex items-center gap-3">
+                        <div className="w-4 h-4 rounded-lg bg-red-500 shadow-sm shadow-red-200" />
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{t('evm.critical')}</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                        <div className="w-4 h-4 rounded-lg bg-emerald-500 shadow-sm shadow-emerald-200" />
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{t('analytics.stable')}</span>
+                    </div>
                 </div>
             </div>
             <div className="relative flex-1 flex overflow-hidden">
-                <div className="w-64 border-r border-slate-100 bg-white z-20 shadow-[10px_0_20px_-10px_rgba(0,0,0,0.03)] shrink-0">
-                    <div className="h-12 border-b border-slate-100 bg-slate-50/50 flex items-center px-6">
-                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">{t('analytics.workBreakdown')}</span>
+                <div className="w-72 border-r border-slate-100 bg-white z-20 shadow-[10px_0_20px_-10px_rgba(0,0,0,0.05)] shrink-0">
+                    <div className="h-14 border-b border-slate-100 bg-slate-50 flex items-center px-6">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.25em]">{t('analytics.workBreakdown')}</span>
                     </div>
-                    <div className="overflow-y-auto h-[calc(100%-48px)] [scrollbar-width:none]">
+                    <div className="overflow-y-auto h-[calc(100%-56px)] [scrollbar-width:none]">
                         {tasks.map(task => (
                             <div key={task.id} className="h-16 border-b border-slate-50 flex flex-col justify-center px-6 group hover:bg-emerald-50/30 transition-all cursor-default">
-                                <p className="text-xs font-black text-slate-700 truncate group-hover:text-emerald-700 transition-colors leading-tight">{task.task_name}</p>
+                                <p className="text-xs font-bold text-slate-700 truncate group-hover:text-emerald-700 transition-colors leading-tight">{task.task_name}</p>
                                 <div className="flex items-center gap-2 mt-1.5">
-                                    <span className="text-[9px] font-mono font-bold text-slate-300 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-100">{task.wbs_code}</span>
-                                    <span className="text-[9px] font-bold text-slate-400">{task.planned_duration}d</span>
+                                    <span className="text-[9px] font-mono font-semibold text-slate-400 bg-slate-50 px-2 py-0.5 rounded-lg border border-slate-100">{task.wbs_code}</span>
+                                    <span className="text-[9px] font-semibold text-slate-400">{task.planned_duration}d</span>
                                 </div>
                             </div>
                         ))}
                     </div>
                 </div>
-                <div className="flex-1 overflow-auto relative bg-slate-50/30 [scrollbar-width:thin]" ref={containerRef}>
+                <div className="flex-1 overflow-auto relative bg-slate-50 [scrollbar-width:thin]" ref={containerRef}>
                     <div style={{ width: `${baseWidth}px`, height: '100%' }} className="relative">
+                        {/* Daily vertical grid lines */}
+                        {days.map((d, i) => (
+                            <div key={`day-${i}`} className="absolute top-0 bottom-0 border-l border-slate-100" style={{ left: `${d.x}px` }} />
+                        ))}
+                        
+                        {/* Month headers */}
                         {months.map((m, i) => (
-                            <div key={i} className="absolute top-0 bottom-0 border-l border-slate-200/40" style={{ left: `${m.x}px` }}>
-                                <div className="h-12 border-b border-slate-100 flex items-center px-3 bg-white/50">
-                                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{m.label}</span>
+                            <div key={i} className="absolute top-0 bottom-0 border-l-2 border-slate-300" style={{ left: `${m.x}px` }}>
+                                <div className="h-14 border-b border-slate-200 flex items-center px-4 bg-slate-100/80">
+                                    <span className="text-[11px] font-black text-slate-700 uppercase tracking-wider">{m.label}</span>
                                 </div>
                             </div>
                         ))}
-                        <div className="absolute top-0 bottom-0 w-px bg-red-500/50 z-10 shadow-[0_0_8px_rgba(239,68,68,0.3)]" style={{ left: `${todayX}px` }}>
-                            <div className="absolute top-12 -translate-x-1/2 px-2.5 py-1 bg-red-500 text-white text-[9px] font-black rounded-full shadow-lg shadow-red-200 tracking-tighter">{t('analytics.today')}</div>
+                        
+                        {/* Today's line */}
+                        <div className="absolute top-0 bottom-0 w-0.5 bg-red-500 z-10 shadow-[0_0_12px_rgba(239,68,68,0.4)]" style={{ left: `${todayX}px` }}>
+                            <div className="absolute top-14 -translate-x-1/2 px-3 py-1.5 bg-red-600 text-white text-[10px] font-bold rounded-lg shadow-lg shadow-red-200 tracking-tighter">{t('analytics.today')}</div>
                         </div>
-                        <svg className="absolute inset-0 w-full h-full pointer-events-none opacity-30">
+                        
+                        {/* Dependency arrows */}
+                        <svg className="absolute inset-0 w-full h-full pointer-events-none opacity-40">
                             {tasks.map(task => (task.predecessors || []).map(predId => {
                                 const pred = tasks.find(pt => pt.id === predId);
                                 if (!pred) return null;
-                                const x1 = getX(pred.planned_end), y1 = tasks.indexOf(pred) * 64 + 32 + 48;
-                                const x2 = getX(task.planned_start), y2 = tasks.indexOf(task) * 64 + 32 + 48;
-                                return <path key={`${predId}-${task.id}`} d={`M ${x1} ${y1} L ${x1+15} ${y1} L ${x1+15} ${y2} L ${x2} ${y2}`} fill="none" stroke="#64748b" strokeWidth="2" strokeLinecap="round" strokeDasharray="4 3" />;
+                                const x1 = getX(pred.planned_end), y1 = tasks.indexOf(pred) * 64 + 32 + 56;
+                                const x2 = getX(task.planned_start), y2 = tasks.indexOf(task) * 64 + 32 + 56;
+                                return <path key={`${predId}-${task.id}`} d={`M ${x1} ${y1} L ${x1+20} ${y1} L ${x1+20} ${y2} L ${x2} ${y2}`} fill="none" stroke="#64748b" strokeWidth="2" strokeLinecap="round" strokeDasharray="5 3" />;
                             }))}
                         </svg>
-                        <div className="pt-12">
+                        
+                        {/* Task bars */}
+                        <div className="pt-14">
                             {tasks.map((task) => {
                                 const cpm  = cpmMap[task.id];
                                 const x    = getX(task.planned_start);
@@ -138,18 +164,18 @@ function GanttChart({ tasks = [], cpmResults = [], t }) {
                                 const isCrit = cpm?.isCritical;
                                 return (
                                     <div key={task.id} className="h-16 relative flex items-center group">
-                                        <div className={`h-8 rounded-xl relative transition-all duration-300 group-hover:scale-[1.02] shadow-sm overflow-hidden border-2 ${isCrit ? 'bg-red-50 border-red-200/50 shadow-red-100' : 'bg-emerald-50 border-emerald-200/50 shadow-emerald-100'}`}
+                                        <div className={`h-9 rounded-xl relative transition-all duration-300 group-hover:scale-[1.02] shadow-md overflow-hidden border-2 ${isCrit ? 'bg-red-50 border-red-300 shadow-red-100' : 'bg-emerald-50 border-emerald-300 shadow-emerald-100'}`}
                                             style={{ left: `${x}px`, width: `${w}px` }}>
-                                            <div className={`h-full opacity-90 transition-all duration-1000 ease-out ${isCrit ? 'bg-gradient-to-r from-red-500 to-rose-500' : 'bg-gradient-to-r from-emerald-500 to-teal-500'}`}
+                                            <div className={`h-full opacity-100 transition-all duration-1000 ease-out ${isCrit ? 'bg-gradient-to-r from-red-500 to-rose-500' : 'bg-gradient-to-r from-emerald-500 to-teal-500'}`}
                                                 style={{ width: `${task.pct_complete}%` }} />
-                                            <div className="absolute inset-0 flex items-center justify-between px-3 pointer-events-none">
-                                                <span className={`text-[10px] font-black tracking-tighter ${task.pct_complete > 30 ? 'text-white' : 'text-slate-500'}`}>{task.pct_complete}%</span>
+                                            <div className="absolute inset-0 flex items-center justify-between px-4 pointer-events-none">
+                                                <span className={`text-[10px] font-bold tracking-tighter ${task.pct_complete > 30 ? 'text-white' : 'text-slate-700'}`}>{task.pct_complete}%</span>
                                             </div>
                                         </div>
                                         {cpm?.float > 0 && (
-                                            <div className="absolute h-1.5 bg-slate-200/60 rounded-full border border-slate-300/20"
+                                            <div className="absolute h-2 bg-slate-200 rounded-full border border-slate-300/40"
                                                 style={{ left: `${x + w}px`, width: `${(cpm.float / totalMs) * baseWidth}px`, top: '50%', transform: 'translateY(-50%)' }}>
-                                                <div className="absolute -right-1 -top-1 w-3 h-3 rounded-full bg-white border-2 border-slate-300" title={`Float: ${cpm.float} days`} />
+                                                <div className="absolute -right-1.5 -top-1.5 w-4 h-4 rounded-full bg-white border-2 border-slate-300" title={`Float: ${cpm.float} days`} />
                                             </div>
                                         )}
                                     </div>
@@ -255,10 +281,10 @@ export default function Analytics() {
                     <p className="text-slate-500 mt-1">{t('analytics.subtitle')}</p>
                 </div>
                 <div className="flex flex-wrap items-center gap-4">
-                    <div className="bg-white px-4 py-2 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3">
-                        <Filter className="w-4 h-4 text-slate-400" />
+                    <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
+                        <label className="text-xs font-semibold text-slate-500 uppercase tracking-widest ml-1">Select Project</label>
                         <select value={selectedProjectId || ''} onChange={e => setSelectedProjectId(Number(e.target.value))}
-                            className="bg-transparent text-slate-700 text-sm font-bold outline-none cursor-pointer min-w-[240px]">
+                            className="mt-2 w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all text-slate-700 text-sm">
                             {projects.map(p => <option key={p.id} value={p.id}>{p.project_code} — {p.project_name}</option>)}
                         </select>
                     </div>
@@ -282,6 +308,51 @@ export default function Analytics() {
                     <Loader2 className="w-4 h-4 animate-spin" /> {t('analytics.loadingTasks')}
                 </div>
             )}
+
+            {/* KPI CARDS */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
+                {[
+                    { 
+                        icon: <Target className="w-5 h-5" />, 
+                        bg: 'bg-slate-100', 
+                        cls: 'text-slate-500', 
+                        label: 'CPI', 
+                        value: perfIndex !== null ? perfIndex.toFixed(2) : '—', 
+                        valCls: perfColor.text
+                    },
+                    { 
+                        icon: <CheckCircle2 className="w-5 h-5" />, 
+                        bg: 'bg-emerald-50', 
+                        cls: 'text-emerald-600', 
+                        label: 'SPI', 
+                        value: evmMetrics?.SPI !== null ? evmMetrics?.SPI?.toFixed(2) : '—', 
+                        valCls: 'text-emerald-600'
+                    },
+                    { 
+                        icon: <AlertCircle className="w-5 h-5" />, 
+                        bg: 'bg-amber-50', 
+                        cls: 'text-amber-600', 
+                        label: 'Planned Value', 
+                        value: evmMetrics?.PV !== null ? `IDR ${(evmMetrics?.PV / 1e6).toFixed(1)}M` : '—', 
+                        valCls: 'text-amber-600'
+                    },
+                    { 
+                        icon: <Clock className="w-5 h-5" />, 
+                        bg: 'bg-emerald-50', 
+                        cls: 'text-emerald-600', 
+                        label: 'Earned Value', 
+                        value: evmMetrics?.EV !== null ? `IDR ${(evmMetrics?.EV / 1e6).toFixed(1)}M` : '—', 
+                        valCls: 'text-emerald-600'
+                    },
+                ].map((kpi, index) => (
+                    <div key={index} className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
+                        <div className={`p-3 ${kpi.bg} rounded-xl ${kpi.cls} w-fit mb-4`}>{kpi.icon}</div>
+                        <h3 className="text-slate-400 text-[10px] font-black uppercase tracking-widest">{kpi.label}</h3>
+                        <p className={`text-2xl font-black tracking-tight mt-1 ${kpi.valCls}`}>{kpi.value}</p>
+                    </div>
+                ))}
+            </div>
+
 
             <div className="animate-in fade-in slide-in-from-bottom-4 duration-700">
                 {/* CURVE TABS */}

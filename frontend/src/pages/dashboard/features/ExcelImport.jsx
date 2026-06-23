@@ -2,62 +2,85 @@ import { useState, useRef, useEffect } from 'react';
 import { Upload, CheckCircle2, AlertTriangle, FileSpreadsheet, X, ArrowRight, Download, Loader2 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { INPUT_CLASS } from '../../../utils/uiConstants';
+import { TASK_COLUMNS as TASK_FIELDS, TASK_TEMPLATE_ROWS } from '../../../utils/taskSchema';
 import { apiFetch } from '../../../utils/api';
-import { useTranslation } from '../../../utils/i18n';
-
-const TASK_FIELDS = [
-    { key: 'task_name',     label: 'Task Name',    required: true,  type: 'string' },
-    { key: 'wbs_code',      label: 'WBS Code',     required: true,  type: 'string' },
-    { key: 'planned_cost',  label: 'Planned Cost', required: true,  type: 'number' },
-    { key: 'planned_hours', label: 'Planned Hours',required: true,  type: 'number' },
-    { key: 'planned_start', label: 'Planned Start',required: false, type: 'date' },
-    { key: 'planned_end',   label: 'Planned End',  required: false, type: 'date' },
-    { key: 'weight',        label: 'Weight (0–1)', required: false, type: 'weight' },
-];
 
 function autoDetectMapping(headers) {
     const mapping = {};
     const normalize = (s) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+
     const patterns = {
-        task_name: ['taskname','task','name','activity','description'],
-        wbs_code: ['wbs','wbscode','code'],
-        planned_cost: ['plannedcost','cost','budget','estimatedcost'],
-        planned_hours: ['plannedhours','hours','manhours','laborhours'],
-        planned_start: ['plannedstart','start','startdate','begin'],
-        planned_end: ['plannedend','end','enddate','finish'],
-        weight: ['weight','weighting','proportion'],
+        task_name:     ['taskname', 'task', 'name', 'activity', 'description'],
+        wbs_code:      ['wbs', 'wbscode', 'code'],
+        planned_cost:  ['plannedcost', 'cost', 'budget', 'estimatedcost'],
+        planned_hours: ['plannedhours', 'hours', 'manhours', 'laborhours'],
+        planned_start: ['plannedstart', 'start', 'startdate', 'begin'],
+        planned_end:   ['plannedend', 'end', 'enddate', 'finish'],
+        weight:        ['weight', 'weighting', 'proportion'],
     };
+
     headers.forEach((header, index) => {
         const norm = normalize(header);
         for (const [field, keywords] of Object.entries(patterns)) {
-            if (!mapping[field] && keywords.some(kw => norm.includes(kw))) mapping[field] = index;
+            if (!mapping[field] && keywords.some(kw => norm.includes(kw))) {
+                mapping[field] = index;
+            }
         }
     });
+
     return mapping;
+}
+
+// A numeric cell that arrives as a formatted string (e.g. "1,000.50") would be
+// silently truncated by parseFloat ("1,000.50" → 1). Reject those explicitly so
+// the user fixes the source cell instead of importing a corrupt value.
+function numericFieldError(raw, label) {
+    if (raw === undefined || raw === null || String(raw).trim() === '') return `${label} is required`;
+    const s = String(raw).trim();
+    if (typeof raw === 'string' && !/^-?\d+(\.\d+)?$/.test(s)) {
+        return `${label} must be a plain number (remove thousands separators or text)`;
+    }
+    const n = parseFloat(s);
+    if (isNaN(n) || n <= 0) return `${label} must be greater than 0`;
+    return null;
 }
 
 function validateRow(row, mapping) {
     const errors = [];
-    const getValue = (field) => { const idx = mapping[field]; return idx !== undefined && idx !== '' ? row[idx] : undefined; };
+    const getValue = (field) => {
+        const idx = mapping[field];
+        return idx !== undefined && idx !== '' ? row[idx] : undefined;
+    };
+
+    // Required string fields
     if (!getValue('task_name')?.toString().trim()) errors.push('Task Name is required');
-    if (!getValue('wbs_code')?.toString().trim())  errors.push('WBS Code is required');
-    const cost = parseFloat(getValue('planned_cost'));
-    if (isNaN(cost) || cost <= 0) errors.push('Planned Cost must be > 0');
-    const hours = parseFloat(getValue('planned_hours'));
-    if (isNaN(hours) || hours <= 0) errors.push('Planned Hours must be > 0');
+    if (!getValue('wbs_code')?.toString().trim()) errors.push('WBS Code is required');
+
+    // Required number fields — reject formatted/locale strings, not just <= 0
+    const costErr = numericFieldError(getValue('planned_cost'), 'Planned Cost');
+    if (costErr) errors.push(costErr);
+    const hoursErr = numericFieldError(getValue('planned_hours'), 'Planned Hours');
+    if (hoursErr) errors.push(hoursErr);
+
+    // Optional: weight
     const weight = getValue('weight');
     if (weight !== undefined && weight !== '' && weight !== null) {
         const w = parseFloat(weight);
         if (isNaN(w) || w < 0 || w > 1) errors.push('Weight must be 0–1');
     }
+
     return errors;
 }
 
 function parseTask(row, mapping) {
-    const getValue = (field) => { const idx = mapping[field]; return idx !== undefined && idx !== '' ? row[idx] : undefined; };
+    const getValue = (field) => {
+        const idx = mapping[field];
+        return idx !== undefined && idx !== '' ? row[idx] : undefined;
+    };
+
     return {
-        task_name: getValue('task_name')?.toString().trim() || '',
-        wbs_code:  getValue('wbs_code')?.toString().trim()  || '',
+        task_name:     getValue('task_name')?.toString().trim() || '',
+        wbs_code:      getValue('wbs_code')?.toString().trim()  || '',
         planned_cost:  parseFloat(getValue('planned_cost'))  || 0,
         planned_hours: parseFloat(getValue('planned_hours')) || 0,
         planned_start: getValue('planned_start')?.toString() || '',
@@ -67,7 +90,6 @@ function parseTask(row, mapping) {
 }
 
 export default function ExcelImport() {
-    const { t } = useTranslation();
     const userRole  = localStorage.getItem('userRole');
     const canImport = ['Project Manager', 'Planner'].includes(userRole);
 
@@ -76,21 +98,34 @@ export default function ExcelImport() {
     const [headers, setHeaders]                     = useState([]);
     const [dataRows, setDataRows]                   = useState([]);
     const [mapping, setMapping]                     = useState({});
-    const [step, setStep]                           = useState('upload');
+    const [step, setStep]                           = useState('upload'); // 'upload' | 'mapping' | 'validation' | 'done'
     const [validationResults, setValidationResults] = useState([]);
     const [importedCount, setImportedCount]         = useState(0);
     const [isDragging, setIsDragging]               = useState(false);
     const [isImporting, setIsImporting]             = useState(false);
     const [importError, setImportError]             = useState('');
-    const [projects, setProjects]                   = useState([]);
+    const [importMode, setImportMode]               = useState('append'); // 'append' | 'replace'
     const fileInputRef = useRef(null);
 
-    useEffect(() => { apiFetch('/projects').then(r => setProjects(r.data || [])).catch(console.error); }, []);
+    // Real data from API — replaces dummyProjectsEvm
+    const [projects, setProjects] = useState([]);
+
+    useEffect(() => {
+        apiFetch('/projects').then(r => setProjects(r.data || [])).catch(console.error);
+    }, []);
 
     const handleFile = (file) => {
         if (!file) return;
-        const validTypes = ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','application/vnd.ms-excel'];
-        if (!validTypes.includes(file.type) && !file.name.match(/\.xlsx?$/i)) { alert('Please upload an .xlsx or .xls file.'); return; }
+        const validTypes = [
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'application/vnd.ms-excel',
+            'text/csv',
+        ];
+        if (!validTypes.includes(file.type) && !file.name.match(/\.(xlsx?|csv)$/i)) {
+            alert('Please upload an .xlsx, .xls, or .csv file.');
+            return;
+        }
+
         setFileName(file.name);
         const reader = new FileReader();
         reader.onload = (e) => {
@@ -98,95 +133,158 @@ export default function ExcelImport() {
             const wb   = XLSX.read(data, { type: 'array' });
             const sheet = wb.Sheets[wb.SheetNames[0]];
             const raw   = XLSX.utils.sheet_to_json(sheet, { header: 1 });
-            if (raw.length < 2) { alert('Spreadsheet must have at least a header row and one data row.'); return; }
+
+            if (raw.length < 2) {
+                alert('Spreadsheet must have at least a header row and one data row.');
+                return;
+            }
+
             const hdrs = raw[0].map(h => (h ?? '').toString());
             const rows = raw.slice(1).filter(r => r.some(cell => cell !== undefined && cell !== ''));
-            setHeaders(hdrs); setDataRows(rows); setMapping(autoDetectMapping(hdrs)); setStep('mapping');
+
+            if (rows.length === 0) {
+                alert('No data rows found below the header row.');
+                return;
+            }
+
+            setHeaders(hdrs);
+            setDataRows(rows);
+            setMapping(autoDetectMapping(hdrs));
+            setStep('mapping');
         };
         reader.readAsArrayBuffer(file);
     };
 
-    const handleDrop = (e) => { e.preventDefault(); setIsDragging(false); handleFile(e.dataTransfer.files[0]); };
+    const handleDrop = (e) => {
+        e.preventDefault();
+        setIsDragging(false);
+        const file = e.dataTransfer.files[0];
+        handleFile(file);
+    };
+
     const handleValidate = () => {
-        setValidationResults(dataRows.map((row, idx) => ({ rowIndex: idx, errors: validateRow(row, mapping), data: row })));
+        if (dataRows.length === 0) return;
+        const results = dataRows.map((row, idx) => ({
+            rowIndex: idx,
+            errors:   validateRow(row, mapping),
+            data:     row,
+        }));
+        setValidationResults(results);
         setStep('validation');
     };
 
     const validRows   = validationResults.filter(r => r.errors.length === 0);
     const invalidRows = validationResults.filter(r => r.errors.length > 0);
 
+    // Every required field must be mapped before validation is meaningful.
+    const requiredMapped = TASK_FIELDS
+        .filter(f => f.required)
+        .every(f => mapping[f.key] !== undefined && mapping[f.key] !== '');
+
     const handleDownloadTemplate = () => {
+        // Template columns come from the shared schema, so they match the export exactly.
         const wb = XLSX.utils.book_new();
-        const templateData = [
-            { 'Task Name': 'Excavation Works', 'WBS Code': '1.1.1', 'Planned Cost': 250000000, 'Planned Hours': 160, 'Planned Start': '2026-04-01', 'Planned End': '2026-04-30', 'Weight': 0.15 },
-            { 'Task Name': 'Concrete Pouring',  'WBS Code': '1.1.2', 'Planned Cost': 180000000, 'Planned Hours': 120, 'Planned Start': '2026-05-01', 'Planned End': '2026-05-20', 'Weight': 0.10 },
-        ];
-        const ws = XLSX.utils.json_to_sheet(templateData);
+        const ws = XLSX.utils.json_to_sheet(TASK_TEMPLATE_ROWS);
         ws['!cols'] = [{ wch: 24 }, { wch: 12 }, { wch: 16 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 8 }];
         XLSX.utils.book_append_sheet(wb, ws, 'Task Import Template');
         XLSX.writeFile(wb, 'Task_Import_Template.xlsx');
     };
 
+    // Wire to real API — POST /api/projects/:id/tasks/import
     const handleImport = async () => {
         if (validRows.length === 0 || !selectedProjectId) return;
-        setIsImporting(true); setImportError('');
+        if (importMode === 'replace' &&
+            !window.confirm('Replace all tasks for this project? This permanently deletes the current tasks before importing.')) {
+            return;
+        }
+        setIsImporting(true);
+        setImportError('');
         try {
             const tasks = validRows.map(r => parseTask(r.data, mapping));
-            const res   = await apiFetch(`/projects/${selectedProjectId}/tasks/import`, { method: 'POST', body: JSON.stringify({ tasks }) });
+            if (importMode === 'replace') {
+                const existing = await apiFetch(`/projects/${selectedProjectId}/tasks`);
+                for (const t of (existing.data || [])) {
+                    await apiFetch(`/tasks/${t.id}`, { method: 'DELETE' });
+                }
+            }
+            const res   = await apiFetch(`/projects/${selectedProjectId}/tasks/import`, {
+                method: 'POST',
+                body:   JSON.stringify({ tasks }),
+            });
             if (!res.success) throw new Error(res.message || 'Import failed.');
-            setImportedCount(res.imported || tasks.length);
+            const count = res.imported || tasks.length;
+            setImportedCount(count);
             setStep('done');
-        } catch (e) { setImportError(e.message); } finally { setIsImporting(false); }
+        } catch (e) {
+            setImportError(e.message);
+        } finally {
+            setIsImporting(false);
+        }
     };
 
     const handleReset = () => {
-        setFileName(''); setHeaders([]); setDataRows([]); setMapping({}); setValidationResults([]);
-        setImportedCount(0); setImportError(''); setStep('upload');
+        setFileName('');
+        setHeaders([]);
+        setDataRows([]);
+        setMapping({});
+        setValidationResults([]);
+        setImportedCount(0);
+        setImportError('');
+        setStep('upload');
         if (fileInputRef.current) fileInputRef.current.value = '';
     };
 
-    const STEP_LABELS = [t('excel.stepUpload'), t('excel.stepMap'), t('excel.stepValidate'), t('excel.stepImport')];
-    const STEP_KEYS   = ['upload', 'mapping', 'validation', 'done'];
+    const inputClass = INPUT_CLASS;
 
-    if (!canImport) return (
-        <div className="space-y-8">
-            <div>
-                <h2 className="text-3xl font-bold text-slate-800 tracking-tight">{t('excel.title')}</h2>
-                <p className="text-slate-500 mt-1">{t('excel.subtitle')}</p>
-            </div>
-            <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-16">
-                <div className="flex flex-col items-center justify-center gap-2">
-                    <Upload className="w-12 h-12 text-slate-200" />
-                    <p className="text-slate-400">{t('excel.pmOnly')}</p>
+    if (!canImport) {
+        return (
+            <div className="space-y-8">
+                <div>
+                    <h2 className="text-3xl font-bold text-slate-800 tracking-tight">Excel Import</h2>
+                    <p className="text-slate-500 mt-1">Upload task data from spreadsheets</p>
+                </div>
+                <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-16">
+                    <div className="flex flex-col items-center justify-center gap-2">
+                        <Upload className="w-12 h-12 text-slate-200" />
+                        <p className="text-slate-400">Only Project Managers and Planners can import task data.</p>
+                    </div>
                 </div>
             </div>
-        </div>
-    );
+        );
+    }
 
     return (
         <div className="space-y-8">
+
+            {/* HEADER */}
             <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
                 <div>
-                    <h2 className="text-3xl font-bold text-slate-800 tracking-tight">{t('excel.title')}</h2>
-                    <p className="text-slate-500 mt-1">{t('excel.subtitle')}</p>
+                    <h2 className="text-3xl font-bold text-slate-800 tracking-tight">Excel Import</h2>
+                    <p className="text-slate-500 mt-1">Upload task data from spreadsheets</p>
                 </div>
                 {step !== 'upload' && step !== 'done' && (
                     <button onClick={handleReset} className="text-sm font-semibold text-slate-500 hover:text-slate-700 bg-slate-100 px-4 py-2.5 rounded-xl transition-colors flex items-center gap-2">
-                        <X className="w-4 h-4" /> {t('excel.startOver')}
+                        <X className="w-4 h-4" /> Start Over
                     </button>
                 )}
             </div>
 
             {/* STEP INDICATOR */}
             <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider">
-                {STEP_LABELS.map((label, i) => {
-                    const currentIdx = STEP_KEYS.indexOf(step);
-                    const isActive = i === currentIdx, isDone = i < currentIdx;
+                {['Upload', 'Map Columns', 'Validate', 'Import'].map((label, i) => {
+                    const stepMap    = ['upload', 'mapping', 'validation', 'done'];
+                    const currentIdx = stepMap.indexOf(step);
+                    const isActive   = i === currentIdx;
+                    const isDone     = i < currentIdx;
                     return (
                         <div key={label} className="flex items-center gap-2">
                             {i > 0 && <ArrowRight className="w-3 h-3 text-slate-300" />}
-                            <span className={`px-3 py-1.5 rounded-lg border ${isActive ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : isDone ? 'bg-emerald-500 text-white border-emerald-500' : 'bg-slate-50 text-slate-400 border-slate-200'}`}>
-                                {isDone ? '✓ ' : ''}{label}
+                            <span className={`px-3 py-1.5 rounded-lg border ${
+                                isActive ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                                isDone   ? 'bg-emerald-500 text-white border-emerald-500' :
+                                           'bg-slate-50 text-slate-400 border-slate-200'
+                            }`}>
+                                {isDone ? '✓' : ''} {label}
                             </span>
                         </div>
                     );
@@ -195,82 +293,132 @@ export default function ExcelImport() {
 
             {/* PROJECT SELECTOR */}
             <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-6">
-                <h3 className="text-sm font-bold text-slate-700 uppercase tracking-wider mb-5">{t('excel.targetProject')}</h3>
+                <h3 className="text-sm font-bold text-slate-700 uppercase tracking-wider mb-5">Target Project</h3>
                 <div className="max-w-md space-y-1">
-                    <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider ml-1">{t('common.project')}</label>
-                    <select value={selectedProjectId} onChange={e => setSelectedProjectId(e.target.value)} className={INPUT_CLASS}>
-                        <option value="">{t('pva.selectPlaceholder')}</option>
-                        {projects.map(p => <option key={p.id} value={p.id}>{p.project_code} — {p.project_name}</option>)}
+                    <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider ml-1">Project</label>
+                    <select
+                        value={selectedProjectId}
+                        onChange={e => setSelectedProjectId(e.target.value)}
+                        className={inputClass}
+                    >
+                        <option value="">Select a project...</option>
+                        {projects.map(p => (
+                            <option key={p.id} value={p.id}>{p.project_code} — {p.project_name}</option>
+                        ))}
                     </select>
                 </div>
             </div>
 
-            {/* UPLOAD */}
+            {/* STEP 1: FILE UPLOAD */}
             {step === 'upload' && (
-                <div onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }} onDragLeave={() => setIsDragging(false)}
-                    onDrop={handleDrop} onClick={() => fileInputRef.current?.click()}
-                    className={`bg-white rounded-3xl border-2 border-dashed p-16 text-center cursor-pointer transition-all duration-200 ${isDragging ? 'border-emerald-400 bg-emerald-50/50' : 'border-slate-200 hover:border-emerald-300 hover:bg-slate-50'}`}>
-                    <input ref={fileInputRef} type="file" accept=".xlsx,.xls" onChange={(e) => handleFile(e.target.files[0])} className="hidden" />
+                <div
+                    onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+                    onDragLeave={() => setIsDragging(false)}
+                    onDrop={handleDrop}
+                    onClick={() => fileInputRef.current?.click()}
+                    className={`bg-white rounded-3xl border-2 border-dashed p-16 text-center cursor-pointer transition-all duration-200 ${
+                        isDragging
+                            ? 'border-emerald-400 bg-emerald-50/50'
+                            : 'border-slate-200 hover:border-emerald-300 hover:bg-slate-50'
+                    }`}
+                >
+                    <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept=".xlsx,.xls,.csv"
+                        onChange={(e) => handleFile(e.target.files[0])}
+                        className="hidden"
+                    />
                     <div className="flex flex-col items-center gap-3">
-                        <div className={`p-4 rounded-2xl transition-colors ${isDragging ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-400'}`}><Upload className="w-8 h-8" /></div>
-                        <div>
-                            <p className="font-semibold text-slate-700">{t('excel.dropFile')}</p>
-                            <p className="text-xs text-slate-400 mt-1">{t('excel.acceptsFormats')}</p>
+                        <div className={`p-4 rounded-2xl transition-colors ${isDragging ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-400'}`}>
+                            <Upload className="w-8 h-8" />
                         </div>
-                        <button onClick={(e) => { e.stopPropagation(); handleDownloadTemplate(); }}
-                            className="mt-2 text-xs font-semibold text-slate-500 bg-white px-4 py-2 rounded-lg border border-slate-200 transition-all flex items-center gap-1.5 hover:bg-slate-50">
-                            <Download className="w-3.5 h-3.5" /> {t('excel.downloadTemplate')}
+                        <div>
+                            <p className="font-semibold text-slate-700">Drop your Excel file here, or click to browse</p>
+                            <p className="text-xs text-slate-400 mt-1">Accepts .xlsx, .xls, and .csv files</p>
+                        </div>
+                        <button
+                            onClick={(e) => { e.stopPropagation(); handleDownloadTemplate(); }}
+                            className="mt-2 text-xs font-semibold text-slate-500 bg-white px-4 py-2 rounded-lg border border-slate-200 transition-all flex items-center gap-1.5 hover:bg-slate-50 hover:text-slate-700 hover:border-slate-300"
+                        >
+                            <Download className="w-3.5 h-3.5" /> Download Template
                         </button>
                     </div>
                 </div>
             )}
 
-            {/* MAPPING */}
+            {/* STEP 2: COLUMN MAPPING */}
             {step === 'mapping' && (
                 <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
                     <div className="p-6 border-b border-slate-50 flex items-center justify-between gap-4">
                         <div className="flex items-center gap-3">
-                            <div className="p-2.5 bg-emerald-50 rounded-xl text-emerald-600"><FileSpreadsheet className="w-5 h-5" /></div>
+                            <div className="p-2.5 bg-emerald-50 rounded-xl text-emerald-600">
+                                <FileSpreadsheet className="w-5 h-5" />
+                            </div>
                             <div>
-                                <h3 className="font-bold text-slate-700">{t('excel.columnMapping')}</h3>
-                                <p className="text-xs text-slate-400 mt-0.5">{fileName} — {dataRows.length} {t('excel.dataRowsDetected')}</p>
+                                <h3 className="font-bold text-slate-700">Column Mapping</h3>
+                                <p className="text-xs text-slate-400 mt-0.5">{fileName} — {dataRows.length} data rows detected</p>
                             </div>
                         </div>
-                        <button onClick={handleValidate} disabled={!mapping.task_name && mapping.task_name !== 0}
-                            className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-xl font-semibold text-sm shadow-lg shadow-emerald-200 transition-all flex items-center gap-2 disabled:opacity-50">
-                            {t('excel.validate')} <ArrowRight className="w-4 h-4" />
+                        <button
+                            onClick={handleValidate}
+                            disabled={!requiredMapped}
+                            title={!requiredMapped ? 'Map all required (*) fields first' : undefined}
+                            className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-xl font-semibold text-sm shadow-lg shadow-emerald-200 transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
+                        >
+                            Validate <ArrowRight className="w-4 h-4" />
                         </button>
                     </div>
+
                     <div className="p-6 space-y-4">
-                        <p className="text-sm text-slate-500">{t('excel.mappingDesc')}</p>
+                        <p className="text-sm text-slate-500">Map each task field to a column from your spreadsheet. Auto-detected mappings are pre-selected.</p>
+                        {!requiredMapped && (
+                            <p className="text-xs font-semibold text-amber-600 flex items-center gap-1.5">
+                                <AlertTriangle className="w-3.5 h-3.5" /> Map all required (*) fields to enable validation.
+                            </p>
+                        )}
+
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                             {TASK_FIELDS.map(field => (
                                 <div key={field.key} className="space-y-1">
                                     <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider ml-1">
-                                        {field.label}{field.required && <span className="text-red-500 ml-0.5">*</span>}
+                                        {field.label}
+                                        {field.required && <span className="text-red-500 ml-0.5">*</span>}
                                     </label>
-                                    <select value={mapping[field.key] ?? ''} onChange={e => setMapping({ ...mapping, [field.key]: e.target.value === '' ? '' : parseInt(e.target.value) })} className={INPUT_CLASS}>
-                                        <option value="">{t('excel.skipColumn')}</option>
-                                        {headers.map((h, i) => <option key={i} value={i}>Col {i + 1}: {h}</option>)}
+                                    <select
+                                        value={mapping[field.key] ?? ''}
+                                        onChange={e => setMapping({ ...mapping, [field.key]: e.target.value === '' ? '' : parseInt(e.target.value) })}
+                                        className={inputClass}
+                                    >
+                                        <option value="">— Skip —</option>
+                                        {headers.map((h, i) => (
+                                            <option key={i} value={i}>Col {i + 1}: {h}</option>
+                                        ))}
                                     </select>
                                 </div>
                             ))}
                         </div>
+
+                        {/* Preview first 5 rows */}
                         <div className="mt-6">
-                            <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">{t('excel.preview')}</h4>
+                            <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Preview (first 5 rows)</h4>
                             <div className="overflow-x-auto">
                                 <table className="w-full text-left border-collapse">
                                     <thead>
                                         <tr className="bg-slate-50/80 text-xs uppercase tracking-wider text-slate-500 font-bold">
                                             <th className="px-3 py-3">#</th>
-                                            {TASK_FIELDS.filter(f => mapping[f.key] !== undefined && mapping[f.key] !== '').map(f => <th key={f.key} className="px-3 py-3">{f.label}</th>)}
+                                            {TASK_FIELDS.filter(f => mapping[f.key] !== undefined && mapping[f.key] !== '').map(f => (
+                                                <th key={f.key} className="px-3 py-3">{f.label}</th>
+                                            ))}
                                         </tr>
                                     </thead>
                                     <tbody className="text-sm font-medium text-slate-600 divide-y divide-slate-50">
                                         {dataRows.slice(0, 5).map((row, idx) => (
                                             <tr key={idx} className="hover:bg-slate-50/50">
                                                 <td className="px-3 py-2.5 text-slate-400">{idx + 1}</td>
-                                                {TASK_FIELDS.filter(f => mapping[f.key] !== undefined && mapping[f.key] !== '').map(f => <td key={f.key} className="px-3 py-2.5">{row[mapping[f.key]] ?? ''}</td>)}
+                                                {TASK_FIELDS.filter(f => mapping[f.key] !== undefined && mapping[f.key] !== '').map(f => (
+                                                    <td key={f.key} className="px-3 py-2.5">{row[mapping[f.key]] ?? ''}</td>
+                                                ))}
                                             </tr>
                                         ))}
                                     </tbody>
@@ -281,60 +429,112 @@ export default function ExcelImport() {
                 </div>
             )}
 
-            {/* VALIDATION */}
+            {/* STEP 3: VALIDATION RESULTS */}
             {step === 'validation' && (
                 <div className="space-y-4">
+                    {/* Summary chips */}
                     <div className="flex flex-wrap gap-3">
                         <div className="flex items-center gap-2 px-4 py-2.5 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-xl text-sm font-semibold">
-                            <CheckCircle2 className="w-4 h-4" /> {validRows.length} {t('excel.validRows')}
+                            <CheckCircle2 className="w-4 h-4" />
+                            {validRows.length} valid rows
                         </div>
                         {invalidRows.length > 0 && (
                             <div className="flex items-center gap-2 px-4 py-2.5 bg-red-50 border border-red-100 text-red-700 rounded-xl text-sm font-semibold">
-                                <AlertTriangle className="w-4 h-4" /> {invalidRows.length} {t('excel.rowsWithErrors')}
+                                <AlertTriangle className="w-4 h-4" />
+                                {invalidRows.length} rows with errors
                             </div>
                         )}
                     </div>
+
+                    {/* Import error */}
                     {importError && (
                         <div className="flex items-center gap-3 px-5 py-4 bg-red-50 border border-red-100 rounded-2xl text-red-700 text-sm font-semibold">
                             <AlertTriangle className="w-4 h-4 shrink-0" /> {importError}
                         </div>
                     )}
+
+                    {/* Validation table */}
                     <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
-                        <div className="p-6 border-b border-slate-50 flex items-center justify-between gap-4">
+                        <div className="p-6 border-b border-slate-50 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                             <div>
-                                <h3 className="font-bold text-slate-700">{t('excel.validationResults')}</h3>
-                                <p className="text-xs text-slate-400 mt-0.5">{validRows.length} {t('common.of')} {validationResults.length} {t('excel.readyToImport')}</p>
+                                <h3 className="font-bold text-slate-700">Validation Results</h3>
+                                <p className="text-xs text-slate-400 mt-0.5">{validRows.length} of {validationResults.length} rows ready to import</p>
+                                {importMode === 'replace' && (
+                                    <p className="text-[11px] font-semibold text-red-500 mt-1">Replace deletes this project's current tasks first.</p>
+                                )}
                             </div>
-                            <button onClick={handleImport} disabled={validRows.length === 0 || !selectedProjectId || isImporting}
-                                className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-xl font-semibold text-sm shadow-lg shadow-emerald-200 transition-all flex items-center gap-2 disabled:opacity-50">
-                                {isImporting ? <><Loader2 className="w-4 h-4 animate-spin" /> {t('excel.importing')}</> : <><Upload className="w-4 h-4" /> {t('excel.importTasks')} {validRows.length} {t('excel.tasks')}</>}
-                            </button>
+                            <div className="flex items-center gap-3 shrink-0">
+                                <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl" role="group" aria-label="Import mode">
+                                    {[['append', 'Append'], ['replace', 'Replace all']].map(([m, label]) => (
+                                        <button
+                                            key={m}
+                                            type="button"
+                                            onClick={() => setImportMode(m)}
+                                            className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all ${
+                                                importMode === m
+                                                    ? (m === 'replace' ? 'bg-white text-red-600 shadow-sm' : 'bg-white text-emerald-700 shadow-sm')
+                                                    : 'text-slate-400 hover:text-slate-600'
+                                            }`}
+                                        >
+                                            {label}
+                                        </button>
+                                    ))}
+                                </div>
+                                <button
+                                    onClick={handleImport}
+                                    disabled={validRows.length === 0 || !selectedProjectId || isImporting}
+                                    className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-xl font-semibold text-sm shadow-lg shadow-emerald-200 transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
+                                >
+                                    {isImporting
+                                        ? <><Loader2 className="w-4 h-4 animate-spin" /> Importing...</>
+                                        : <><Upload className="w-4 h-4" /> Import {validRows.length} Tasks</>
+                                    }
+                                </button>
+                            </div>
                         </div>
+
                         <div className="overflow-x-auto max-h-96">
                             <table className="w-full text-left border-collapse">
                                 <thead className="sticky top-0">
                                     <tr className="bg-slate-50/80 text-xs uppercase tracking-wider text-slate-500 font-bold">
                                         <th className="px-4 py-3">Row</th>
-                                        <th className="px-4 py-3">{t('common.status')}</th>
+                                        <th className="px-4 py-3">Status</th>
                                         <th className="px-4 py-3">Task Name</th>
                                         <th className="px-4 py-3">WBS</th>
-                                        <th className="px-4 py-3">Details</th>
+                                        <th className="px-4 py-3">Details / Errors</th>
                                     </tr>
                                 </thead>
                                 <tbody className="text-sm font-medium text-slate-600 divide-y divide-slate-50">
                                     {validationResults.map(r => {
-                                        const isValid = r.errors.length === 0;
+                                        const isValid     = r.errors.length === 0;
                                         const taskNameIdx = mapping.task_name;
-                                        const wbsIdx = mapping.wbs_code;
+                                        const wbsIdx      = mapping.wbs_code;
                                         return (
                                             <tr key={r.rowIndex} className={`${isValid ? 'hover:bg-slate-50/50' : 'bg-red-50/30'} transition-colors`}>
                                                 <td className="px-4 py-3 text-slate-400">{r.rowIndex + 1}</td>
-                                                <td className="px-4 py-3">{isValid ? <CheckCircle2 className="w-4 h-4 text-emerald-500" /> : <AlertTriangle className="w-4 h-4 text-red-500" />}</td>
-                                                <td className="px-4 py-3 font-semibold text-slate-700">{taskNameIdx !== undefined ? r.data[taskNameIdx] || '—' : '—'}</td>
-                                                <td className="px-4 py-3 font-mono text-xs text-slate-400">{wbsIdx !== undefined ? r.data[wbsIdx] || '—' : '—'}</td>
                                                 <td className="px-4 py-3">
-                                                    {isValid ? <span className="text-emerald-600 text-xs">{t('excel.readyRow')}</span>
-                                                        : <div className="space-y-0.5">{r.errors.map((err, i) => <p key={i} className="text-red-600 text-xs">{err}</p>)}</div>}
+                                                    {isValid ? (
+                                                        <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                                                    ) : (
+                                                        <AlertTriangle className="w-4 h-4 text-red-500" />
+                                                    )}
+                                                </td>
+                                                <td className="px-4 py-3 font-semibold text-slate-700">
+                                                    {taskNameIdx !== undefined ? r.data[taskNameIdx] || '—' : '—'}
+                                                </td>
+                                                <td className="px-4 py-3 font-mono text-xs text-slate-400">
+                                                    {wbsIdx !== undefined ? r.data[wbsIdx] || '—' : '—'}
+                                                </td>
+                                                <td className="px-4 py-3">
+                                                    {isValid ? (
+                                                        <span className="text-emerald-600 text-xs">Ready to import</span>
+                                                    ) : (
+                                                        <div className="space-y-0.5">
+                                                            {r.errors.map((err, i) => (
+                                                                <p key={i} className="text-red-600 text-xs">{err}</p>
+                                                            ))}
+                                                        </div>
+                                                    )}
                                                 </td>
                                             </tr>
                                         );
@@ -346,18 +546,24 @@ export default function ExcelImport() {
                 </div>
             )}
 
-            {/* DONE */}
+            {/* STEP 4: SUCCESS */}
             {step === 'done' && (
                 <div className="bg-white rounded-3xl border border-emerald-100 shadow-sm p-12">
                     <div className="flex flex-col items-center justify-center gap-4">
-                        <div className="p-4 bg-emerald-50 rounded-2xl text-emerald-600"><CheckCircle2 className="w-10 h-10" /></div>
-                        <div className="text-center">
-                            <h3 className="text-xl font-bold text-slate-800">{t('excel.importComplete')}</h3>
-                            <p className="text-slate-500 mt-1">{t('excel.importedFrom')} <strong className="text-emerald-700">{importedCount} {t('excel.tasks')}</strong> {t('excel.importFrom')} {fileName}</p>
+                        <div className="p-4 bg-emerald-50 rounded-2xl text-emerald-600">
+                            <CheckCircle2 className="w-10 h-10" />
                         </div>
-                        <button onClick={handleReset}
-                            className="mt-2 bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2.5 rounded-xl font-semibold text-sm shadow-lg shadow-emerald-200 transition-all">
-                            {t('excel.importAnother')}
+                        <div className="text-center">
+                            <h3 className="text-xl font-bold text-slate-800">Import Complete</h3>
+                            <p className="text-slate-500 mt-1">
+                                Successfully imported <strong className="text-emerald-700">{importedCount} tasks</strong> from {fileName}
+                            </p>
+                        </div>
+                        <button
+                            onClick={handleReset}
+                            className="mt-2 bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2.5 rounded-xl font-semibold text-sm shadow-lg shadow-emerald-200 transition-all"
+                        >
+                            Import Another File
                         </button>
                     </div>
                 </div>

@@ -3,10 +3,11 @@ import {
     Users, Plus, Search, X, Loader2, CheckCircle2,
     AlertTriangle, ShieldCheck, UserX, UserCheck,
     Pencil, Trash2, KeyRound, Eye, EyeOff, Shield,
-    Globe, Languages
+    Globe, Languages, ScrollText, Download
 } from 'lucide-react';
 import { apiFetch } from '../../../utils/api';
 import { INPUT_CLASS } from '../../../utils/uiConstants';
+import { exportWorkbook, exportFilename } from '../../../utils/excelExport';
 import { useTranslation } from '../../../utils/i18n';
 
 const VALID_ROLES = ['Project Manager', 'Planner', 'Cost Engineer', 'Site Engineer', 'Management'];
@@ -603,6 +604,231 @@ function UserManagementTab({ t }) {
     );
 }
 
+// ── AUDIT LOG TAB ─────────────────────────────────────────────────────────────
+const ACTION_BADGE = {
+    CREATE:   'bg-emerald-50 text-emerald-700 border-emerald-100',
+    UPDATE:   'bg-blue-50 text-blue-700 border-blue-100',
+    DELETE:   'bg-red-50 text-red-600 border-red-100',
+    LOGIN:    'bg-violet-50 text-violet-700 border-violet-100',
+    LOGOUT:   'bg-slate-50 text-slate-600 border-slate-200',
+    CHECKOUT: 'bg-amber-50 text-amber-700 border-amber-100',
+    RETURN:   'bg-teal-50 text-teal-700 border-teal-100',
+    SYNC:     'bg-cyan-50 text-cyan-700 border-cyan-100',
+    LOCK:     'bg-orange-50 text-orange-700 border-orange-100',
+    IMPORT:   'bg-indigo-50 text-indigo-700 border-indigo-100',
+};
+
+const fmtDateTime = (d) => d
+    ? new Date(d).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+    : '—';
+
+const summarizeDetail = (detail) => {
+    if (!detail || typeof detail !== 'object') return '—';
+    const entries = Object.entries(detail);
+    if (!entries.length) return '—';
+    return entries.map(([k, v]) => `${k}: ${typeof v === 'object' ? JSON.stringify(v) : v}`).join(', ');
+};
+
+function AuditLogTab({ t }) {
+    const PAGE = 50;
+    const [logs, setLogs]       = useState([]);
+    const [total, setTotal]     = useState(0);
+    const [offset, setOffset]   = useState(0);
+    const [meta, setMeta]       = useState({ usernames: [], actions: [], resource_types: [] });
+    const [loading, setLoading] = useState(true);
+    const [loadingMore, setLoadingMore] = useState(false);
+    const [error, setError]     = useState('');
+
+    const [fUser, setFUser]         = useState('');
+    const [fAction, setFAction]     = useState('');
+    const [fResource, setFResource] = useState('');
+    const [fFrom, setFFrom]         = useState('');
+    const [fTo, setFTo]             = useState('');
+
+    const buildParams = (nextOffset, limit = PAGE) => {
+        const params = new URLSearchParams();
+        if (fUser)     params.set('username', fUser);
+        if (fAction)   params.set('action', fAction);
+        if (fResource) params.set('resource_type', fResource);
+        if (fFrom)     params.set('date_from', fFrom);
+        if (fTo)       params.set('date_to', fTo);
+        params.set('limit', String(limit));
+        params.set('offset', String(nextOffset));
+        return params.toString();
+    };
+
+    // Resets to the first page — used on mount, filter change, and retry.
+    const fetchLogs = async () => {
+        setLoading(true);
+        setError('');
+        try {
+            const res = await apiFetch(`/audit?${buildParams(0)}`);
+            setLogs(res.data || []);
+            setTotal(res.total || 0);
+            setOffset(0);
+        } catch (e) {
+            setError(e.message || 'Failed to load audit log.');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const loadMore = async () => {
+        const next = offset + PAGE;
+        setLoadingMore(true);
+        try {
+            const res = await apiFetch(`/audit?${buildParams(next)}`);
+            setLogs(prev => [...prev, ...(res.data || [])]);
+            setTotal(res.total || 0);
+            setOffset(next);
+        } catch (e) {
+            setError(e.message || 'Failed to load more entries.');
+        } finally {
+            setLoadingMore(false);
+        }
+    };
+
+    useEffect(() => {
+        apiFetch('/audit/meta')
+            .then(r => setMeta(r.data || { usernames: [], actions: [], resource_types: [] }))
+            .catch(() => {});
+    }, []);
+
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    useEffect(() => { fetchLogs(); }, [fUser, fAction, fResource, fFrom, fTo]);
+
+    const clearFilters = () => { setFUser(''); setFAction(''); setFResource(''); setFFrom(''); setFTo(''); };
+    const hasFilters = fUser || fAction || fResource || fFrom || fTo;
+
+    const handleExport = async () => {
+        // Export all matching entries (up to the backend cap), not just the loaded page.
+        let source = logs;
+        try {
+            const res = await apiFetch(`/audit?${buildParams(0, 500)}`);
+            if (res?.data) source = res.data;
+        } catch { /* fall back to currently loaded rows */ }
+        const rows = source.map(l => ({
+            Time:          fmtDateTime(l.created_at),
+            User:          l.username,
+            Action:        l.action,
+            Resource:      l.resource_type,
+            'Resource ID': l.resource_id || '',
+            Details:       summarizeDetail(l.detail),
+            IP:            l.ip_address || '',
+        }));
+        exportWorkbook(exportFilename('Audit_Log'), [{ name: 'Audit Log', rows }]);
+    };
+
+    return (
+        <div className="space-y-6">
+            {/* HEADER */}
+            <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+                <div>
+                    <h3 className="text-xl font-bold text-slate-800">{t('settings.audit.title')}</h3>
+                    <p className="text-slate-500 text-sm mt-1">{t('settings.audit.subtitle')}</p>
+                </div>
+                <button onClick={handleExport} disabled={logs.length === 0}
+                    className="bg-white border border-slate-200 text-slate-600 hover:text-emerald-700 hover:border-emerald-200 px-5 py-2 rounded-xl font-semibold shadow-sm transition-all flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed">
+                    <Download className="w-4 h-4" /> {t('common.export')}
+                </button>
+            </div>
+
+            {/* FILTERS */}
+            <div className="flex flex-wrap items-center gap-2">
+                <select value={fUser} onChange={e => setFUser(e.target.value)} className="px-4 py-2 text-xs font-bold bg-white border border-slate-200 rounded-xl outline-none focus:border-emerald-500 text-slate-600 shadow-sm">
+                    <option value="">{t('settings.audit.allUsers')}</option>
+                    {meta.usernames.map(u => <option key={u} value={u}>{u}</option>)}
+                </select>
+                <select value={fAction} onChange={e => setFAction(e.target.value)} className="px-4 py-2 text-xs font-bold bg-white border border-slate-200 rounded-xl outline-none focus:border-emerald-500 text-slate-600 shadow-sm">
+                    <option value="">{t('settings.audit.allActions')}</option>
+                    {meta.actions.map(a => <option key={a} value={a}>{a}</option>)}
+                </select>
+                <select value={fResource} onChange={e => setFResource(e.target.value)} className="px-4 py-2 text-xs font-bold bg-white border border-slate-200 rounded-xl outline-none focus:border-emerald-500 text-slate-600 shadow-sm">
+                    <option value="">{t('settings.audit.allResources')}</option>
+                    {meta.resource_types.map(r => <option key={r} value={r}>{r}</option>)}
+                </select>
+                <input type="date" value={fFrom} onChange={e => setFFrom(e.target.value)} className="px-3 py-2 text-xs font-bold bg-white border border-slate-200 rounded-xl outline-none focus:border-emerald-500 text-slate-600 shadow-sm" />
+                <span className="text-slate-400 text-xs">→</span>
+                <input type="date" value={fTo} onChange={e => setFTo(e.target.value)} className="px-3 py-2 text-xs font-bold bg-white border border-slate-200 rounded-xl outline-none focus:border-emerald-500 text-slate-600 shadow-sm" />
+                {hasFilters && (
+                    <button onClick={clearFilters} className="px-3 py-2 text-xs font-bold text-slate-400 hover:text-slate-700 flex items-center gap-1">
+                        <X className="w-3.5 h-3.5" /> {t('common.clear')}
+                    </button>
+                )}
+            </div>
+
+            {/* TABLE */}
+            <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
+                {loading ? (
+                    <div className="flex flex-col items-center justify-center py-20 gap-4 text-slate-400">
+                        <Loader2 className="w-10 h-10 animate-spin text-emerald-500" />
+                        <p className="text-xs font-bold uppercase tracking-widest">{t('common.loading')}</p>
+                    </div>
+                ) : error ? (
+                    <div className="flex flex-col items-center justify-center py-16 gap-3 text-slate-400">
+                        <AlertTriangle className="w-10 h-10 text-red-300" />
+                        <p className="text-sm">{error}</p>
+                        <button onClick={fetchLogs} className="text-xs font-bold text-emerald-600 hover:underline">{t('common.retry')}</button>
+                    </div>
+                ) : (
+                    <>
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left border-collapse">
+                                <thead>
+                                    <tr className="bg-slate-50/80 text-xs uppercase tracking-wider text-slate-500 font-bold">
+                                        <th className="px-6 py-4">{t('settings.audit.colTime')}</th>
+                                        <th className="px-6 py-4">{t('settings.audit.colUser')}</th>
+                                        <th className="px-6 py-4">{t('settings.audit.colAction')}</th>
+                                        <th className="px-6 py-4">{t('settings.audit.colResource')}</th>
+                                        <th className="px-6 py-4">{t('settings.audit.colDetails')}</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="text-sm font-medium text-slate-600 divide-y divide-slate-50">
+                                    {logs.length > 0 ? logs.map(l => (
+                                        <tr key={l.id} className="hover:bg-slate-50/50 transition-colors">
+                                            <td className="px-6 py-3 text-slate-400 text-xs whitespace-nowrap">{fmtDateTime(l.created_at)}</td>
+                                            <td className="px-6 py-3 font-bold text-slate-700">{l.username}</td>
+                                            <td className="px-6 py-3">
+                                                <span className={`text-[10px] font-bold uppercase px-2.5 py-1 rounded-lg border ${ACTION_BADGE[l.action] || ACTION_BADGE.LOGOUT}`}>
+                                                    {l.action}
+                                                </span>
+                                            </td>
+                                            <td className="px-6 py-3 text-xs">
+                                                <span className="font-semibold text-slate-600">{l.resource_type}</span>
+                                                {l.resource_id && <span className="text-slate-400"> #{l.resource_id}</span>}
+                                            </td>
+                                            <td className="px-6 py-3 text-xs text-slate-400 max-w-md truncate" title={summarizeDetail(l.detail)}>{summarizeDetail(l.detail)}</td>
+                                        </tr>
+                                    )) : (
+                                        <tr>
+                                            <td colSpan="5" className="px-6 py-16 text-center text-slate-400">
+                                                <div className="flex flex-col items-center gap-3">
+                                                    <ScrollText className="w-12 h-12 text-slate-200" />
+                                                    <p className="text-sm">{hasFilters ? t('settings.audit.noMatch') : t('settings.audit.empty')}</p>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                        <div className="bg-slate-50 px-6 py-3 border-t border-slate-100 flex justify-between items-center">
+                            <span className="text-xs text-slate-400">{t('common.showing')} {logs.length} {t('common.of')} {total}</span>
+                            {logs.length < total && (
+                                <button onClick={loadMore} disabled={loadingMore}
+                                    className="text-xs font-bold text-emerald-600 hover:text-emerald-700 disabled:opacity-50 flex items-center gap-1.5">
+                                    {loadingMore && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                                    {t('common.loadMore')}
+                                </button>
+                            )}
+                        </div>
+                    </>
+                )}
+            </div>
+        </div>
+    );
+}
+
 // ── MAIN SETTINGS PAGE ────────────────────────────────────────────────────────
 export default function Settings() {
     const { t } = useTranslation();
@@ -614,7 +840,10 @@ export default function Settings() {
 
     const TABS = [
         { id: 'language', label: t('settings.tabLanguage'), icon: <Languages className="w-4 h-4" />, roles: 'all' },
-        ...(isPM ? [{ id: 'users', label: t('settings.tabUsers'), icon: <Users className="w-4 h-4" />, roles: 'pm' }] : []),
+        ...(isPM ? [
+            { id: 'users', label: t('settings.tabUsers'), icon: <Users className="w-4 h-4" />, roles: 'pm' },
+            { id: 'audit', label: t('settings.tabAudit'), icon: <ScrollText className="w-4 h-4" />, roles: 'pm' },
+        ] : []),
     ];
 
     return (
@@ -644,6 +873,7 @@ export default function Settings() {
             <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
                 {activeTab === 'language' && <LanguageTab />}
                 {activeTab === 'users'    && isPM && <UserManagementTab t={t} />}
+                {activeTab === 'audit'    && isPM && <AuditLogTab t={t} />}
             </div>
         </div>
     );

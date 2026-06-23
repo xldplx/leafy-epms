@@ -60,14 +60,27 @@ const uploadEvidencePhoto = async (req, res) => {
 
     if (!req.file) return res.status(400).json({ success: false, message: 'No file uploaded.' });
 
-    try {
-        const ext      = req.file.originalname.split('.').pop();
-        const filename = `${projectId}/${taskId}/${Date.now()}.${ext}`;
+    // Allowlist image types only. The bucket is public, so a client-controlled
+    // content-type/extension would let an attacker serve executable HTML/SVG from
+    // our domain (stored XSS). Derive the extension from the validated MIME, never
+    // from the uploaded filename. SVG is intentionally excluded (can carry script).
+    const ALLOWED = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' };
 
-        const { data, error } = await supabase.storage
+    try {
+        const ext = ALLOWED[req.file.mimetype];
+        if (!ext) return res.status(400).json({ success: false, message: 'Unsupported file type. Allowed: JPEG, PNG, WebP.' });
+
+        const safeProjectId = parseInt(projectId);
+        const safeTaskId    = parseInt(taskId);
+        if (isNaN(safeProjectId) || isNaN(safeTaskId))
+            return res.status(400).json({ success: false, message: 'Valid projectId and taskId are required.' });
+
+        const filename = `${safeProjectId}/${safeTaskId}/${Date.now()}.${ext}`;
+
+        const { error } = await supabase.storage
             .from('evidence')
             .upload(filename, req.file.buffer, {
-                contentType: req.file.mimetype,
+                contentType: req.file.mimetype, // safe: constrained to an image type by ALLOWED above
                 upsert: false,
             });
 

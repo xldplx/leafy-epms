@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
     LayoutDashboard, Users, LogOut, ChevronUp, User, Settings,
     FolderKanban, ClipboardList, BarChart3, Bell, Upload,
-    Wrench, Package, Hammer, Wallet, Languages
+    Wrench, Package, Hammer, Wallet, FileText
 } from 'lucide-react';
 import { useTranslation } from '../../utils/i18n';
 
@@ -21,12 +21,16 @@ import Materials    from './features/Materials';
 import Tools        from './features/Tools';
 import Budget       from './features/Budget';
 import SettingsPage from './features/Settings';
+import Report       from './features/Report';
+import MyProfile    from './features/MyProfile';
+import ErrorBoundary from '../../components/ErrorBoundary';
 
 export default function DashboardLayout() {
     const navigate = useNavigate();
     const { t } = useTranslation();
 
     const [activePage, setActivePage]     = useState('Overview');
+    const [pendingProjectId, setPendingProjectId] = useState(null);
     const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
     const menuRef = useRef(null);
 
@@ -36,6 +40,12 @@ export default function DashboardLayout() {
     const handleLogout = () => {
         localStorage.clear();
         navigate('/login');
+    };
+
+    // Cross-page navigation (e.g. an Alert deep-linking into its project).
+    const navigateTo = (page, projectId = null) => {
+        if (projectId != null) setPendingProjectId(projectId);
+        setActivePage(page);
     };
 
     useEffect(() => {
@@ -57,6 +67,7 @@ export default function DashboardLayout() {
         { id: 'Daily Actuals',  labelKey: 'nav.dailyActuals',  icon: <ClipboardList className="w-5 h-5" />,   allowedRoles: ['Project Manager','Planner','Site Engineer'] },
         { id: 'Plan vs Actual', labelKey: 'nav.planVsActual',  icon: <BarChart3 className="w-5 h-5" />,       allowedRoles: ['Project Manager','Planner','Cost Engineer','Management'] },
         { id: 'Alerts',         labelKey: 'nav.alerts',        icon: <Bell className="w-5 h-5" />,            allowedRoles: ['Project Manager','Planner','Cost Engineer','Management'] },
+        { id: 'Report',         labelKey: 'nav.report',        icon: <FileText className="w-5 h-5" />,        allowedRoles: ['Project Manager','Planner','Cost Engineer','Management'] },
         { id: 'Excel Import',   labelKey: 'nav.excelImport',   icon: <Upload className="w-5 h-5" />,          allowedRoles: ['Project Manager','Planner','Cost Engineer','Site Engineer','Management'] },
         { id: 'Equipment',      labelKey: 'nav.equipment',     icon: <Wrench className="w-5 h-5" />,          allowedRoles: ['Project Manager','Planner','Site Engineer'] },
         { id: 'Consumables',    labelKey: 'nav.consumables',   icon: <Package className="w-5 h-5" />,         allowedRoles: ['Project Manager','Planner','Site Engineer'] },
@@ -74,6 +85,7 @@ export default function DashboardLayout() {
         'Daily Actuals':  DailyActuals,
         'Plan vs Actual': PlanVsActual,
         'Alerts':         Alerts,
+        'Report':         Report,
         'Excel Import':   ExcelImport,
         'Equipment':      Equipment,
         'Consumables':    Consumables,
@@ -81,6 +93,7 @@ export default function DashboardLayout() {
         'Tools':          Tools,
         'Budget':         Budget,
         'Settings':       SettingsPage,
+        'MyProfile':      MyProfile,
     };
 
     const ActiveComponent = PAGE_COMPONENTS[activePage] || Overview;
@@ -128,38 +141,22 @@ export default function DashboardLayout() {
                     ))}
                 </nav>
 
-                {/* SETTINGS — semua role bisa akses */}
-                <div className="px-4 pb-2 shrink-0">
-                    <div className="h-px bg-slate-100/70 mb-2" />
-                    <button onClick={() => setActivePage('Settings')}
-                        className={`w-full flex items-center gap-3.5 px-4 py-3.5 rounded-2xl text-sm font-bold transition-all duration-300 group ${
-                            activePage === 'Settings'
-                                ? 'bg-emerald-600 text-white shadow-[0_8px_20px_-4px_rgba(16,185,129,0.3)] translate-x-1'
-                                : 'text-slate-500 hover:bg-white hover:text-slate-800 hover:shadow-sm'
-                        }`}
-                    >
-                        <span className={`transition-transform duration-300 group-hover:scale-110 ${activePage === 'Settings' ? 'text-white' : 'text-slate-400 group-hover:text-emerald-500'}`}>
-                            <Settings className="w-5 h-5" />
-                        </span>
-                        <span className="tracking-tight">{t('nav.settings')}</span>
-                        {activePage === 'Settings' && (
-                            <div className="ml-auto w-1.5 h-1.5 rounded-full bg-white/40 animate-pulse" />
-                        )}
-                    </button>
-                </div>
+
 
                 {/* USER PROFILE */}
                 <div className="p-4 border-t border-slate-100/50 relative shrink-0" ref={menuRef}>
                     {isUserMenuOpen && (
                         <div className="absolute bottom-[calc(100%-10px)] left-4 right-4 bg-white border border-slate-200 shadow-xl shadow-slate-200/50 rounded-xl overflow-hidden animate-in slide-in-from-bottom-2 fade-in duration-200 z-50">
                             <div className="p-2 space-y-1">
-                                <button className="w-full flex items-center gap-3 px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 rounded-lg transition-colors text-left">
+                                <button
+                                    onClick={() => { setActivePage('MyProfile'); setIsUserMenuOpen(false); }}
+                                    className="w-full flex items-center gap-3 px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 rounded-lg transition-colors text-left">
                                     <User className="w-4 h-4 text-slate-400" /> My Profile
                                 </button>
                                 <button
                                     onClick={() => { setActivePage('Settings'); setIsUserMenuOpen(false); }}
                                     className="w-full flex items-center gap-3 px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 rounded-lg transition-colors text-left">
-                                    <Languages className="w-4 h-4 text-slate-400" /> {t('nav.settings')}
+                                    <Settings className="w-4 h-4 text-slate-400" /> {t('nav.settings')}
                                 </button>
                                 <div className="h-px bg-slate-100 my-1 mx-2" />
                                 <button onClick={handleLogout}
@@ -189,7 +186,13 @@ export default function DashboardLayout() {
             {/* MAIN CONTENT */}
             <main className="flex-1 min-h-0 overflow-y-auto p-8 lg:p-12 scroll-smooth">
                 <div className="animate-in fade-in duration-300 max-w-7xl mx-auto">
-                    <ActiveComponent />
+                    <ErrorBoundary key={activePage}>
+                        <ActiveComponent
+                            onNavigate={navigateTo}
+                            initialProjectId={activePage === 'Projects' ? pendingProjectId : null}
+                            onConsumeInitial={() => setPendingProjectId(null)}
+                        />
+                    </ErrorBoundary>
                 </div>
             </main>
         </div>
