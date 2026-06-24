@@ -16,9 +16,10 @@ function computeSchedulePct(plannedStart, plannedEnd, today) {
     const start   = new Date(plannedStart);
     const end     = new Date(plannedEnd);
     const total   = end - start;
-    if (total <= 0) return 100;
+    if (total <= 0) return 1;
     const elapsed = today - start;
-    return Math.min(100, Math.max(0, (elapsed / total) * 100));
+    // Return 0-1 (desimal) sesuai presisi DB NUMERIC(5,4)
+    return Math.min(1, Math.max(0, elapsed / total));
 }
 
 function computeFloat(plannedEnd, today) {
@@ -41,7 +42,7 @@ function enrichTasks(tasks) {
 
         return {
             ...task,
-            schedule_pct: parseFloat(schedulePct.toFixed(2)),
+            schedule_pct: parseFloat(schedulePct.toFixed(4)),
             float:        floatDays,
         };
     });

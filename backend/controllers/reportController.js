@@ -32,13 +32,13 @@ const supabase = require('../config/db');
 // ── Helper: hitung schedule_pct dari tanggal ──────────────────────────────────
 function computeSchedulePct(plannedStart, plannedEnd, today = new Date()) {
     if (!plannedStart || !plannedEnd) return 0;
-    const start    = new Date(plannedStart);
-    const end      = new Date(plannedEnd);
-    const total    = end - start;
-    if (total <= 0) return 100;
-    const elapsed  = today - start;
-    const pct      = (elapsed / total) * 100;
-    return Math.min(100, Math.max(0, pct));
+    const start   = new Date(plannedStart);
+    const end     = new Date(plannedEnd);
+    const total   = end - start;
+    if (total <= 0) return 1;
+    const elapsed = today - start;
+    // Return 0-1 (desimal) sesuai presisi DB NUMERIC(5,4)
+    return Math.min(1, Math.max(0, elapsed / total));
 }
 
 // ── Helper: hitung float (simplified) ────────────────────────────────────────
@@ -202,7 +202,7 @@ const refreshSchedulePct = async (req, res) => {
             const { error: uErr } = await supabase
                 .from('tasks')
                 .update({
-                    schedule_pct: parseFloat(schedulePct.toFixed(2)),
+                    schedule_pct: parseFloat(schedulePct.toFixed(4)),
                     float:        floatDays,
                     updated_at:   today.toISOString(),
                 })
