@@ -178,7 +178,7 @@ export default function Budget() {
     const renderRow = (row) => {
         const variance = (Number(row.planned) || 0) - (Number(row.actual) || 0);
         const pct      = (Number(row.planned) || 0) > 0 ? (Number(row.actual) / Number(row.planned)) * 100 : 0;
-        const overrun  = row.actual > row.planned && row.actual > 0;
+        const overrun  = (Number(row.actual) || 0) > (Number(row.planned) || 0) && (Number(row.actual) || 0) > 0;
         const isSyncing = syncingId === row.id;
         return (
             <tr key={row.id} className={`transition-colors group ${overrun ? 'bg-red-50/40 hover:bg-red-50/60' : 'hover:bg-slate-50/50'}`}>

@@ -325,7 +325,7 @@ export default function Analytics() {
                         bg: 'bg-emerald-50', 
                         cls: 'text-emerald-600', 
                         label: 'SPI', 
-                        value: evmMetrics?.SPI !== null ? evmMetrics?.SPI?.toFixed(2) : '—', 
+                        value: evmMetrics?.SPI != null ? evmMetrics?.SPI?.toFixed(2) : '—',
                         valCls: 'text-emerald-600'
                     },
                     { 
@@ -333,7 +333,7 @@ export default function Analytics() {
                         bg: 'bg-amber-50', 
                         cls: 'text-amber-600', 
                         label: 'Planned Value', 
-                        value: evmMetrics?.PV !== null ? `IDR ${(evmMetrics?.PV / 1e6).toFixed(1)}M` : '—', 
+                        value: evmMetrics?.PV != null ? `IDR ${(evmMetrics?.PV / 1e6).toFixed(1)}M` : '—',
                         valCls: 'text-amber-600'
                     },
                     { 
@@ -341,7 +341,7 @@ export default function Analytics() {
                         bg: 'bg-emerald-50', 
                         cls: 'text-emerald-600', 
                         label: 'Earned Value', 
-                        value: evmMetrics?.EV !== null ? `IDR ${(evmMetrics?.EV / 1e6).toFixed(1)}M` : '—', 
+                        value: evmMetrics?.EV != null ? `IDR ${(evmMetrics?.EV / 1e6).toFixed(1)}M` : '—',
                         valCls: 'text-emerald-600'
                     },
                 ].map((kpi, index) => (

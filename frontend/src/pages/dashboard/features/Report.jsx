@@ -142,7 +142,7 @@ export default function Report({ onNavigate, initialProjectId, onConsumeInitial 
                 <select value={selectedProjectId || ''} onChange={e => setSelectedProjectId(Number(e.target.value))}
                     className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-700 text-sm font-semibold outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all"
                 >
-                    {projects.map(p => <option key={p.id} value={p.id}>{p.project_code} — {p.name}</option>)}
+                    {projects.map(p => <option key={p.id} value={p.id}>{p.project_code} — {p.project_name}</option>)}
                 </select>
             </div>
 

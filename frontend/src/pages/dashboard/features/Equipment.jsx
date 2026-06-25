@@ -388,7 +388,7 @@ export default function Equipment({ onNavigate, initialProjectId, onConsumeIniti
                                                     </span>
                                                 </td>
                                                 <td className="px-6 py-4 text-slate-400 text-xs">{fmtDate(equip.last_service)}</td>
-                                                <td className="px-6 py-4 font-bold text-slate-700">{parseFloat(equip.utilization).toFixed(1)}%</td>
+                                                <td className="px-6 py-4 font-bold text-slate-700">{(parseFloat(equip.utilization) || 0).toFixed(1)}%</td>
                                                 <td className="px-6 py-4">
                                                     <div className="flex items-center justify-end gap-1">
                                                         {canEdit && (

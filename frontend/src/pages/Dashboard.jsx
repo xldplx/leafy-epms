@@ -21,6 +21,8 @@ export default function Login() {
                 localStorage.setItem('token', data.token);
                 localStorage.setItem('userRole', data.role);
                 localStorage.setItem('userName', data.username);
+                if (data.email) localStorage.setItem('userEmail', data.email);
+                if (data.full_name) localStorage.setItem('userFullName', data.full_name);
                 navigate('/dashboard/overview');
             } else {
                 setError(data.message || 'Login failed. Please try again.');

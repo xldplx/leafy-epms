@@ -374,10 +374,10 @@ export default function Materials({ onNavigate, initialProjectId, onConsumeIniti
                                                 <td className="px-6 py-4 font-semibold text-slate-700">{material.name}</td>
                                                 <td className="px-6 py-4 text-slate-500">{material.unit || '—'}</td>
                                                 <td className={`px-6 py-4 font-bold ${isOutOfStock ? 'text-red-600' : isLowStock ? 'text-amber-600' : 'text-slate-700'}`}>
-                                                    {parseFloat(material.quantity).toLocaleString()}
+                                                    {(parseFloat(material.quantity) || 0).toLocaleString()}
                                                 </td>
-                                                <td className="px-6 py-4 text-slate-500">{parseFloat(material.planned_qty).toLocaleString()}</td>
-                                                <td className="px-6 py-4 text-slate-500">{parseFloat(material.actual_qty).toLocaleString()}</td>
+                                                <td className="px-6 py-4 text-slate-500">{(parseFloat(material.planned_qty) || 0).toLocaleString()}</td>
+                                                <td className="px-6 py-4 text-slate-500">{(parseFloat(material.actual_qty) || 0).toLocaleString()}</td>
                                                 <td className="px-6 py-4">
                                                     <span className={`text-[10px] font-bold uppercase px-2.5 py-1 rounded-lg border ${STATUS_BADGE[status] || STATUS_BADGE.on_track}`}>
                                                         {statusLabel(status)}

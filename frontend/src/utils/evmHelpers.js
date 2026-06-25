@@ -7,11 +7,15 @@ function _lang() {
     try { return localStorage.getItem('epms.language') || 'en'; } catch { return 'en'; }
 }
 
+// Supabase/PostgREST returns NUMERIC columns as strings. Coerce before any
+// arithmetic — `s + "100" + "200"` concatenates instead of summing.
+const num = (v) => parseFloat(v) || 0;
+
 export function computeEvm(tasks, schedulePct) {
-    const BAC = tasks.reduce((s, t) => s + t.planned_cost, 0);
-    const EV  = tasks.reduce((s, t) => s + t.planned_cost * (t.pct_complete / 100), 0);
-    const AC  = tasks.reduce((s, t) => s + t.actual_cost, 0);
-    const PV  = BAC * (schedulePct || 0);
+    const BAC = tasks.reduce((s, t) => s + num(t.planned_cost), 0);
+    const EV  = tasks.reduce((s, t) => s + num(t.planned_cost) * (num(t.pct_complete) / 100), 0);
+    const AC  = tasks.reduce((s, t) => s + num(t.actual_cost), 0);
+    const PV  = BAC * num(schedulePct);
     const CPI = AC > 0 ? EV / AC : null;
     const SPI = PV > 0 ? EV / PV : null;
     const CV  = EV - AC;
@@ -21,11 +25,11 @@ export function computeEvm(tasks, schedulePct) {
     const VAC  = EAC !== null ? BAC - EAC : null;
     const TCPI = (BAC - AC) > 0 ? (BAC - EV) / (BAC - AC) : null;
     const overallPct = BAC > 0 ? (EV / BAC) * 100 : 0;
-    const totalPlannedHours  = tasks.reduce((s, t) => s + (t.planned_hours || 0), 0);
-    const totalActualHours   = tasks.reduce((s, t) => s + (t.actual_hours  || 0), 0);
+    const totalPlannedHours  = tasks.reduce((s, t) => s + num(t.planned_hours), 0);
+    const totalActualHours   = tasks.reduce((s, t) => s + num(t.actual_hours), 0);
     const totalHoursVariance = tasks.reduce((s, t) =>
-        t.actual_hours > 0
-            ? s + (Math.round((t.planned_hours || 0) * (t.pct_complete / 100)) - t.actual_hours)
+        num(t.actual_hours) > 0
+            ? s + (Math.round(num(t.planned_hours) * (num(t.pct_complete) / 100)) - num(t.actual_hours))
             : s, 0);
     return { BAC, EV, AC, PV, CPI, SPI, CV, SV, EAC, ETC, VAC, TCPI, overallPct, totalPlannedHours, totalActualHours, totalHoursVariance };
 }
@@ -90,10 +94,10 @@ export function computeAlerts(projects, allTasks, thresholds) {
 
     projects.forEach(project => {
         const tasks = allTasks.filter(task => task.project_id === project.id);
-        const BAC = tasks.reduce((s, task) => s + task.planned_cost, 0);
-        const EV  = tasks.reduce((s, task) => s + task.planned_cost * (task.pct_complete / 100), 0);
-        const AC  = tasks.reduce((s, task) => s + task.actual_cost, 0);
-        const PV  = BAC * project.schedule_pct;
+        const BAC = tasks.reduce((s, task) => s + num(task.planned_cost), 0);
+        const EV  = tasks.reduce((s, task) => s + num(task.planned_cost) * (num(task.pct_complete) / 100), 0);
+        const AC  = tasks.reduce((s, task) => s + num(task.actual_cost), 0);
+        const PV  = BAC * num(project.schedule_pct);
         const CPI = AC > 0 ? EV / AC : null;
         const SPI = PV > 0 ? EV / PV : null;
 
@@ -108,8 +112,8 @@ export function computeAlerts(projects, allTasks, thresholds) {
         if (SPI !== null) {
             if (SPI < tv.spi_red) {
                 const delayedTasks = tasks
-                    .filter(task => task.pct_complete < 100)
-                    .sort((a, b) => (b.planned_cost * (1 - b.pct_complete / 100)) - (a.planned_cost * (1 - a.pct_complete / 100)))
+                    .filter(task => num(task.pct_complete) < 100)
+                    .sort((a, b) => (num(b.planned_cost) * (1 - num(b.pct_complete) / 100)) - (num(a.planned_cost) * (1 - num(a.pct_complete) / 100)))
                     .slice(0, 2);
                 alerts.push({ id: `${project.id}-spi-critical`, project, metric: 'SPI', value: SPI, threshold: tv.spi_red, severity: 'critical', recommendation: _makeRec('spi_critical', delayedTasks.map(t => t.task_name).join(', ')), affectedTasks: delayedTasks });
             } else if (SPI < tv.spi_amber) {

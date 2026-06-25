@@ -1,25 +1,37 @@
 
 import React, { useState } from 'react';
 import { User, Mail, Briefcase, Save, AlertCircle } from 'lucide-react';
-import { useTranslation } from '../../../utils/i18n';
+import { apiFetch } from '../../../utils/api';
 
 export default function MyProfile() {
-    const { t } = useTranslation();
-    const [name, setName] = useState(localStorage.getItem('userName') || 'User');
+    const [name, setName] = useState(localStorage.getItem('userFullName') || localStorage.getItem('userName') || 'User');
     const [email, setEmail] = useState(localStorage.getItem('userEmail') || '');
-    const [role, setRole] = useState(localStorage.getItem('userRole') || 'Guest');
+    const [role] = useState(localStorage.getItem('userRole') || 'Guest');
     const [success, setSuccess] = useState(false);
     const [loading, setLoading] = useState(false);
+    const [error, setError] = useState('');
 
-    const handleSave = () => {
+    const handleSave = async () => {
         setLoading(true);
-        setTimeout(() => {
+        setError('');
+        try {
+            const token = localStorage.getItem('token');
+            const userId = token ? JSON.parse(atob(token.split('.')[1])).id : null;
+            if (!userId) throw new Error('Not authenticated. Please log in again.');
+            await apiFetch(`/users/${userId}`, {
+                method: 'PUT',
+                body: JSON.stringify({ email, full_name: name }),
+            });
             localStorage.setItem('userName', name);
+            localStorage.setItem('userFullName', name);
             if (email) localStorage.setItem('userEmail', email);
             setSuccess(true);
-            setLoading(false);
             setTimeout(() => setSuccess(false), 3000);
-        }, 500);
+        } catch (e) {
+            setError(e.message || 'Failed to save profile.');
+        } finally {
+            setLoading(false);
+        }
     };
 
     return (
@@ -55,6 +67,12 @@ export default function MyProfile() {
                         <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 px-4 py-3 rounded-xl flex items-center gap-2 mb-6">
                             <AlertCircle className="w-4 h-4" />
                             <span className="font-semibold">Profile updated successfully!</span>
+                        </div>
+                    )}
+                    {error && (
+                        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl flex items-center gap-2 mb-6">
+                            <AlertCircle className="w-4 h-4" />
+                            <span className="font-semibold">{error}</span>
                         </div>
                     )}
                     <div className="space-y-5">

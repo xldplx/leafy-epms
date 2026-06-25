@@ -93,6 +93,11 @@ function parseTask(row, mapping) {
 export default function ExcelImport() {
     const userRole  = localStorage.getItem('userRole');
     const canImport = ['Project Manager', 'Planner'].includes(userRole);
+    // Replace deletes existing tasks first, but DELETE /tasks/:id is Project-Manager-only
+    // (server.js authorize), so a Planner's Replace import 403s mid-way. Gate it to PM.
+    // NOTE: the replace flow is still non-atomic (delete-all then insert) — a failed insert
+    // leaves the project empty; a transactional bulk-replace endpoint is a follow-up.
+    const canReplace = userRole === 'Project Manager';
 
     const [selectedProjectId, setSelectedProjectId] = useState('');
     const [fileName, setFileName]                   = useState('');
@@ -467,7 +472,7 @@ export default function ExcelImport() {
                             </div>
                             <div className="flex items-center gap-3 shrink-0">
                                 <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl" role="group" aria-label="Import mode">
-                                    {[['append', 'Append'], ['replace', 'Replace all']].map(([m, label]) => (
+                                    {[['append', 'Append'], ...(canReplace ? [['replace', 'Replace all']] : [])].map(([m, label]) => (
                                         <button
                                             key={m}
                                             type="button"
