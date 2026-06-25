@@ -2,8 +2,7 @@ const supabase = require('../config/db');
 
 const VALID_ROLES = ['Project Manager', 'Planner', 'Cost Engineer', 'Site Engineer', 'Management'];
 
-// Exact columns dari public.users — tidak ada kolom email
-const SELECT_COLS = 'id, username, role, is_active, created_by, created_at, updated_at';
+const SELECT_COLS = 'id, username, role, is_active, email, full_name, created_by, created_at, updated_at';
 
 // ── GET /api/users ────────────────────────────────────────────────────────────
 const getAllUsers = async (req, res) => {
@@ -83,6 +82,9 @@ const updateUser = async (req, res) => {
     const isSelf   = targetId === req.user.id;
 
     const updates = {};
+
+    if (req.body.email     !== undefined) updates.email     = req.body.email     || null;
+    if (req.body.full_name !== undefined) updates.full_name = req.body.full_name || null;
 
     if (req.body.username !== undefined) {
         if (!req.body.username.trim())

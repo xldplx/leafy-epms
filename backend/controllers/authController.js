@@ -19,7 +19,7 @@ const login = async (req, res) => {
     try {
         const { data, error } = await supabase
             .from('users')
-            .select('id, username, role, password, is_active')
+            .select('id, username, role, password, is_active, email, full_name')
             .eq('username', username)
             .maybeSingle();
 
@@ -56,6 +56,8 @@ const login = async (req, res) => {
             refreshToken: refreshToken,
             role:         data.role,
             username:     data.username,
+            email:        data.email     || null,
+            full_name:    data.full_name  || null,
             expiresIn:    ACCESS_EXPIRES,
         });
     } catch (e) { res.status(500).json({ success: false, message: e.message }); }
@@ -120,7 +122,7 @@ const getMe = async (req, res) => {
     try {
         const { data, error } = await supabase
             .from('users')
-            .select('id, username, role, is_active, created_at')
+            .select('id, username, role, is_active, email, full_name, created_at')
             .eq('id', req.user.id)
             .single();
         if (error || !data) return res.status(404).json({ success: false, message: 'User not found.' });

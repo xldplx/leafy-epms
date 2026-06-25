@@ -227,7 +227,7 @@ export default function Materials({ onNavigate, initialProjectId, onConsumeIniti
                 <select value={selectedProjectId} onChange={(e) => setSelectedProjectId(e.target.value)}
                     className="mt-2 w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all text-slate-700 text-sm">
                     {projects.map(p => (
-                        <option key={p.id} value={p.id}>{p.project_code} - {p.name}</option>
+                        <option key={p.id} value={p.id}>{p.project_code} - {p.project_name}</option>
                     ))}
                 </select>
             </div>

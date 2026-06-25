@@ -1,87 +1,148 @@
+/**
+ * materialsController.js
+ * CRUD untuk tabel public.materials
+ *
+ * Kolom tabel:
+ *   id, name, unit, quantity, planned_qty, actual_qty,
+ *   unit_cost, status, spec, category, project_id,
+ *   created_at, updated_at
+ *
+ * Routes yang dipakai frontend (Materials.jsx):
+ *   GET    /api/materials?project_id=:id   → getAllMaterials
+ *   POST   /api/materials                  → createMaterial
+ *   PUT    /api/materials/:id              → updateMaterial
+ *   DELETE /api/materials/:id              → deleteMaterial
+ */
 
-const supabase = require('../config/db');
+const supabase   = require('../config/db');
+const { writeAudit } = require('./auditController');
 
-// GET /api/materials?project_id=X
+// ── GET /api/materials?project_id=:id ─────────────────────────────────────────
 const getAllMaterials = async (req, res) => {
     try {
-        const { project_id } = req.query;
-        let query = supabase.from('materials').select('*');
-        if (project_id) {
-            query = query.eq('project_id', parseInt(project_id));
+        let query = supabase
+            .from('materials')
+            .select('*')
+            .order('created_at', { ascending: false });
+
+        if (req.query.project_id) {
+            query = query.eq('project_id', parseInt(req.query.project_id));
         }
+
         const { data, error } = await query;
-        
         if (error) return res.status(500).json({ success: false, message: error.message });
         res.json({ success: true, data: data || [] });
-    } catch (e) { res.status(500).json({ success: false, message: e.message }); }
+    } catch (e) {
+        res.status(500).json({ success: false, message: e.message });
+    }
 };
 
-// POST /api/materials
+// ── POST /api/materials ───────────────────────────────────────────────────────
 const createMaterial = async (req, res) => {
-    const { project_id, name, unit, quantity, planned_qty, actual_qty, unit_cost, status, spec } = req.body;
-    if (!project_id) return res.status(400).json({ success: false, message: 'project_id is required.' });
-    if (!name?.trim()) return res.status(400).json({ success: false, message: 'name is required.' });
+    const {
+        name, unit, quantity, planned_qty, actual_qty,
+        unit_cost, status, spec, project_id, category,
+    } = req.body;
+
+    if (!name || !String(name).trim())
+        return res.status(400).json({ success: false, message: 'name is required.' });
+    if (!project_id)
+        return res.status(400).json({ success: false, message: 'project_id is required.' });
 
     try {
-        const { data, error } = await supabase.from('materials').insert([{
-            project_id: parseInt(project_id),
-            name: name.trim(),
-            unit: unit?.trim() || null,
-            quantity: parseFloat(quantity) || 0,
-            planned_qty: parseFloat(planned_qty) || 0,
-            actual_qty: parseFloat(actual_qty) || 0,
-            unit_cost: parseFloat(unit_cost) || 0,
-            status: status || 'on_track',
-            spec: spec?.trim() || null
-        }]).select().single();
-        
+        const { data, error } = await supabase
+            .from('materials')
+            .insert([{
+                name:        String(name).trim(),
+                unit:        unit        || null,
+                quantity:    quantity    != null ? parseFloat(quantity)    : 0,
+                planned_qty: planned_qty != null ? parseFloat(planned_qty) : 0,
+                actual_qty:  actual_qty  != null ? parseFloat(actual_qty)  : 0,
+                unit_cost:   unit_cost   != null ? parseFloat(unit_cost)   : 0,
+                status:      status      || 'on_track',
+                spec:        spec        || null,
+                category:    category    || null,
+                project_id:  parseInt(project_id),
+            }])
+            .select()
+            .single();
+
         if (error) return res.status(500).json({ success: false, message: error.message });
+
+        await writeAudit(req, 'CREATE', 'material', data.id, { name: data.name, project_id });
         res.status(201).json({ success: true, data });
-    } catch (e) { res.status(500).json({ success: false, message: e.message }); }
+    } catch (e) {
+        res.status(500).json({ success: false, message: e.message });
+    }
 };
 
-// PUT /api/materials/:id
+// ── PUT /api/materials/:id ────────────────────────────────────────────────────
 const updateMaterial = async (req, res) => {
     const { id } = req.params;
-    const updates = {};
-    if (req.body.name !== undefined) {
-        if (!req.body.name.trim()) return res.status(400).json({ success: false, message: 'name cannot be empty.' });
-        updates.name = req.body.name.trim();
-    }
-    if (req.body.unit !== undefined) updates.unit = req.body.unit?.trim() || null;
-    if (req.body.quantity !== undefined) updates.quantity = parseFloat(req.body.quantity) || 0;
-    if (req.body.planned_qty !== undefined) updates.planned_qty = parseFloat(req.body.planned_qty) || 0;
-    if (req.body.actual_qty !== undefined) updates.actual_qty = parseFloat(req.body.actual_qty) || 0;
-    if (req.body.unit_cost !== undefined) updates.unit_cost = parseFloat(req.body.unit_cost) || 0;
-    if (req.body.status !== undefined) updates.status = req.body.status;
-    if (req.body.spec !== undefined) updates.spec = req.body.spec?.trim() || null;
+    const {
+        name, unit, quantity, planned_qty, actual_qty,
+        unit_cost, status, spec, project_id, category,
+    } = req.body;
 
-    if (Object.keys(updates).length === 0) return res.status(400).json({ success: false, message: 'No valid fields to update.' });
+    if (!name || !String(name).trim())
+        return res.status(400).json({ success: false, message: 'name is required.' });
 
     try {
-        const { data, error } = await supabase.from('materials')
+        const updates = {
+            name:       String(name).trim(),
+            unit:       unit     || null,
+            status:     status   || 'on_track',
+            spec:       spec     || null,
+            category:   category || null,
+            updated_at: new Date().toISOString(),
+        };
+
+        if (quantity    != null) updates.quantity    = parseFloat(quantity);
+        if (planned_qty != null) updates.planned_qty = parseFloat(planned_qty);
+        if (actual_qty  != null) updates.actual_qty  = parseFloat(actual_qty);
+        if (unit_cost   != null) updates.unit_cost   = parseFloat(unit_cost);
+        if (project_id  != null) updates.project_id  = parseInt(project_id);
+
+        const { data, error } = await supabase
+            .from('materials')
             .update(updates)
-            .eq('id', parseInt(id))
-            .select().single();
-        
+            .eq('id', id)
+            .select()
+            .single();
+
         if (error) return res.status(500).json({ success: false, message: error.message });
         if (!data)  return res.status(404).json({ success: false, message: 'Material not found.' });
+
+        await writeAudit(req, 'UPDATE', 'material', id, { name: data.name });
         res.json({ success: true, data });
-    } catch (e) { res.status(500).json({ success: false, message: e.message }); }
+    } catch (e) {
+        res.status(500).json({ success: false, message: e.message });
+    }
 };
 
-// DELETE /api/materials/:id
+// ── DELETE /api/materials/:id ─────────────────────────────────────────────────
 const deleteMaterial = async (req, res) => {
+    const { id } = req.params;
     try {
-        const { error } = await supabase.from('materials').delete().eq('id', parseInt(req.params.id));
+        // Ambil nama dulu untuk keperluan audit log
+        const { data: existing } = await supabase
+            .from('materials')
+            .select('name')
+            .eq('id', id)
+            .single();
+
+        const { error } = await supabase
+            .from('materials')
+            .delete()
+            .eq('id', id);
+
         if (error) return res.status(500).json({ success: false, message: error.message });
-        res.json({ success: true, message: 'Material deleted successfully.' });
-    } catch (e) { res.status(500).json({ success: false, message: e.message }); }
+
+        await writeAudit(req, 'DELETE', 'material', id, { name: existing?.name });
+        res.json({ success: true, message: 'Material deleted.' });
+    } catch (e) {
+        res.status(500).json({ success: false, message: e.message });
+    }
 };
 
-module.exports = {
-    getAllMaterials,
-    createMaterial,
-    updateMaterial,
-    deleteMaterial
-};
+module.exports = { getAllMaterials, createMaterial, updateMaterial, deleteMaterial };
