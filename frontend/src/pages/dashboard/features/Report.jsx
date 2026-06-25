@@ -45,12 +45,12 @@ export default function Report({ onNavigate, initialProjectId, onConsumeInitial 
     const criticalActivities = useMemo(() => {
         return projectTasks.filter(task => {
             // Tasks with no float (critical path) OR behind schedule
-            const isBehind = task.pct_complete < (task.schedule_pct || 50);
+            const isBehind = task.pct_complete < (task.schedule_pct || 0) * 100;
             const isLowFloat = (task.float || 0) <= 2;
             return isBehind || isLowFloat;
         }).map(task => ({
             ...task,
-            delayDays: Math.max(0, (task.schedule_pct || 0) - task.pct_complete) * ((task.planned_duration || 1) / 100)
+            delayDays: Math.max(0, (task.schedule_pct || 0) * 100 - task.pct_complete) * ((task.planned_duration || 1) / 100)
         }));
     }, [projectTasks]);
 
@@ -58,7 +58,7 @@ export default function Report({ onNavigate, initialProjectId, onConsumeInitial 
         // Analyze tasks that are delayed
         return projectTasks.filter(task => (task.pct_complete || 0) < 100).map(task => {
             const plannedDuration = task.planned_duration || 1;
-            const scheduledPct = task.schedule_pct || 0;
+            const scheduledPct = (task.schedule_pct || 0) * 100;
             const plannedPctComplete = scheduledPct;
             const actualPctComplete = task.pct_complete || 0;
             const pctBehind = Math.max(0, plannedPctComplete - actualPctComplete);

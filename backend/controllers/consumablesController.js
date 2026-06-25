@@ -200,9 +200,13 @@ const logConsumption = async (req, res) => {
 
         if (logErr) return res.status(500).json({ success: false, message: logErr.message });
 
-        // 3. Kurangi current_stock dan update last_used_at
+        // 3. Kurangi current_stock dan update last_used_at.
+        // NOTE: not atomic — concurrent logs for the same item can lose updates.
+        // A true fix needs a Postgres RPC (current_stock = current_stock - qty).
+        // Here we at least check the error and compensate by deleting the log, so
+        // we never report success with the stock left un-decremented.
         const newStock = Math.max(0, currentStock - qtyNum);
-        await supabase
+        const { error: decErr } = await supabase
             .from('consumables')
             .update({
                 current_stock: newStock,
@@ -210,6 +214,12 @@ const logConsumption = async (req, res) => {
                 updated_at:    new Date().toISOString(),
             })
             .eq('id', parseInt(item_id));
+
+        if (decErr) {
+            // Compensate: remove the orphan log so the ledger and stock stay consistent.
+            await supabase.from('consumable_logs').delete().eq('id', logData.id);
+            return res.status(500).json({ success: false, message: decErr.message });
+        }
 
         await writeAudit(req, 'CREATE', 'consumable_log', logData.id, {
             item_id,

@@ -161,8 +161,10 @@ async function computeActualForRow(budgetRow, allTasks) {
 
         if (wbsNode && wbsNode.wbs_code) {
             const prefix = wbsNode.wbs_code;
+            // Boundary-safe prefix match: '1.1' must not also capture '1.10'.
+            // Count the node itself and its dotted descendants only.
             const filtered = allTasks.filter(
-                t => t.wbs_code && t.wbs_code.startsWith(prefix)
+                t => t.wbs_code && (t.wbs_code === prefix || t.wbs_code.startsWith(prefix + '.'))
             );
             return filtered.reduce((s, t) => s + parseFloat(t.actual_cost || 0), 0);
         }
