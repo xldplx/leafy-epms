@@ -201,30 +201,24 @@ export default function Projects({ initialProjectId = null, onConsumeInitial }) 
                 </div>
             )}
 
-            {/* HEADER */}
-            <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
-                <div>
-                    <h2 className="text-3xl font-bold text-slate-800 tracking-tight">Projects</h2>
-                    <p className="text-slate-500 mt-1">Manage project portfolio & work breakdown</p>
-                </div>
-                <div className="flex items-center gap-3">
+            {/* ACTIONS */}
+            <div className="flex justify-end gap-3 mb-6">
+                <button
+                    onClick={handleExport}
+                    disabled={projects.length === 0}
+                    className="text-sm font-semibold px-4 py-2.5 rounded-xl transition-all flex items-center gap-2 border shadow-sm text-emerald-600 bg-emerald-50 border-emerald-100 hover:bg-emerald-600 hover:text-white hover:border-emerald-600 hover:shadow-lg hover:shadow-emerald-200 hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-40 disabled:pointer-events-none"
+                >
+                    <Download className="w-4 h-4" /> Export
+                </button>
+                {userRole === 'Project Manager' && (
                     <button
-                        onClick={handleExport}
-                        disabled={projects.length === 0}
-                        className="text-sm font-semibold px-4 py-2.5 rounded-xl transition-all flex items-center gap-2 border shadow-sm text-emerald-600 bg-emerald-50 border-emerald-100 hover:bg-emerald-600 hover:text-white hover:border-emerald-600 hover:shadow-lg hover:shadow-emerald-200 hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-40 disabled:pointer-events-none"
+                        onClick={() => setIsModalOpen(true)}
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2.5 rounded-xl font-semibold shadow-lg shadow-emerald-200 transition-all transform hover:-translate-y-0.5 flex items-center gap-2"
                     >
-                        <Download className="w-4 h-4" /> Export
+                        <Plus className="w-5 h-5" />
+                        New Project
                     </button>
-                    {userRole === 'Project Manager' && (
-                        <button
-                            onClick={() => setIsModalOpen(true)}
-                            className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2.5 rounded-xl font-semibold shadow-lg shadow-emerald-200 transition-all transform hover:-translate-y-0.5 flex items-center gap-2"
-                        >
-                            <Plus className="w-5 h-5" />
-                            New Project
-                        </button>
-                    )}
-                </div>
+                )}
             </div>
 
             {/* PORTFOLIO CONTROLS */}

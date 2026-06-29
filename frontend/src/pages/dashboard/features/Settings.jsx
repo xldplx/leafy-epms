@@ -848,11 +848,6 @@ export default function Settings() {
 
     return (
         <div className="space-y-8">
-            {/* PAGE HEADER */}
-            <div>
-                <h2 className="text-3xl font-bold text-slate-800 tracking-tight">{t('settings.title')}</h2>
-                <p className="text-slate-500 mt-1">{t('settings.subtitle')}</p>
-            </div>
 
             {/* TAB BAR */}
             <div className="flex gap-2 bg-white/60 backdrop-blur-xl p-1.5 rounded-2xl border border-slate-200/50 shadow-sm w-fit">

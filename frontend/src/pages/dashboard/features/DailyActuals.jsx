@@ -123,12 +123,6 @@ export default function DailyActuals() {
                 </div>
             )}
 
-            <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
-                <div>
-                    <h2 className="text-4xl font-black text-slate-900 tracking-tight">{t('daily.title')}</h2>
-                    <p className="text-slate-500 mt-1 font-medium">{t('daily.subtitle')}</p>
-                </div>
-            </div>
 
             {/* CONTROLS */}
             <div className={`${CARD_CLASS} p-8`}>

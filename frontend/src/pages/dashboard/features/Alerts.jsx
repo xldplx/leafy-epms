@@ -70,10 +70,6 @@ export default function Alerts({ onNavigate }) {
                 </div>
             )}
 
-            <div>
-                <h2 className="text-3xl font-bold text-slate-800 tracking-tight">{t('alerts.title')}</h2>
-                <p className="text-slate-500 mt-1">{t('alerts.subtitle')}</p>
-            </div>
 
             <div className="flex flex-wrap gap-3">
                 {alerts.length === 0 ? (

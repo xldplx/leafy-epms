@@ -112,21 +112,13 @@ export default function Overview() {
 
     return (
         <div className="space-y-10 pb-12">
-            {/* HEADER */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-                <div>
-                    <div className="flex items-center gap-2 mb-1">
-                        <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-600/80">{t('overview.portfolioLive')}</span>
-                    </div>
-                    <h2 className="text-4xl font-black text-slate-900 tracking-tight">{t('overview.title')}</h2>
-                    <p className="text-slate-500 mt-1 font-medium">{t('overview.subtitle')}</p>
-                </div>
-                <div className="flex items-center gap-2 bg-white/40 backdrop-blur-md p-1.5 rounded-2xl border border-slate-200/50 shadow-sm">
+            {/* VIEW MODE SELECTOR */}
+            <div className="flex justify-end mb-6">
+                <div className="flex items-center gap-2 bg-white/60 backdrop-blur-md p-1 rounded-xl border border-slate-200/80 shadow-sm">
                     {VIEW_MODES.map(({ key, label }) => (
                         <button key={key} onClick={() => setViewMode(key)}
-                            className={`px-5 py-2 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all ${
-                                viewMode === key ? 'bg-white text-emerald-700 shadow-md border border-emerald-100' : 'text-slate-400 hover:text-slate-700'
+                            className={`px-4 py-1.5 text-[9px] font-black uppercase tracking-widest rounded-lg transition-all ${
+                                viewMode === key ? 'bg-white text-emerald-700 shadow-sm border border-slate-200' : 'text-slate-400 hover:text-slate-700'
                             }`}>
                             {label}
                         </button>
