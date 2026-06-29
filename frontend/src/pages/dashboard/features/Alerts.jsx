@@ -133,25 +133,29 @@ export default function Alerts({ onNavigate }) {
                             role="button" tabIndex={0}
                             onKeyDown={(e) => { if ((e.key === 'Enter' || e.key === ' ') && alert.project?.id != null) { e.preventDefault(); onNavigate?.('Projects', alert.project.id); } }}
                             title={t('alerts.openProject')}
-                            className={`group bg-white rounded-3xl border p-6 flex items-start gap-4 cursor-pointer transition-all hover:shadow-md ${alert.severity === 'critical' ? 'border-red-100 hover:border-red-200' : 'border-amber-100 hover:border-amber-200'}`}
+                            className={`group bg-white rounded-3xl border border-slate-200/80 border-l-4 p-6 flex items-start gap-4 cursor-pointer transition-all hover:shadow-md hover:border-slate-300 ${
+                                alert.severity === 'critical' ? 'border-l-rose-500' : 'border-l-amber-500'
+                            }`}
                         >
-                            <div className={`p-2.5 rounded-xl shrink-0 ${alert.severity === 'critical' ? 'bg-red-50 text-red-600' : 'bg-amber-50 text-amber-600'}`}>
+                            <div className={`p-2.5 rounded-xl shrink-0 ${alert.severity === 'critical' ? 'bg-rose-50 text-rose-600 border border-rose-100' : 'bg-amber-50 text-amber-600 border border-amber-100'}`}>
                                 <AlertTriangle className="w-5 h-5" />
                             </div>
                             <div className="flex-1 min-w-0">
                                 <div className="flex items-start justify-between gap-4">
                                     <div>
-                                        <p className="font-bold text-slate-800">{alert.project.project_name}</p>
+                                        <p className="font-bold text-slate-800 tracking-tight">{alert.project.project_name}</p>
                                         <p className="font-mono text-xs text-slate-400 mt-0.5">{alert.project.project_code}</p>
                                     </div>
                                     <div className="flex items-center gap-2 shrink-0">
-                                        <span className={`text-[10px] font-bold uppercase px-2.5 py-1 rounded-lg border ${alert.severity === 'critical' ? 'bg-red-50 text-red-600 border-red-100' : 'bg-amber-50 text-amber-600 border-amber-100'}`}>
+                                        <span className={`text-[9px] font-extrabold uppercase px-2.5 py-1 rounded-lg border leading-none ${
+                                            alert.severity === 'critical' ? 'bg-rose-50 text-rose-600 border-rose-100' : 'bg-amber-50 text-amber-600 border-amber-100'
+                                        }`}>
                                             {alert.severity === 'critical' ? t('alerts.critical') : t('alerts.atRisk')}
                                         </span>
-                                        <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-emerald-500 transition-colors" />
+                                        <ChevronRight className="w-4 h-4 text-slate-350 group-hover:text-emerald-600 transition-colors" />
                                     </div>
                                 </div>
-                                <p className="text-sm text-slate-500 mt-2 leading-relaxed font-medium">{alert.recommendation}</p>
+                                <p className="text-sm text-slate-500 mt-2.5 leading-relaxed font-medium">{alert.recommendation}</p>
                                 {alert.affectedTasks?.length > 0 && (
                                     <div className="mt-4 p-4 bg-slate-50 rounded-2xl border border-slate-100">
                                         <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">{t('alerts.highImpactTasks')}</p>
@@ -160,7 +164,7 @@ export default function Alerts({ onNavigate }) {
                                                 <div key={task.id} className="flex items-center justify-between gap-4">
                                                     <span className="text-xs font-bold text-slate-700">{task.task_name}</span>
                                                     <div className="flex items-center gap-2">
-                                                        <div className="w-24 bg-slate-200 rounded-full h-1 overflow-hidden">
+                                                        <div className="w-24 bg-slate-200 rounded-full h-1.5 overflow-hidden">
                                                             <div className="bg-emerald-500 h-full" style={{ width: `${task.pct_complete}%` }} />
                                                         </div>
                                                         <span className="text-[10px] font-black text-slate-400 w-8 text-right">{task.pct_complete}%</span>

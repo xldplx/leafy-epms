@@ -36,16 +36,16 @@ export default function Login() {
 
     return (
         <div className="min-h-screen flex items-center justify-center bg-slate-950 select-none relative overflow-hidden p-4 sm:p-6 font-sans">
-            
+
             {/* Ambient Dark Grid & Glows */}
             <div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff03_1px,transparent_1px),linear-gradient(to_bottom,#ffffff03_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none" />
             <div className="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] bg-emerald-500/10 blur-[140px] rounded-full pointer-events-none" />
             <div className="absolute bottom-[-20%] right-[-10%] w-[50%] h-[50%] bg-blue-500/5 blur-[140px] rounded-full pointer-events-none" />
-            
+
             <div className="relative z-10 w-full max-w-md">
                 {/* Premium Centered Dark Card */}
                 <div className="bg-slate-900/60 backdrop-blur-2xl p-8 sm:p-10 rounded-[2.5rem] border border-slate-800/80 shadow-[0_30px_70px_-15px_rgba(0,0,0,0.6)] hover:border-emerald-500/20 transition-all duration-500 group">
-                    
+
                     {/* Top Decorative Line */}
                     <div className="absolute top-0 left-1/2 -translate-x-1/2 w-32 h-1 bg-gradient-to-r from-emerald-500 to-teal-400 rounded-full opacity-60" />
 
@@ -76,7 +76,7 @@ export default function Login() {
                     )}
 
                     <form onSubmit={handleLogin} className="space-y-5">
-                        
+
                         {/* Username */}
                         <div className="space-y-1.5">
                             <label className="text-[10px] font-bold text-slate-300 uppercase tracking-widest ml-1">

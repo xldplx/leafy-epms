@@ -276,7 +276,7 @@ export default function Analytics() {
         <div className="space-y-8 pb-12">
             {/* CONTROLS */}
             <div className="flex justify-end mb-6">
-                <div className="bg-white px-4 py-2 rounded-2xl border border-slate-150 shadow-sm flex items-center gap-3">
+                <div className="bg-white px-4 py-2 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3">
                     <label className="text-xs font-semibold text-slate-500 uppercase tracking-widest">Select Project</label>
                     <select value={selectedProjectId || ''} onChange={e => setSelectedProjectId(Number(e.target.value))}
                         className="px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all text-slate-700 text-sm font-semibold">

@@ -6,6 +6,8 @@ import {
     Wrench, Package, Hammer, Wallet, FileText, ChevronLeft, ChevronRight, Menu
 } from 'lucide-react';
 import { useTranslation } from '../../utils/i18n';
+import { apiFetch } from '../../utils/api';
+import { computeAlerts } from '../../utils/evmHelpers';
 
 import Overview     from './features/Overview';
 import Analytics    from './features/Analytics';
@@ -34,6 +36,7 @@ export default function DashboardLayout() {
     const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
     const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
     const [isCollapsed, setIsCollapsed]         = useState(false);
+    const [dbAlerts, setDbAlerts]               = useState([]);
     const menuRef = useRef(null);
     const notificationsRef = useRef(null);
 
@@ -52,6 +55,21 @@ export default function DashboardLayout() {
     };
 
     useEffect(() => {
+        const fetchAlerts = () => {
+            apiFetch('/alerts/raw')
+                .then(raw => {
+                    if (raw.success) {
+                        apiFetch('/alerts/thresholds').then(thresh => {
+                            const tv = thresh.success && thresh.data ? thresh.data : { cpi_amber: 1.00, cpi_red: 0.90, spi_amber: 1.00, spi_red: 0.90 };
+                            const computed = computeAlerts(raw.projects || [], raw.tasks || [], tv);
+                            setDbAlerts(computed);
+                        }).catch(console.error);
+                    }
+                })
+                .catch(console.error);
+        };
+        fetchAlerts();
+
         const handleClickOutside = (event) => {
             if (menuRef.current && !menuRef.current.contains(event.target)) {
                 setIsUserMenuOpen(false);
@@ -62,7 +80,7 @@ export default function DashboardLayout() {
         };
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, []);
+    }, [activePage]);
 
     // Nav items re-ordered logically by operational flow
     const NAV_ITEMS = [
@@ -186,7 +204,7 @@ export default function DashboardLayout() {
                                 } ${isCollapsed ? 'justify-center p-3' : 'gap-3 px-3 py-3'}`}
                                 title={isCollapsed ? t(item.labelKey) : undefined}
                             >
-                                <span className={`transition-transform duration-300 group-hover:scale-110 shrink-0 ${isActive ? 'text-white' : 'text-slate-455 group-hover:text-emerald-400'}`}>
+                                <span className={`transition-transform duration-300 group-hover:scale-110 shrink-0 ${isActive ? 'text-white' : 'text-slate-400 group-hover:text-emerald-400'}`}>
                                     {item.icon}
                                 </span>
                                 {!isCollapsed && (
@@ -282,7 +300,9 @@ export default function DashboardLayout() {
                                 }`}
                             >
                                 <Bell className="w-4.5 h-4.5" />
-                                <span className="absolute top-2 right-2.5 w-2 h-2 rounded-full bg-emerald-500 border border-white" />
+                                {dbAlerts.length > 0 && (
+                                    <span className="absolute top-2 right-2.5 w-2 h-2 rounded-full bg-rose-500 border border-white animate-pulse" />
+                                )}
                             </button>
                             
                             {/* Notifications Dropdown */}
@@ -294,22 +314,26 @@ export default function DashboardLayout() {
                                 <div className="px-4 py-3.5 border-b border-slate-100 flex items-center justify-between">
                                     <span className="text-xs font-black uppercase text-slate-800 tracking-wider">Latest Alerts</span>
                                 </div>
-                                <div className="divide-y divide-slate-50 max-h-64 overflow-y-auto">
-                                    <div className="p-3.5 hover:bg-slate-50 transition-colors text-left">
-                                        <div className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider">Manpower Limit</div>
-                                        <div className="text-xs text-slate-700 mt-1 font-medium leading-normal">Attendance threshold reached for Project Alpha (Site Engineer action required).</div>
-                                        <div className="text-[9px] text-slate-400 mt-1">2 hours ago</div>
-                                    </div>
-                                    <div className="p-3.5 hover:bg-slate-50 transition-colors text-left">
-                                        <div className="text-[10px] font-bold text-amber-600 uppercase tracking-wider">Cost Overrun Warning</div>
-                                        <div className="text-xs text-slate-700 mt-1 font-medium leading-normal">Weekly materials cost has exceeded planned projections by 8.4%.</div>
-                                        <div className="text-[9px] text-slate-400 mt-1">5 hours ago</div>
-                                    </div>
-                                    <div className="p-3.5 hover:bg-slate-50 transition-colors text-left">
-                                        <div className="text-[10px] font-bold text-blue-600 uppercase tracking-wider">System Update</div>
-                                        <div className="text-xs text-slate-700 mt-1 font-medium leading-normal">Excel inventory import successfully verified and parsed into main pipeline.</div>
-                                        <div className="text-[9px] text-slate-400 mt-1">1 day ago</div>
-                                    </div>
+                                <div className="divide-y divide-slate-100 max-h-64 overflow-y-auto">
+                                    {dbAlerts.length > 0 ? (
+                                        dbAlerts.slice(0, 5).map(alert => (
+                                            <button 
+                                                key={alert.id}
+                                                onClick={() => { navigateTo('Projects', alert.project?.id); setIsNotificationsOpen(false); }}
+                                                className="w-full p-3.5 hover:bg-slate-50 transition-colors text-left block"
+                                            >
+                                                <div className={`text-[9px] font-black uppercase tracking-wider ${alert.severity === 'critical' ? 'text-rose-600' : 'text-amber-600'}`}>
+                                                    {alert.severity === 'critical' ? 'Critical Deviation' : 'Threshold Warning'}
+                                                </div>
+                                                <div className="text-xs text-slate-800 mt-1 font-bold truncate">{alert.project.project_name}</div>
+                                                <div className="text-[10px] text-slate-500 mt-1 line-clamp-2 leading-relaxed">{alert.recommendation}</div>
+                                            </button>
+                                        ))
+                                    ) : (
+                                        <div className="p-8 text-center text-xs text-slate-400 font-bold uppercase tracking-wider">
+                                            All systems operational
+                                        </div>
+                                    )}
                                 </div>
                                 <button 
                                     onClick={() => { setActivePage('Alerts'); setIsNotificationsOpen(false); }}
