@@ -1,4 +1,5 @@
 const supabase = require('../config/db');
+const { writeAudit } = require('./auditController');
 
 const VALID_ROLES = ['Project Manager', 'Planner', 'Cost Engineer', 'Site Engineer', 'Management'];
 
@@ -70,6 +71,7 @@ const createUser = async (req, res) => {
             .single();
 
         if (error) return res.status(500).json({ success: false, message: error.message });
+        await writeAudit(req, 'CREATE', 'user', data.id, { username: data.username });
         res.status(201).json({ success: true, data });
     } catch (e) {
         res.status(500).json({ success: false, message: e.message });
@@ -133,6 +135,7 @@ const updateUser = async (req, res) => {
 
         if (error) return res.status(500).json({ success: false, message: error.message });
         if (!data)  return res.status(404).json({ success: false, message: 'User not found.' });
+        await writeAudit(req, 'UPDATE', 'user', data.id, { username: data.username });
         res.json({ success: true, data });
     } catch (e) {
         res.status(500).json({ success: false, message: e.message });
@@ -156,6 +159,7 @@ const deactivateUser = async (req, res) => {
 
         if (error) return res.status(500).json({ success: false, message: error.message });
         if (!data)  return res.status(404).json({ success: false, message: 'User not found.' });
+        await writeAudit(req, 'UPDATE', 'user', targetId, { username: data.username, status: 'deactivated' });
         res.json({ success: true, message: `User "${data.username}" has been deactivated.`, data });
     } catch (e) {
         res.status(500).json({ success: false, message: e.message });
@@ -176,6 +180,7 @@ const activateUser = async (req, res) => {
 
         if (error) return res.status(500).json({ success: false, message: error.message });
         if (!data)  return res.status(404).json({ success: false, message: 'User not found.' });
+        await writeAudit(req, 'UPDATE', 'user', targetId, { username: data.username, status: 'activated' });
         res.json({ success: true, message: `User "${data.username}" has been activated.`, data });
     } catch (e) {
         res.status(500).json({ success: false, message: e.message });
@@ -196,6 +201,7 @@ const deleteUser = async (req, res) => {
             .eq('id', targetId);
 
         if (error) return res.status(500).json({ success: false, message: error.message });
+        await writeAudit(req, 'DELETE', 'user', targetId, { username: `user_id_${targetId}` });
         res.json({ success: true, message: 'User permanently deleted.' });
     } catch (e) {
         res.status(500).json({ success: false, message: e.message });

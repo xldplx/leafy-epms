@@ -1,4 +1,5 @@
 const supabase = require('../config/db');
+const { writeAudit } = require('./auditController');
 
 const getAllProjects = async (req, res) => {
     try {
@@ -35,6 +36,7 @@ const createProject = async (req, res) => {
             if (error.code === '23505') return res.status(409).json({ success: false, message: 'Project code already exists.' });
             return res.status(500).json({ success: false, message: error.message });
         }
+        await writeAudit(req, 'CREATE', 'project', data.id, { project_name: data.project_name });
         res.status(201).json({ success: true, data });
     } catch (e) { res.status(500).json({ success: false, message: e.message }); }
 };
@@ -47,6 +49,7 @@ const updateProject = async (req, res) => {
     try {
         const { data, error } = await supabase.from('projects').update(updates).eq('id', req.params.id).select().single();
         if (error) return res.status(500).json({ success: false, message: error.message });
+        await writeAudit(req, 'UPDATE', 'project', data.id, { project_name: data.project_name });
         res.json({ success: true, data });
     } catch (e) { res.status(500).json({ success: false, message: e.message }); }
 };
@@ -55,6 +58,7 @@ const deleteProject = async (req, res) => {
     try {
         const { error } = await supabase.from('projects').delete().eq('id', req.params.id);
         if (error) return res.status(500).json({ success: false, message: error.message });
+        await writeAudit(req, 'DELETE', 'project', req.params.id, { project_name: `project_id_${req.params.id}` });
         res.json({ success: true, message: 'Project deleted.' });
     } catch (e) { res.status(500).json({ success: false, message: e.message }); }
 };
