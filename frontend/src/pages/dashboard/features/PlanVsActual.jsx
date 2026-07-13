@@ -157,8 +157,8 @@ export default function PlanVsActual() {
                         className="text-[10px] font-bold uppercase tracking-wider px-3.5 py-2 rounded-xl transition-all flex items-center gap-1.5 border shadow bg-white border-slate-200 text-slate-500 hover:text-emerald-700 hover:border-emerald-250 hover:-translate-y-0.5 active:translate-y-0 cursor-pointer self-end">
                         <Download className="w-3.5 h-3.5" /> {t('pva.exportExcel')}
                     </button>
-                </div>
-            )}
+                )}
+            </div>
 
             {/* NO PROJECT SELECTED - Beautiful Portfolio EVM Heath Ledger */}
             {!selectedProjectId && (
