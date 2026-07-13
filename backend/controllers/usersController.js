@@ -1,12 +1,9 @@
-const supabase       = require('../config/db');
-const bcrypt         = require('bcryptjs');
+const supabase = require('../config/db');
 const { writeAudit } = require('./auditController');
 
 const VALID_ROLES = ['Project Manager', 'Planner', 'Cost Engineer', 'Site Engineer', 'Management'];
 
 const SELECT_COLS = 'id, username, role, is_active, email, full_name, created_by, created_at, updated_at';
-
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 // ── GET /api/users ────────────────────────────────────────────────────────────
 const getAllUsers = async (req, res) => {
@@ -61,13 +58,11 @@ const createUser = async (req, res) => {
         if (existing)
             return res.status(409).json({ success: false, message: 'Username already exists.' });
 
-        const hashedPassword = await bcrypt.hash(password, 10);
-
         const { data, error } = await supabase
             .from('users')
             .insert([{
                 username:   username.trim(),
-                password:   hashedPassword,
+                password,
                 role,
                 is_active:  true,
                 created_by: req.user.username,
@@ -76,8 +71,7 @@ const createUser = async (req, res) => {
             .single();
 
         if (error) return res.status(500).json({ success: false, message: error.message });
-
-        await writeAudit(req, 'CREATE', 'user', data.id, { username: data.username, role: data.role });
+        await writeAudit(req, 'CREATE', 'user', data.id, { username: data.username });
         res.status(201).json({ success: true, data });
     } catch (e) {
         res.status(500).json({ success: false, message: e.message });
@@ -85,53 +79,32 @@ const createUser = async (req, res) => {
 };
 
 // ── PUT /api/users/:id ────────────────────────────────────────────────────────
-// Route memakai authorizeSelfOr('Project Manager'):
-//   • Semua role boleh mengubah profil MILIKNYA SENDIRI (email, full_name, password)
-//   • Hanya Project Manager yang boleh mengubah user LAIN / username / role
 const updateUser = async (req, res) => {
     const targetId = parseInt(req.params.id);
     const isSelf   = targetId === req.user.id;
-    const isPM     = req.user.role === 'Project Manager';
 
     const updates = {};
 
-    // ── email ──
-    if (req.body.email !== undefined) {
-        const email = (req.body.email || '').trim();
-        if (email && !EMAIL_RE.test(email))
-            return res.status(400).json({ success: false, message: 'Invalid email format.' });
-        updates.email = email || null;
-    }
+    if (req.body.email     !== undefined) updates.email     = req.body.email     || null;
+    if (req.body.full_name !== undefined) updates.full_name = req.body.full_name || null;
 
-    // ── full_name ──
-    if (req.body.full_name !== undefined)
-        updates.full_name = (req.body.full_name || '').trim() || null;
-
-    // ── username (khusus PM) ──
     if (req.body.username !== undefined) {
-        if (!isPM)
-            return res.status(403).json({ success: false, message: 'Only a Project Manager can change usernames.' });
         if (!req.body.username.trim())
             return res.status(400).json({ success: false, message: 'Username cannot be empty.' });
         updates.username = req.body.username.trim();
     }
-
-    // ── role (khusus PM, tidak boleh untuk diri sendiri) ──
     if (req.body.role !== undefined) {
-        if (!isPM)
-            return res.status(403).json({ success: false, message: 'Only a Project Manager can change roles.' });
+        // PM tidak boleh mengubah role akunnya sendiri
         if (isSelf)
             return res.status(403).json({ success: false, message: 'You cannot change your own role.' });
         if (!VALID_ROLES.includes(req.body.role))
             return res.status(400).json({ success: false, message: `Role must be one of: ${VALID_ROLES.join(', ')}.` });
         updates.role = req.body.role;
     }
-
-    // ── password (self atau PM) — di-hash dengan bcrypt ──
     if (req.body.password !== undefined && req.body.password !== '') {
         if (req.body.password.length < 6)
             return res.status(400).json({ success: false, message: 'Password must be at least 6 characters.' });
-        updates.password = await bcrypt.hash(req.body.password, 10);
+        updates.password = req.body.password;
     }
 
     if (Object.keys(updates).length === 0)
@@ -153,19 +126,6 @@ const updateUser = async (req, res) => {
                 return res.status(409).json({ success: false, message: 'Username already taken.' });
         }
 
-        // Cek duplikat email (case-insensitive)
-        if (updates.email) {
-            const { data: existingEmail } = await supabase
-                .from('users')
-                .select('id')
-                .ilike('email', updates.email)
-                .neq('id', targetId)
-                .maybeSingle();
-
-            if (existingEmail)
-                return res.status(409).json({ success: false, message: 'Email already in use by another account.' });
-        }
-
         const { data, error } = await supabase
             .from('users')
             .update(updates)
@@ -175,12 +135,7 @@ const updateUser = async (req, res) => {
 
         if (error) return res.status(500).json({ success: false, message: error.message });
         if (!data)  return res.status(404).json({ success: false, message: 'User not found.' });
-
-        await writeAudit(req, 'UPDATE', 'user', targetId, {
-            fields: Object.keys(updates).filter(k => k !== 'updated_at' && k !== 'password'),
-            self:   isSelf,
-        });
-
+        await writeAudit(req, 'UPDATE', 'user', data.id, { username: data.username });
         res.json({ success: true, data });
     } catch (e) {
         res.status(500).json({ success: false, message: e.message });
@@ -204,8 +159,7 @@ const deactivateUser = async (req, res) => {
 
         if (error) return res.status(500).json({ success: false, message: error.message });
         if (!data)  return res.status(404).json({ success: false, message: 'User not found.' });
-
-        await writeAudit(req, 'UPDATE', 'user', targetId, { action: 'deactivate', username: data.username });
+        await writeAudit(req, 'UPDATE', 'user', targetId, { username: data.username, status: 'deactivated' });
         res.json({ success: true, message: `User "${data.username}" has been deactivated.`, data });
     } catch (e) {
         res.status(500).json({ success: false, message: e.message });
@@ -226,8 +180,7 @@ const activateUser = async (req, res) => {
 
         if (error) return res.status(500).json({ success: false, message: error.message });
         if (!data)  return res.status(404).json({ success: false, message: 'User not found.' });
-
-        await writeAudit(req, 'UPDATE', 'user', targetId, { action: 'activate', username: data.username });
+        await writeAudit(req, 'UPDATE', 'user', targetId, { username: data.username, status: 'activated' });
         res.json({ success: true, message: `User "${data.username}" has been activated.`, data });
     } catch (e) {
         res.status(500).json({ success: false, message: e.message });
@@ -248,8 +201,7 @@ const deleteUser = async (req, res) => {
             .eq('id', targetId);
 
         if (error) return res.status(500).json({ success: false, message: error.message });
-
-        await writeAudit(req, 'DELETE', 'user', targetId, {});
+        await writeAudit(req, 'DELETE', 'user', targetId, { username: `user_id_${targetId}` });
         res.json({ success: true, message: 'User permanently deleted.' });
     } catch (e) {
         res.status(500).json({ success: false, message: e.message });

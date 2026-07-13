@@ -8,15 +8,8 @@ if (!process.env.VERCEL) {
 const express = require('express');
 const cors    = require('cors');
 const { PORT } = require('./config/constants');
-const { authenticate, authorize, authorizeSelfOr } = require('./middleware/auth');
+const { authenticate, authorize } = require('./middleware/auth');
 const { requestLogger, logger }   = require('./utils/logger');
-
-// Multer untuk upload foto evidence (memory storage → langsung ke Supabase Storage)
-const multer = require('multer');
-const upload = multer({
-    storage: multer.memoryStorage(),
-    limits:  { fileSize: 5 * 1024 * 1024 }, // max 5 MB
-});
 
 // ── Controllers ───────────────────────────────────────────────────────────────
 const auth        = require('./controllers/authController');
@@ -83,11 +76,9 @@ app.get ('/api/me',      authenticate, auth.getMe);
 
 // ── Users ─────────────────────────────────────────────────────────────────────
 app.get   ('/api/users',                authenticate, authorize('Project Manager'), users.getAllUsers);
-app.get   ('/api/users/:id',            authenticate, authorizeSelfOr('Project Manager'), users.getUserById);
+app.get   ('/api/users/:id',            authenticate, authorize('Project Manager'), users.getUserById);
 app.post  ('/api/users',                authenticate, authorize('Project Manager'), users.createUser);
-// Semua role boleh update profil MILIKNYA sendiri (halaman My Profile);
-// Project Manager tetap bisa update user siapa pun (halaman Settings)
-app.put   ('/api/users/:id',            authenticate, authorizeSelfOr('Project Manager'), users.updateUser);
+app.put   ('/api/users/:id',            authenticate, authorize('Project Manager'), users.updateUser);
 app.patch ('/api/users/:id/deactivate', authenticate, authorize('Project Manager'), users.deactivateUser);
 app.patch ('/api/users/:id/activate',   authenticate, authorize('Project Manager'), users.activateUser);
 app.delete('/api/users/:id',            authenticate, authorize('Project Manager'), users.deleteUser);
@@ -124,10 +115,6 @@ app.patch('/api/projects/:projectId/report/refresh',  authenticate, authorize('P
 // ── Daily Actuals ─────────────────────────────────────────────────────────────
 app.get ('/api/projects/:projectId/daily-actuals', authenticate, daily.getDailyActuals);
 app.post('/api/projects/:projectId/daily-actuals', authenticate, authorize('Project Manager', 'Site Engineer'), daily.submitDailyActuals);
-// Upload foto evidence ke Supabase Storage (bucket "evidence") — multipart/form-data, field "file"
-app.post('/api/projects/:projectId/daily-actuals/evidence',
-    authenticate, authorize('Project Manager', 'Site Engineer'),
-    upload.single('file'), daily.uploadEvidencePhoto);
 
 // ── Personnel ─────────────────────────────────────────────────────────────────
 app.get   ('/api/personnel',     authenticate, personnel.getAllPersonnel);
@@ -161,10 +148,6 @@ app.patch ('/api/tools/:id/checkout', authenticate, authorize('Project Manager',
 app.patch ('/api/tools/:id/return',   authenticate, authorize('Project Manager', 'Planner', 'Site Engineer'), tools.returnTool);
 
 // ── Materials ─────────────────────────────────────────────────────────────────
-// PENTING: /materials/receipts harus SEBELUM /materials/:id
-app.get   ('/api/materials/receipts',     authenticate, materials.getReceipts);
-app.post  ('/api/materials/receipts',     authenticate, authorize('Project Manager', 'Planner', 'Site Engineer'), materials.createReceipt);
-app.put   ('/api/materials/receipts/:id', authenticate, authorize('Project Manager', 'Planner'), materials.verifyReceipt);
 app.get   ('/api/materials',     authenticate, materials.getAllMaterials);
 app.post  ('/api/materials',     authenticate, authorize('Project Manager', 'Planner'), materials.createMaterial);
 app.put   ('/api/materials/:id', authenticate, authorize('Project Manager', 'Planner'), materials.updateMaterial);
