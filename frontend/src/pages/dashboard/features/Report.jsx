@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import {
     FileText, Calendar, AlertTriangle, AlertCircle,
@@ -107,7 +108,6 @@ export default function Report({ onNavigate, initialProjectId, onConsumeInitial 
         }));
         exportWorkbook(exportFilename(`Report-${activeTab}`), [{ name: activeTab === 'critical' ? 'Critical Activities' : 'Delay Analysis', rows }]);
     };
-
     if (loading) {
         return (
             <div className="h-screen flex items-center justify-center gap-3 text-slate-400">
@@ -118,71 +118,80 @@ export default function Report({ onNavigate, initialProjectId, onConsumeInitial 
     }
 
     return (
-        <div className="space-y-8 text-left pb-12 animate-in fade-in duration-300">
+        <div className="space-y-6 text-left pb-12 animate-in fade-in duration-300">
+            
+            {/* TITLE & SUBTITLE */}
+            <div>
+                <h3 className="text-xl font-bold text-slate-800 tracking-tight">Performance Report</h3>
+                <p className="text-sm text-slate-500 mt-1">Track project schedule float variance, task criticality, and delay impacts in a consolidated workspace.</p>
+            </div>
 
-            {/* UNIFIED CONTROLS BAR CARD - Aligned with Projects/Analytics */}
-            <div className="bg-white border border-slate-200 rounded-3xl py-3.5 px-5 shadow-sm flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                <div className="flex flex-wrap items-center gap-4">
-                    {/* Project selector */}
-                    <div className="flex flex-col">
-                        <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider ml-1 mb-1.5">Select Active Project</span>
-                        <select value={selectedProjectId || ''} onChange={e => setSelectedProjectId(Number(e.target.value))}
-                            className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-700 text-xs font-semibold outline-none focus:border-emerald-500 cursor-pointer shadow-sm min-w-[200px]"
-                        >
-                            {projects.map(p => <option key={p.id} value={p.id}>{p.project_code} — {p.project_name}</option>)}
-                        </select>
-                    </div>
-                    
-                    {/* Report View Toggle tabs */}
-                    <div className="flex flex-col">
-                        <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider ml-1 mb-1.5">Report Category</span>
-                        <div className="flex gap-1 bg-slate-50 p-1 rounded-xl border border-slate-200/60 shadow-inner w-fit">
-                            {[
-                                { id: 'critical', label: 'Critical Path' },
-                                { id: 'delay', label: 'Delay Log' }
-                            ].map(tab => (
-                                <button key={tab.id} onClick={() => setActiveTab(tab.id)}
-                                    className={`px-3.5 py-1.5 rounded-lg text-[11px] font-bold uppercase tracking-wider transition-all duration-300 whitespace-nowrap cursor-pointer ${
-                                        activeTab === tab.id 
-                                            ? 'bg-white text-emerald-700 shadow border border-emerald-100/60' 
-                                            : 'text-slate-450 hover:text-slate-700'
-                                    }`}
-                                >
-                                    {tab.label}
-                                </button>
-                            ))}
+            {/* UNIFIED CONTROLS BAR CARD */}
+            <div className="bg-white border border-slate-200/80 rounded-3xl p-6 shadow-sm">
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-5">
+                    {/* Project & View Selector */}
+                    <div className="flex flex-wrap items-center gap-6">
+                        {/* Project selector */}
+                        <div className="flex flex-col">
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider ml-1 mb-2">Select Active Project</span>
+                            <select value={selectedProjectId || ''} onChange={e => setSelectedProjectId(Number(e.target.value))}
+                                className="px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-700 text-sm font-semibold outline-none focus:border-emerald-500 cursor-pointer shadow-sm min-w-[240px]"
+                            >
+                                {projects.map(p => <option key={p.id} value={p.id}>{p.project_code} — {p.project_name}</option>)}
+                            </select>
                         </div>
-                    </div>
-                </div>
-
-                {/* Search & Export Actions */}
-                <div className="flex flex-wrap items-center gap-3">
-                    {/* Search input */}
-                    <div className="flex flex-col">
-                        <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider ml-1 mb-1.5">Search task entries</span>
-                        <div className="relative min-w-[200px]">
-                            <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                            <input type="text" placeholder="Search name or WBS code..."
-                                value={search} onChange={e => setSearch(e.target.value)}
-                                className="w-full text-xs font-semibold bg-white border border-slate-200 rounded-xl pl-8.5 pr-8.5 py-1.5 outline-none focus:border-emerald-500 transition-colors shadow-sm placeholder:text-slate-400 text-slate-700" />
-                            {search && (
-                                <button onClick={() => setSearch('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer">
-                                    <X className="w-3.5 h-3.5" />
-                                </button>
-                            )}
+                        
+                        {/* Report View Toggle tabs */}
+                        <div className="flex flex-col">
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider ml-1 mb-2">Report Category</span>
+                            <div className="flex gap-1.5 bg-slate-50 p-1.5 rounded-xl border border-slate-200/60 shadow-inner w-fit">
+                                {[
+                                    { id: 'critical', label: 'Critical Path' },
+                                    { id: 'delay', label: 'Delay Log' }
+                                ].map(tab => (
+                                    <button key={tab.id} onClick={() => setActiveTab(tab.id)}
+                                        className={`px-5 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all duration-300 whitespace-nowrap ${
+                                            activeTab === tab.id 
+                                                ? 'bg-white text-emerald-700 shadow border border-emerald-100' 
+                                                : 'text-slate-450 hover:text-slate-700'
+                                        }`}
+                                    >
+                                        {tab.label}
+                                    </button>
+                                ))}
+                            </div>
                         </div>
                     </div>
 
-                    {/* Export Button */}
-                    <button onClick={handleExport} disabled={filteredCritical.length === 0 && filteredDelays.length === 0}
-                        className="text-[10px] font-bold uppercase tracking-wider px-3.5 py-2 rounded-xl transition-all flex items-center gap-1.5 border shadow bg-white border-slate-200 text-slate-500 hover:text-emerald-700 hover:border-emerald-250 hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-40 disabled:pointer-events-none cursor-pointer self-end">
-                        <Download className="w-3.5 h-3.5" /> Export
-                    </button>
+                    {/* Search & Export Actions */}
+                    <div className="flex flex-wrap items-end gap-4">
+                        {/* Search input */}
+                        <div className="flex flex-col">
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider ml-1 mb-2">Search task entries</span>
+                            <div className="relative min-w-[280px]">
+                                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                                <input type="text" placeholder="Search name or WBS code..."
+                                    value={search} onChange={e => setSearch(e.target.value)}
+                                    className="w-full text-sm font-semibold bg-white border border-slate-200 rounded-xl pl-9 pr-9 py-2.5 outline-none focus:border-emerald-500 transition-colors shadow-sm placeholder:text-slate-450 text-slate-700" />
+                                {search && (
+                                    <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-650">
+                                        <X className="w-4 h-4" />
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Export Button */}
+                        <button onClick={handleExport} disabled={filteredCritical.length === 0 && filteredDelays.length === 0}
+                            className="bg-white border border-slate-200 text-slate-655 hover:text-emerald-700 hover:border-emerald-250 px-5 py-3 rounded-xl font-bold text-xs shadow-sm transition-all flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none h-[42px]">
+                            <Download className="w-4 h-4" /> Export
+                        </button>
+                    </div>
                 </div>
             </div>
 
             {/* MAIN TASKS LOG CONSOLE CARD */}
-            <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+            <div className="bg-white rounded-[2rem] border border-slate-200/85 shadow-sm overflow-hidden flex flex-col">
                 
                 {/* Embedded Inline KPI Summary Header */}
                 <div className="px-6 py-5 bg-slate-50/50 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -211,7 +220,7 @@ export default function Report({ onNavigate, initialProjectId, onConsumeInitial 
                 <div className="overflow-x-auto">
                     <table className="w-full text-left border-collapse">
                         <thead>
-                            <tr className="bg-slate-50/40 border-b border-slate-100 text-xs uppercase tracking-wider text-slate-500 font-bold">
+                            <tr className="bg-slate-50/40 border-b border-slate-100 text-xs uppercase tracking-wider text-slate-555 font-black">
                                 <th className="px-6 py-4.5">WBS Code</th>
                                 <th className="px-6 py-4.5">Task Name</th>
                                 <th className="px-6 py-4.5">Planned Start</th>
@@ -231,9 +240,9 @@ export default function Report({ onNavigate, initialProjectId, onConsumeInitial 
                                 )}
                             </tr>
                         </thead>
-                        <tbody className="text-sm font-semibold text-slate-605 divide-y divide-slate-100">
+                        <tbody className="text-sm font-semibold text-slate-650 divide-y divide-slate-100">
                             {(activeTab === 'critical' ? filteredCritical : filteredDelays).map((task) => (
-                                <tr key={task.id} className="hover:bg-emerald-50/10 even:bg-slate-50/10 transition-colors">
+                                <tr key={task.id} className="hover:bg-slate-50/70 transition-colors">
                                     <td className="px-6 py-4.5 font-mono text-xs text-slate-400">{task.wbs_code}</td>
                                     <td className="px-6 py-4.5 font-extrabold text-slate-800">{task.task_name}</td>
                                     <td className="px-6 py-4.5 text-slate-500">{fmtDate(task.planned_start)}</td>
