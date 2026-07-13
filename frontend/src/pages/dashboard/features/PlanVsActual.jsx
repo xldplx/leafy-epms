@@ -142,10 +142,10 @@ export default function PlanVsActual() {
                             <h3 className="font-bold text-slate-700">{t('pva.physicalProgress')}</h3>
                             <span className="text-2xl font-bold text-emerald-600">{overallPct.toFixed(1)}%</span>
                         </div>
-                        <div className="w-full bg-slate-100 rounded-full h-3">
-                            <div className="bg-emerald-500 h-3 rounded-full transition-all duration-500" style={{ width: `${Math.min(overallPct, 100)}%` }} />
+                        <div className="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">
+                            <div className="bg-emerald-500 h-full rounded-full transition-all duration-500" style={{ width: `${Math.min(overallPct, 100)}%` }} />
                         </div>
-                        <div className="flex justify-between text-xs text-slate-400 mt-2">
+                        <div className="flex justify-between text-[10px] font-black uppercase text-slate-400 tracking-wider mt-2.5">
                             <span>EV: {formatCurrency(EV)}</span>
                             <span>BAC: {formatCurrency(BAC)}</span>
                         </div>
@@ -208,23 +208,23 @@ export default function PlanVsActual() {
                                         const taskHVColor = taskHV !== null ? varianceColor(taskHV) : null;
                                         const rowBg = taskCV < 0 ? 'bg-red-50/60' : parseFloat(task.pct_complete) === 100 ? 'bg-emerald-50/50' : parseFloat(task.pct_complete) === 0 ? 'bg-slate-50/60' : '';
                                         return (
-                                            <tr key={task.id} className={`${rowBg} hover:bg-slate-100/50 transition-colors`}>
-                                                <td className="px-4 py-3.5 font-semibold text-slate-700">{task.task_name}</td>
-                                                <td className="px-4 py-3.5 font-mono text-xs text-slate-400">{task.wbs_code}</td>
-                                                <td className="px-4 py-3.5 text-slate-500">{formatCurrency(task.planned_cost)}</td>
-                                                <td className="px-4 py-3.5 text-slate-500">{formatCurrency(task.actual_cost)}</td>
-                                                <td className={`px-4 py-3.5 font-bold whitespace-nowrap ${taskCVColor.text}`}>{formatCurrency(taskCV)}</td>
-                                                <td className="px-4 py-3.5 text-slate-500">{task.planned_hours}</td>
-                                                <td className="px-4 py-3.5 text-slate-500">{task.actual_hours}</td>
-                                                <td className={`px-4 py-3.5 font-bold ${taskHVColor ? taskHVColor.text : 'text-slate-400'}`}>
+                                            <tr key={task.id} className={`${rowBg} transition-colors`}>
+                                                <td className="px-6 py-4.5 font-extrabold text-slate-800">{task.task_name}</td>
+                                                <td className="px-6 py-4.5 font-mono text-xs text-slate-400">{task.wbs_code}</td>
+                                                <td className="px-6 py-4.5 text-slate-500">{formatCurrency(task.planned_cost)}</td>
+                                                <td className="px-6 py-4.5 text-slate-500">{formatCurrency(task.actual_cost)}</td>
+                                                <td className={`px-6 py-4.5 font-bold whitespace-nowrap ${taskCVColor.text}`}>{formatCurrency(taskCV)}</td>
+                                                <td className="px-6 py-4.5 text-slate-500">{task.planned_hours}</td>
+                                                <td className="px-6 py-4.5 text-slate-500">{task.actual_hours}</td>
+                                                <td className={`px-6 py-4.5 font-bold ${taskHVColor ? taskHVColor.text : 'text-slate-400'}`}>
                                                     {taskHV !== null ? (taskHV >= 0 ? `+${taskHV}` : taskHV) : '—'}
                                                 </td>
-                                                <td className="px-4 py-3.5">
-                                                    <div className="flex items-center gap-2 min-w-20">
-                                                        <div className="flex-1 bg-slate-100 rounded-full h-1.5">
-                                                            <div className="h-1.5 rounded-full bg-emerald-500" style={{ width: `${task.pct_complete}%` }} />
+                                                <td className="px-6 py-4.5 text-right">
+                                                    <div className="flex items-center gap-2 justify-end">
+                                                        <div className="w-16 bg-slate-100 rounded-full h-1.5 overflow-hidden">
+                                                            <div className="h-full bg-emerald-500" style={{ width: `${task.pct_complete}%` }} />
                                                         </div>
-                                                        <span className="text-xs font-bold text-slate-600 shrink-0">{task.pct_complete}%</span>
+                                                        <span className="text-xs font-bold text-slate-500 shrink-0">{task.pct_complete}%</span>
                                                     </div>
                                                 </td>
                                             </tr>
