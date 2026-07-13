@@ -47,6 +47,10 @@ const allowedOrigins = [
 app.use(cors({
     origin: function (origin, callback) {
         if (!origin) return callback(null, true);
+        // Allow all origins in local development to avoid localhost vs 127.0.0.1 or port mismatch issues
+        if (process.env.NODE_ENV === 'development' || !process.env.VERCEL) {
+            return callback(null, true);
+        }
         if (allowedOrigins.includes(origin)) callback(null, true);
         else callback(new Error('Not allowed by CORS'));
     },
