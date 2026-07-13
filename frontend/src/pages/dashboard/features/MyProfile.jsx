@@ -1,51 +1,30 @@
-import React, { useState, useEffect } from 'react';
+
+import React, { useState } from 'react';
 import { User, Mail, Briefcase, Save, AlertCircle } from 'lucide-react';
 import { apiFetch } from '../../../utils/api';
 
 export default function MyProfile() {
-    const [userId, setUserId] = useState(null);
-    const [name, setName] = useState('User');
-    const [email, setEmail] = useState('');
-    const [role, setRole] = useState('Guest');
+    const [name, setName] = useState(localStorage.getItem('userFullName') || localStorage.getItem('userName') || 'User');
+    const [email, setEmail] = useState(localStorage.getItem('userEmail') || '');
+    const [role] = useState(localStorage.getItem('userRole') || 'Guest');
     const [success, setSuccess] = useState(false);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
-
-    // Sumber kebenaran tunggal: database (Supabase) via backend, bukan localStorage
-    useEffect(() => {
-        let cancelled = false;
-        (async () => {
-            try {
-                const res = await apiFetch('/me');
-                const u = res?.data;
-                if (!cancelled && u) {
-                    setUserId(u.id);
-                    setName(u.full_name || u.username || 'User');
-                    setEmail(u.email || '');
-                    setRole(u.role || 'Guest');
-                }
-            } catch (e) {
-                if (!cancelled) setError(e.message || 'Failed to load profile.');
-            }
-        })();
-        return () => { cancelled = true; };
-    }, []);
 
     const handleSave = async () => {
         setLoading(true);
         setError('');
         try {
+            const token = localStorage.getItem('token');
+            const userId = token ? JSON.parse(atob(token.split('.')[1])).id : null;
             if (!userId) throw new Error('Not authenticated. Please log in again.');
-            const res = await apiFetch(`/users/${userId}`, {
+            await apiFetch(`/users/${userId}`, {
                 method: 'PUT',
                 body: JSON.stringify({ email, full_name: name }),
             });
-            const u = res?.data;
-            if (u) {
-                setName(u.full_name || u.username || 'User');
-                setEmail(u.email || '');
-                setRole(u.role || role);
-            }
+            localStorage.setItem('userName', name);
+            localStorage.setItem('userFullName', name);
+            if (email) localStorage.setItem('userEmail', email);
             setSuccess(true);
             setTimeout(() => setSuccess(false), 3000);
         } catch (e) {
