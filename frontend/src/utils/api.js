@@ -127,16 +127,4 @@ export const budgetApi = {
     create:       (payload)       => apiFetch('/budget', { method: 'POST', body: JSON.stringify(payload) }),
     update:       (id, payload)   => apiFetch(`/budget/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
     delete:       (id)            => apiFetch(`/budget/${id}`, { method: 'DELETE' }),
-    syncOne:      (id)            => apiFetch(`/budget/${id}/sync`, { method: 'PATCH' }),
-    syncAll:      (projectId)     => apiFetch(`/budget/sync-all?project_id=${projectId}`, { method: 'PATCH' }),
-};
-
-// ─── TOOLS ───────────────────────────────────────────────────────────────────────
-export const toolsApi = {
-    getAll:    ()              => apiFetch('/tools'),
-    create:    (payload)       => apiFetch('/tools', { method: 'POST', body: JSON.stringify(payload) }),
-    update:    (id, payload)   => apiFetch(`/tools/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
-    delete:    (id)            => apiFetch(`/tools/${id}`, { method: 'DELETE' }),
-    checkout:  (id, payload)   => apiFetch(`/tools/${id}/checkout`, { method: 'PATCH', body: JSON.stringify(payload) }),
-    return:    (id, payload)   => apiFetch(`/tools/${id}/return`,   { method: 'PATCH', body: JSON.stringify(payload || {}) }),
 };

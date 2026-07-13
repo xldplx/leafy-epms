@@ -402,6 +402,27 @@ export const translations = {
         'tools.checkingOut':        'Checking out...',
 
         // ── Budget Page ───────────────────────────────────────────────────────
+        'budget.title':             'Budget',
+        'budget.subtitle':          'CAPEX & OPEX financial resources — planned vs actual variance analysis',
+        'budget.addCategory':       'Add Category',
+        'budget.totalPlanned':      'Total Planned',
+        'budget.totalActual':       'Total Actual',
+        'budget.variance':          'Variance',
+        'budget.percentUsed':       '% Used',
+        'budget.categories':        'Budget Categories',
+        'budget.groupedBy':         'Grouped by expenditure type',
+        'budget.noCategories':      'No budget categories yet.',
+        'budget.addFirst':          '+ Add the first category',
+        'budget.categoryName':      'Category Name',
+        'budget.type':              'Type',
+        'budget.planned':           'Planned',
+        'budget.actual':            'Actual',
+        'budget.progress':          'Progress',
+        'budget.addedDemo':         'Category added (demo only — not saved)',
+        'budget.totalBudget':       'Total project budget',
+        'budget.demoData':          'Demo Data',
+        'budget.capex':             'CAPEX — Capital Expenditure',
+        'budget.opex':              'OPEX — Operating Expenditure',
         'budget.editCategory':      'Edit Category',
         'budget.deleteCategory':    'Delete Budget Category',
         'budget.syncFromTasks':     'Sync from tasks',
@@ -502,7 +523,7 @@ export const translations = {
 
     id: {
         // ── Budget ──────────────────────────────────────────────────────────  
-        'budget.title':             'Anggaran','budget.editCategory':      'Ubah Kategori',
+        'budget.editCategory':      'Ubah Kategori',
         'budget.deleteCategory':    'Hapus Kategori Anggaran',
         'budget.syncFromTasks':     'Sinkron dari tugas',
         'budget.syncAll':           'Sinkron Semua dari Tugas',

@@ -102,18 +102,15 @@ export default function PlanVsActual() {
 
     return (
         <div className="space-y-8">
-            <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
-                <div>
-                    <h2 className="text-3xl font-bold text-slate-800 tracking-tight">{t('pva.title')}</h2>
-                    <p className="text-slate-500 mt-1">{t('pva.subtitle')}</p>
-                </div>
-                {selectedProject && (
+            {/* ACTIONS */}
+            {selectedProject && (
+                <div className="flex justify-end mb-6">
                     <button onClick={handleExport}
                         className="text-sm font-semibold px-4 py-2.5 rounded-xl transition-all flex items-center gap-2 border shadow-sm text-emerald-600 bg-emerald-50 border-emerald-100 hover:bg-emerald-600 hover:text-white hover:border-emerald-600 hover:shadow-lg hover:shadow-emerald-200 hover:-translate-y-0.5">
                         <Download className="w-4 h-4" /> {t('pva.exportExcel')}
                     </button>
-                )}
-            </div>
+                </div>
+            )}
 
             {exportFeedback && (
                 <div className="fixed top-6 right-6 z-50 bg-emerald-600 text-white px-5 py-3 rounded-xl shadow-lg shadow-emerald-200 flex items-center gap-2 text-sm font-semibold animate-in slide-in-from-top-2 fade-in duration-200">

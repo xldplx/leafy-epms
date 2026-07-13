@@ -1,5 +1,6 @@
 const jwt      = require('jsonwebtoken');
 const crypto   = require('crypto');
+const bcrypt   = require('bcryptjs');
 const supabase = require('../config/db');
 const { JWT_SECRET, JWT_EXPIRES_IN } = require('../config/constants');
 const { writeAudit } = require('./auditController');
@@ -9,7 +10,10 @@ const { writeAudit } = require('./auditController');
 // But to avoid schema change: store in memory Map with TTL (per-process, clears on restart)
 const refreshTokenStore = new Map(); // token -> { userId, username, role, expiresAt }
 const REFRESH_EXPIRES_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
-const ACCESS_EXPIRES     = '15m'; // short-lived access token
+// Frontend (api.js) belum punya logic refresh token, jadi access token
+// mengikuti JWT_EXPIRES_IN dari config (default 8h) agar user tidak
+// terlempar keluar setiap 15 menit. Endpoint /api/refresh tetap tersedia.
+const ACCESS_EXPIRES     = JWT_EXPIRES_IN || '8h';
 
 // POST /api/login
 const login = async (req, res) => {
@@ -25,7 +29,28 @@ const login = async (req, res) => {
 
         if (error)              return res.status(500).json({ success: false, message: error.message });
         if (!data)              return res.status(401).json({ success: false, message: 'Invalid credentials.' });
-        if (data.password !== password) return res.status(401).json({ success: false, message: 'Invalid credentials.' });
+
+        // Verifikasi password dengan bcrypt.
+        // Fallback: jika ada baris lama yang masih plain-text, cocokkan langsung
+        // lalu langsung di-upgrade ke hash bcrypt (lazy migration).
+        const stored = data.password || '';
+        const isBcryptHash = /^\$2[aby]\$/.test(stored);
+        let passwordValid = false;
+
+        if (isBcryptHash) {
+            passwordValid = await bcrypt.compare(password, stored);
+        } else {
+            passwordValid = stored === password;
+            if (passwordValid) {
+                const newHash = await bcrypt.hash(password, 10);
+                await supabase
+                    .from('users')
+                    .update({ password: newHash, updated_at: new Date().toISOString() })
+                    .eq('id', data.id);
+            }
+        }
+
+        if (!passwordValid) return res.status(401).json({ success: false, message: 'Invalid credentials.' });
         if (data.is_active === false)   return res.status(403).json({ success: false, message: 'Account deactivated. Contact your administrator.' });
 
         // Short-lived access token

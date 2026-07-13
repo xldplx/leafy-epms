@@ -32,7 +32,10 @@ const createPersonnel = async (req, res) => {
             status:      status              || 'active',
             project_id:  project_id ? parseInt(project_id) : null,
         }]).select(SELECT_COLS).single();
-        if (error) return res.status(500).json({ success: false, message: error.message });
+        if (error) {
+            if (error.code === '23505') return res.status(409).json({ success: false, message: 'Employee ID already exists.' });
+            return res.status(500).json({ success: false, message: error.message });
+        }
         res.status(201).json({ success: true, data });
     } catch (e) { res.status(500).json({ success: false, message: e.message }); }
 };
@@ -40,10 +43,11 @@ const createPersonnel = async (req, res) => {
 // PUT /api/personnel/:id
 const updatePersonnel = async (req, res) => {
     const updates = {};
-    ['employee_id','full_name','designation','zone','email','skill','level','position','status','project_id']
+    ['employee_id','full_name','designation','zone','email','skill','level','position','status','project_id','last_checkin']
         .forEach(f => { if (req.body[f] !== undefined) updates[f] = req.body[f]; });
     if (Object.keys(updates).length === 0)
         return res.status(400).json({ success: false, message: 'No valid fields to update.' });
+    updates.updated_at = new Date().toISOString();
     try {
         const { data, error } = await supabase.from('personnel')
             .update(updates).eq('id', req.params.id).select(SELECT_COLS).single();

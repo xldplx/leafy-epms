@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { Plus, Users, Search, X, Loader2, CheckCircle2, AlertTriangle, Pencil, Trash2, Download } from 'lucide-react';
 import { apiFetch } from '../../../utils/api';
@@ -28,7 +29,6 @@ export default function Manpower({ onNavigate, initialProjectId, onConsumeInitia
     const [deletingPerson, setDeletingPerson] = useState(false);
     const [deleteError, setDeleteError] = useState('');
 
-    const [loading, setLoading] = useState(false);
     const [toast, setToast] = useState({ msg: '', type: 'success' });
 
     const userRole = localStorage.getItem('userRole');
@@ -54,12 +54,10 @@ export default function Manpower({ onNavigate, initialProjectId, onConsumeInitia
     };
 
     const fetchPersonnel = async () => {
-        setLoading(true);
         try {
             const res = await apiFetch('/personnel' + (selectedProjectId ? `?project_id=${selectedProjectId}` : ''));
             setPersonnel(res.data || []);
         } catch (e) { console.error(e); }
-        finally { setLoading(false); }
     };
 
     useEffect(() => { fetchProjects(); }, [initialProjectId]);
@@ -189,23 +187,18 @@ export default function Manpower({ onNavigate, initialProjectId, onConsumeInitia
                 </div>
             )}
 
-            <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
-                <div>
-                    <h2 className="text-3xl font-bold text-slate-800 tracking-tight">Manpower</h2>
-                    <p className="text-slate-500 mt-1">Manage construction personnel and resources</p>
-                </div>
-                <div className="flex items-center gap-3">
-                    <button onClick={handleExport} disabled={personnel.length === 0}
-                        className="bg-white hover:bg-slate-50 text-slate-600 border border-slate-200 px-6 py-2.5 rounded-xl font-semibold shadow-sm transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
-                        <Download className="w-5 h-5" /> Export
+            {/* ACTIONS */}
+            <div className="flex justify-end gap-3 mb-6">
+                <button onClick={handleExport} disabled={personnel.length === 0}
+                    className="bg-white hover:bg-slate-50 text-slate-600 border border-slate-200 px-6 py-2.5 rounded-xl font-semibold shadow-sm transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
+                    <Download className="w-5 h-5" /> Export
+                </button>
+                {canEdit && (
+                    <button onClick={openAddModal}
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2.5 rounded-xl font-semibold shadow-lg shadow-emerald-200 transition-all transform hover:-translate-y-0.5 flex items-center gap-2">
+                        <Plus className="w-5 h-5" /> Add Personnel
                     </button>
-                    {canEdit && (
-                        <button onClick={openAddModal}
-                            className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2.5 rounded-xl font-semibold shadow-lg shadow-emerald-200 transition-all transform hover:-translate-y-0.5 flex items-center gap-2">
-                            <Plus className="w-5 h-5" /> Add Personnel
-                        </button>
-                    )}
-                </div>
+                )}
             </div>
 
             <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
@@ -213,7 +206,7 @@ export default function Manpower({ onNavigate, initialProjectId, onConsumeInitia
                 <select value={selectedProjectId} onChange={(e) => setSelectedProjectId(e.target.value)}
                     className="mt-2 w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all text-slate-700 text-sm">
                     {projects.map(p => (
-                        <option key={p.id} value={p.id}>{p.project_code} — {p.project_name}</option>
+                        <option key={p.id} value={p.id}>{p.project_code} - {p.project_name}</option>
                     ))}
                 </select>
             </div>

@@ -5,19 +5,19 @@ import { formatCurrency, formatDate, computeEvm, indexColor } from '../../../uti
 import { STATUS_STYLES } from '../../../utils/uiConstants';
 import { isValidProjectCode } from '../../../utils/validators';
 import { exportWorkbook, exportFilename } from '../../../utils/excelExport';
+import { recordAudit } from '../../../utils/auditLog';
 import ErrorState from '../../../components/ErrorState';
 import { apiFetch } from '../../../utils/api';
 
 // Status-driven top accent so the portfolio scans by health at a glance.
 const STATUS_ACCENT = {
-    active:    'border-t-emerald-400',
-    planning:  'border-t-blue-400',
+    active:    'border-t-emerald-500',
+    planning:  'border-t-blue-500',
     completed: 'border-t-slate-400',
-    on_hold:   'border-t-amber-400',
+    on_hold:   'border-t-amber-500',
 };
 
 export default function Projects({ initialProjectId = null, onConsumeInitial }) {
-    // Real data from API — replaces seedProjects, dummyProjectsEvm, dummyTaskData
     const [projects, setProjects]     = useState([]);
     const [projectEvm, setProjectEvm] = useState({});
     const [loading, setLoading]       = useState(true);
@@ -77,8 +77,6 @@ export default function Projects({ initialProjectId = null, onConsumeInitial }) 
 
     useEffect(() => { fetchProjects(); }, []);
 
-    // Deep-link from an Alert: once projects load, open the requested one, then
-    // tell the parent to clear the request so manual nav still shows the list.
     useEffect(() => {
         if (initialProjectId == null || projects.length === 0) return;
         const target = projects.find(p => Number(p.id) === Number(initialProjectId));
@@ -86,10 +84,8 @@ export default function Projects({ initialProjectId = null, onConsumeInitial }) 
             setSelectedProject(target);
             onConsumeInitial?.();
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [initialProjectId, projects]);
 
-    // Close modal on Escape key
     useEffect(() => {
         const handler = (e) => { if (e.key === 'Escape') setIsModalOpen(false); };
         if (isModalOpen) document.addEventListener('keydown', handler);
@@ -127,6 +123,7 @@ export default function Projects({ initialProjectId = null, onConsumeInitial }) 
                 setError(res.message || 'Failed to create project.');
                 return;
             }
+            recordAudit({ action: 'CREATE', resource_type: 'project', resource_id: trimmedCode, detail: `Created project "${trimmedName}"` });
             setIsModalOpen(false);
             resetForm();
             setSuccessToast(true);
@@ -139,7 +136,6 @@ export default function Projects({ initialProjectId = null, onConsumeInitial }) 
         }
     };
 
-    // Live project-code format feedback (only flags non-empty, malformed input)
     const codeTrimmed = form.project_code.trim();
     const codeInvalid = codeTrimmed.length > 0 && !isValidProjectCode(codeTrimmed);
 
@@ -174,16 +170,29 @@ export default function Projects({ initialProjectId = null, onConsumeInitial }) 
             if (sortBy === 'name')   return (a.project_name || '').localeCompare(b.project_name || '');
             if (sortBy === 'code')   return (a.project_code || '').localeCompare(b.project_code || '');
             if (sortBy === 'budget') return (Number(b.total_budget) || 0) - (Number(a.total_budget) || 0);
-            return 0; // 'recent' — keep API order (created_at desc)
+            return 0; // 'recent'
         });
     }, [projects, statusFilter, search, sortBy]);
+
+    // Compute Quick Portfolio KPI Stats
+    const stats = useMemo(() => {
+        const total = projects.length;
+        const active = projects.filter(p => (p.status || 'planning') === 'active').length;
+        const totalVal = projects.reduce((acc, curr) => acc + (Number(curr.total_budget) || 0), 0);
+        let onTrack = 0;
+        projects.forEach(p => {
+            const evm = projectEvm[p.id];
+            if (evm && evm.CPI >= 1.0) onTrack++;
+        });
+        return { total, active, totalVal, onTrack };
+    }, [projects, projectEvm]);
 
     if (selectedProject) {
         return <ProjectDetail key={selectedProject.id} project={selectedProject} onBack={() => { setSelectedProject(null); fetchProjects(); }} />;
     }
 
     return (
-        <div className="space-y-8">
+        <div className="space-y-8 text-left pb-12 animate-in fade-in duration-300">
 
             {/* SUCCESS TOAST */}
             {successToast && (
@@ -199,72 +208,90 @@ export default function Projects({ initialProjectId = null, onConsumeInitial }) 
                 </div>
             )}
 
-            {/* HEADER */}
-            <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
-                <div>
-                    <h2 className="text-3xl font-bold text-slate-800 tracking-tight">Projects</h2>
-                    <p className="text-slate-500 mt-1">Manage project portfolio & work breakdown</p>
-                </div>
-                <div className="flex items-center gap-3">
-                    <button
-                        onClick={handleExport}
-                        disabled={projects.length === 0}
-                        className="text-sm font-semibold px-4 py-2.5 rounded-xl transition-all flex items-center gap-2 border shadow-sm text-emerald-600 bg-emerald-50 border-emerald-100 hover:bg-emerald-600 hover:text-white hover:border-emerald-600 hover:shadow-lg hover:shadow-emerald-200 hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-40 disabled:pointer-events-none"
-                    >
-                        <Download className="w-4 h-4" /> Export
-                    </button>
-                    {userRole === 'Project Manager' && (
-                        <button
-                            onClick={() => setIsModalOpen(true)}
-                            className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2.5 rounded-xl font-semibold shadow-lg shadow-emerald-200 transition-all transform hover:-translate-y-0.5 flex items-center gap-2"
-                        >
-                            <Plus className="w-5 h-5" />
-                            New Project
-                        </button>
-                    )}
-                </div>
-            </div>
-
-            {/* PORTFOLIO CONTROLS */}
+            {/* STATS BAR CARD STRIP (KPI stats cards match Overview.jsx & Settings.jsx style) */}
             {!loading && !loadError && projects.length > 0 && (
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                    <div className="flex items-center gap-1.5 bg-white/40 backdrop-blur-md p-1.5 rounded-2xl border border-slate-200/50 shadow-sm overflow-x-auto no-scrollbar">
-                        {['All', 'active', 'planning', 'completed', 'on_hold'].map(f => (
-                            <button
-                                key={f}
-                                onClick={() => setStatusFilter(f)}
-                                className={`px-4 py-2 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all whitespace-nowrap ${
-                                    statusFilter === f
-                                        ? 'bg-white text-emerald-700 shadow-md shadow-emerald-500/5 border border-emerald-100'
-                                        : 'text-slate-400 hover:text-slate-700'
-                                }`}
-                            >
-                                {f === 'All' ? 'All' : f.replace('_', ' ')}
-                            </button>
-                        ))}
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                    {[
+                        { label: 'Total Projects', value: stats.total, color: 'text-slate-800', desc: 'Registered in database' },
+                        { label: 'Active Projects', value: stats.active, color: 'text-emerald-700', desc: 'Under site execution' },
+                        { label: 'On-Track (CPI ≥ 1)', value: stats.onTrack, color: 'text-emerald-600', desc: 'CPI performing healthy' },
+                        { label: 'Total Portfolio Budget', value: `IDR ${(stats.totalVal / 1e9).toFixed(1)}B`, color: 'text-rose-700', desc: 'Cumulative project values' }
+                    ].map((stat, idx) => (
+                        <div key={idx} className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-300">
+                            <h3 className="text-slate-400 text-[10px] font-black uppercase tracking-widest">{stat.label}</h3>
+                            <p className={`text-2xl font-black tracking-tight mt-1 ${stat.color}`}>{stat.value}</p>
+                            <p className="text-[10px] text-slate-450 font-semibold mt-1.5 leading-tight">{stat.desc}</p>
+                        </div>
+                    ))}
+                </div>
+            )}
+
+            {/* FILTERS & SEARCH ROW IN UNIFIED CARD WITH ACTIONS - Matches Overview.jsx structure */}
+            {!loading && !loadError && (
+                <div className="bg-white border border-slate-200 rounded-3xl py-3 px-5 shadow-sm flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                    <div className="flex flex-wrap items-center gap-4">
+                        {/* Status Filter tab toggle */}
+                        <div className="flex gap-1 bg-slate-50 p-1 rounded-xl border border-slate-200/60 shadow-inner w-fit overflow-x-auto no-scrollbar">
+                            {['All', 'active', 'planning', 'completed', 'on_hold'].map(f => (
+                                <button
+                                    key={f}
+                                    onClick={() => setStatusFilter(f)}
+                                    className={`px-3.5 py-1.5 rounded-lg text-[11px] font-bold uppercase tracking-wider transition-all duration-300 whitespace-nowrap ${
+                                        statusFilter === f
+                                            ? 'bg-white text-emerald-700 shadow border border-emerald-100/60'
+                                            : 'text-slate-450 hover:text-slate-700'
+                                    }`}
+                                >
+                                    {f === 'All' ? 'All' : f.replace('_', ' ')}
+                                </button>
+                            ))}
+                        </div>
+
+                        {/* Sort Order Selector */}
+                        <select
+                            value={sortBy}
+                            onChange={e => setSortBy(e.target.value)}
+                            className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-700 text-xs font-semibold outline-none focus:border-emerald-500 cursor-pointer shadow-sm min-w-[140px]"
+                        >
+                            <option value="recent">Most Recent</option>
+                            <option value="name">Name (A–Z)</option>
+                            <option value="code">Code (A–Z)</option>
+                            <option value="budget">Budget (High–Low)</option>
+                        </select>
                     </div>
-                    <div className="flex items-center gap-3">
-                        <div className="relative">
-                            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+
+                    {/* Search Input bar and Actions */}
+                    <div className="flex flex-wrap items-center gap-3">
+                        {/* Search Input */}
+                        <div className="relative min-w-[200px]">
+                            <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                             <input
                                 type="text"
                                 placeholder="Search name or code..."
                                 value={search}
                                 onChange={e => setSearch(e.target.value)}
-                                className="text-sm bg-white border border-slate-200 rounded-xl pl-9 pr-3 py-2 outline-none focus:border-emerald-500 transition-colors min-w-[220px]"
+                                className="w-full text-xs font-semibold bg-white border border-slate-200 rounded-xl pl-8.5 pr-3 py-1.5 outline-none focus:border-emerald-500 transition-colors shadow-sm placeholder:text-slate-400 text-slate-700"
                             />
                         </div>
-                        <select
-                            value={sortBy}
-                            onChange={e => setSortBy(e.target.value)}
-                            aria-label="Sort projects"
-                            className="text-sm bg-white border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-emerald-500 transition-colors text-slate-600 font-semibold"
+
+                        {/* Export Button inside card */}
+                        <button
+                            onClick={handleExport}
+                            disabled={projects.length === 0}
+                            className="text-[10px] font-bold uppercase tracking-wider px-3 py-2 rounded-xl transition-all flex items-center gap-1.5 border shadow bg-white border-slate-200 text-slate-500 hover:text-emerald-700 hover:border-emerald-250 hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-40 disabled:pointer-events-none"
                         >
-                            <option value="recent">Most recent</option>
-                            <option value="name">Name (A–Z)</option>
-                            <option value="code">Code (A–Z)</option>
-                            <option value="budget">Budget (high–low)</option>
-                        </select>
+                            <Download className="w-3.5 h-3.5" /> Export
+                        </button>
+
+                        {/* Add Project Button inside card */}
+                        {userRole === 'Project Manager' && (
+                            <button
+                                onClick={() => setIsModalOpen(true)}
+                                className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-wider shadow hover:shadow-lg transition-all transform hover:-translate-y-0.5 flex items-center gap-1.5 active:scale-95"
+                            >
+                                <Plus className="w-3.5 h-3.5" /> New Project
+                            </button>
+                        )}
                     </div>
                 </div>
             )}
@@ -272,16 +299,16 @@ export default function Projects({ initialProjectId = null, onConsumeInitial }) 
             {/* PROJECT CARDS GRID */}
             {loading ? (
                 <div className="flex items-center justify-center h-48 gap-3 text-slate-400">
-                    <Loader2 className="w-6 h-6 animate-spin" /> Loading projects...
+                    <Loader2 className="w-6 h-6 animate-spin text-emerald-500" /> Loading projects...
                 </div>
             ) : loadError ? (
                 <ErrorState message={loadError} onRetry={fetchProjects} />
             ) : projects.length === 0 ? (
                 /* EMPTY STATE */
-                <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-16">
+                <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-16">
                     <div className="flex flex-col items-center justify-center gap-2">
                         <FolderKanban className="w-12 h-12 text-slate-200" />
-                        <p className="text-slate-400">No projects found. Create your first project to get started.</p>
+                        <p className="text-slate-400 font-bold uppercase tracking-wider text-xs">No projects found. Create your first project to get started.</p>
                     </div>
                 </div>
             ) : visibleProjects.length > 0 ? (
@@ -295,55 +322,59 @@ export default function Projects({ initialProjectId = null, onConsumeInitial }) 
                         <div
                             key={project.id}
                             onClick={() => setSelectedProject(project)}
-                            className={`group bg-white p-6 rounded-3xl border border-slate-100 border-t-4 ${STATUS_ACCENT[project.status] || STATUS_ACCENT.planning} shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1 cursor-pointer`}
+                            className={`group bg-white p-6 rounded-3xl border border-slate-200 border-t-4 ${STATUS_ACCENT[project.status] || STATUS_ACCENT.planning} shadow-sm hover:shadow-xl hover:border-emerald-500/20 transition-all duration-300 hover:-translate-y-1 cursor-pointer flex flex-col justify-between`}
                         >
-                            {/* Top Row: Icon + Status */}
-                            <div className="flex justify-between items-start mb-4">
-                                <div className="p-3 bg-emerald-50 rounded-2xl text-emerald-600 group-hover:bg-emerald-600 group-hover:text-white transition-colors">
-                                    <FolderKanban className="w-6 h-6" />
+                            <div>
+                                {/* Top Row: Icon + Status */}
+                                <div className="flex justify-between items-start mb-4">
+                                    <div className="p-3 bg-emerald-50 rounded-2xl text-emerald-600 group-hover:bg-emerald-600 group-hover:text-white transition-colors">
+                                        <FolderKanban className="w-6 h-6" />
+                                    </div>
+                                    <span className={`text-[10px] font-bold uppercase px-2.5 py-1 rounded-lg border ${STATUS_STYLES[project.status] || STATUS_STYLES.planning}`}>
+                                        {(project.status || 'planning').replace('_', ' ')}
+                                    </span>
                                 </div>
-                                <span className={`text-[10px] font-bold uppercase px-2.5 py-1 rounded-lg border ${STATUS_STYLES[project.status] || STATUS_STYLES.planning}`}>
-                                    {(project.status || 'planning').replace('_', ' ')}
-                                </span>
-                            </div>
 
-                            {/* Project Info */}
-                            <h3 className="text-lg font-bold text-slate-800 mb-1 group-hover:text-emerald-700 transition-colors">{project.project_name}</h3>
-                            <p className="text-[10px] text-slate-400 font-mono mb-3 tracking-wide">{project.project_code}</p>
-                            <p className="text-sm text-slate-500 mb-4 line-clamp-2 leading-relaxed">{project.description || 'No description provided.'}</p>
+                                {/* Project Info */}
+                                <h3 className="text-base font-bold text-slate-800 mb-1 group-hover:text-emerald-700 transition-colors leading-tight">{project.project_name}</h3>
+                                <p className="text-[9px] text-slate-400 font-mono font-bold mb-3 tracking-wider">{project.project_code}</p>
+                                <p className="text-xs text-slate-500 mb-4 line-clamp-2 leading-relaxed font-semibold">{project.description || 'No description provided.'}</p>
 
-                            {/* EVM Mini Metrics */}
-                            {evm && (
-                                <div className="mb-4">
-                                    <div className="flex items-center gap-2 mb-2">
-                                        <div className="flex-1 bg-slate-100 rounded-full h-1.5">
-                                            <div className="h-1.5 rounded-full bg-emerald-500 transition-all" style={{ width: `${Math.min(evm.overallPct, 100)}%` }} />
+                                {/* EVM Mini Metrics */}
+                                {evm && (
+                                    <div className="mb-4">
+                                        <div className="flex items-center gap-2 mb-2.5">
+                                            <div className="flex-1 bg-slate-100 rounded-full h-1.5">
+                                                <div className="h-1.5 rounded-full bg-emerald-500 transition-all" style={{ width: `${Math.min(evm.overallPct, 100)}%` }} />
+                                            </div>
+                                            <span className="text-xs font-bold text-slate-500 shrink-0">{evm.overallPct.toFixed(1)}%</span>
                                         </div>
-                                        <span className="text-xs font-bold text-slate-500 shrink-0">{evm.overallPct.toFixed(1)}%</span>
+                                        <div className="flex gap-2">
+                                            {cpi && <span className={`text-[9px] font-bold px-2 py-0.5 rounded-lg border uppercase tracking-wider ${cpi.bg} ${cpi.border} ${cpi.text}`}>CPI {evm.CPI?.toFixed(2) ?? '—'}</span>}
+                                            {spi && <span className={`text-[9px] font-bold px-2 py-0.5 rounded-lg border uppercase tracking-wider ${spi.bg} ${spi.border} ${spi.text}`}>SPI {evm.SPI?.toFixed(2) ?? '—'}</span>}
+                                        </div>
                                     </div>
-                                    <div className="flex gap-2">
-                                        {cpi && <span className={`text-[10px] font-bold px-2 py-0.5 rounded-lg border ${cpi.bg} ${cpi.border} ${cpi.text}`}>CPI {evm.CPI?.toFixed(2) ?? '—'}</span>}
-                                        {spi && <span className={`text-[10px] font-bold px-2 py-0.5 rounded-lg border ${spi.bg} ${spi.border} ${spi.text}`}>SPI {evm.SPI?.toFixed(2) ?? '—'}</span>}
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Footer: date + budget */}
-                            <div className="grid grid-cols-2 gap-3 text-xs text-slate-400 border-t border-slate-50 pt-3">
-                                <div className="flex items-center gap-1.5">
-                                    <Calendar className="w-3.5 h-3.5 shrink-0" />
-                                    {project.planned_start ? formatDate(project.planned_start) : '—'}
-                                </div>
-                                <div className="flex items-center gap-1.5">
-                                    <DollarSign className="w-3.5 h-3.5 shrink-0" />
-                                    {formatCurrency(project.total_budget)}
-                                </div>
+                                )}
                             </div>
 
-                            {/* Hover Arrow */}
-                            <div className="mt-4 flex justify-end opacity-0 group-hover:opacity-100 transition-opacity">
-                                <div className="text-emerald-500 flex items-center gap-1 text-xs font-semibold">
-                                    Open Project <ChevronRight className="w-4 h-4" />
+                            <div>
+                                {/* Footer: date + budget */}
+                                <div className="grid grid-cols-2 gap-3 text-xs text-slate-400 border-t border-slate-100 pt-3.5">
+                                    <div className="flex items-center gap-1.5">
+                                        <Calendar className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                                        <span className="font-semibold text-slate-500">{project.planned_start ? formatDate(project.planned_start) : '—'}</span>
+                                    </div>
+                                    <div className="flex items-center gap-1.5 justify-end">
+                                        <DollarSign className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                                        <span className="font-semibold text-slate-500">{formatCurrency(project.total_budget)}</span>
+                                    </div>
+                                </div>
+
+                                {/* Hover Arrow */}
+                                <div className="mt-3.5 flex justify-end opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <div className="text-emerald-600 flex items-center gap-1 text-[11px] font-black uppercase tracking-wider">
+                                        Open Project <ChevronRight className="w-3.5 h-3.5" />
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -352,13 +383,13 @@ export default function Projects({ initialProjectId = null, onConsumeInitial }) 
                 </div>
             ) : (
                 /* NO MATCH FOR CURRENT FILTERS */
-                <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-16">
+                <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-16">
                     <div className="flex flex-col items-center justify-center gap-3">
                         <Search className="w-12 h-12 text-slate-200" />
-                        <p className="text-slate-400">No projects match your filters.</p>
+                        <p className="text-slate-400 font-bold uppercase tracking-wider text-xs">No projects match your filters.</p>
                         <button
                             onClick={() => { setStatusFilter('All'); setSearch(''); }}
-                            className="text-xs font-bold text-emerald-600 hover:text-emerald-700 uppercase tracking-wider"
+                            className="text-xs font-bold text-emerald-600 hover:text-emerald-700 uppercase tracking-wider border-b border-emerald-600 border-dashed"
                         >
                             Clear filters
                         </button>
@@ -368,100 +399,100 @@ export default function Projects({ initialProjectId = null, onConsumeInitial }) 
 
             {/* CREATE PROJECT MODAL */}
             {isModalOpen && (
-                <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50" onClick={() => setIsModalOpen(false)}>
-                    <div role="dialog" aria-label="Create new project" className="bg-white rounded-3xl p-8 w-full max-w-lg shadow-2xl border border-slate-100 animate-in fade-in duration-200" onClick={(e) => e.stopPropagation()}>
+                <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 animate-in fade-in duration-200" onClick={() => setIsModalOpen(false)}>
+                    <div role="dialog" aria-label="Create new project" className="bg-white rounded-3xl p-8 w-full max-w-lg shadow-2xl border border-slate-200 animate-in zoom-in-95 duration-250" onClick={(e) => e.stopPropagation()}>
 
                         {/* Modal Header */}
                         <div className="flex items-center justify-between mb-6">
-                            <h3 className="text-xl font-bold text-slate-800">Create New Project</h3>
-                            <button onClick={() => setIsModalOpen(false)} aria-label="Close" className="text-slate-400 hover:text-slate-600 transition-colors">
+                            <h3 className="text-lg font-bold text-slate-800">Create New Project</h3>
+                            <button onClick={() => setIsModalOpen(false)} aria-label="Close" className="text-slate-400 hover:text-slate-650 transition-colors">
                                 <X className="w-5 h-5" />
                             </button>
                         </div>
 
                         {/* Error */}
                         {error && (
-                            <div className="p-3 mb-4 rounded-lg bg-red-50/80 border border-red-100 text-red-600 text-xs text-center font-bold uppercase animate-pulse">
+                            <div className="p-3 mb-4 rounded-xl bg-red-50 border border-red-150 text-red-655 text-xs text-center font-bold uppercase animate-pulse">
                                 {error}
                             </div>
                         )}
 
                         {/* Form */}
-                        <form onSubmit={handleCreate} className="space-y-4">
+                        <form onSubmit={handleCreate} className="space-y-4 text-left">
                             <div className="space-y-1">
-                                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider ml-1">Project Name</label>
+                                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider ml-1">Project Name</label>
                                 <input
                                     type="text"
                                     required
                                     value={form.project_name}
                                     onChange={(e) => setForm({ ...form, project_name: e.target.value })}
-                                    className="w-full px-4 py-3 bg-white/50 border border-slate-200 rounded-lg outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all text-slate-700 text-sm"
+                                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/5 transition-all text-slate-700 text-sm font-semibold"
                                     placeholder="e.g. Industrial Complex Phase 2"
                                 />
                             </div>
 
                             <div className="space-y-1">
-                                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider ml-1">Project Code</label>
+                                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider ml-1">Project Code</label>
                                 <input
                                     type="text"
                                     required
                                     value={form.project_code}
                                     onChange={(e) => setForm({ ...form, project_code: e.target.value })}
-                                    className={`w-full px-4 py-3 bg-white/50 border rounded-lg outline-none focus:ring-2 transition-all text-slate-700 text-sm ${
+                                    className={`w-full px-4 py-2.5 bg-slate-50 border rounded-xl outline-none focus:ring-4 transition-all text-slate-700 text-sm font-semibold ${
                                         codeInvalid
-                                            ? 'border-red-300 focus:border-red-500 focus:ring-red-500/20'
-                                            : 'border-slate-200 focus:border-emerald-500 focus:ring-emerald-500/20'
+                                            ? 'border-red-300 focus:border-red-500 focus:ring-red-500/5'
+                                            : 'border-slate-200 focus:border-emerald-500 focus:ring-emerald-500/5'
                                     }`}
                                     placeholder="e.g. PRJ-2026-004"
                                     aria-invalid={codeInvalid}
                                 />
-                                <p className={`text-[11px] ml-1 ${codeInvalid ? 'text-red-500 font-semibold' : 'text-slate-400'}`}>
+                                <p className={`text-[10px] ml-1 font-bold ${codeInvalid ? 'text-red-500' : 'text-slate-400'}`}>
                                     Format: PRJ-YYYY-NNN (e.g. PRJ-2026-004)
                                 </p>
                             </div>
 
                             <div className="space-y-1">
-                                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider ml-1">Description</label>
+                                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider ml-1">Description</label>
                                 <textarea
                                     value={form.description}
                                     onChange={(e) => setForm({ ...form, description: e.target.value })}
                                     rows={3}
-                                    className="w-full px-4 py-3 bg-white/50 border border-slate-200 rounded-lg outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all text-slate-700 text-sm resize-none"
+                                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/5 transition-all text-slate-700 text-sm font-semibold resize-none"
                                     placeholder="Brief project description..."
                                 />
                             </div>
 
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-1">
-                                    <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider ml-1">Start Date</label>
+                                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider ml-1">Start Date</label>
                                     <input
                                         type="date"
                                         required
                                         value={form.planned_start}
                                         onChange={(e) => setForm({ ...form, planned_start: e.target.value })}
-                                        className="w-full px-4 py-3 bg-white/50 border border-slate-200 rounded-lg outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all text-slate-700 text-sm"
+                                        className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/5 transition-all text-slate-700 text-sm font-semibold"
                                     />
                                 </div>
                                 <div className="space-y-1">
-                                    <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider ml-1">End Date</label>
+                                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider ml-1">End Date</label>
                                     <input
                                         type="date"
                                         required
                                         min={form.planned_start || undefined}
                                         value={form.planned_end}
                                         onChange={(e) => setForm({ ...form, planned_end: e.target.value })}
-                                        className="w-full px-4 py-3 bg-white/50 border border-slate-200 rounded-lg outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all text-slate-700 text-sm"
+                                        className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/5 transition-all text-slate-700 text-sm font-semibold"
                                     />
                                 </div>
                             </div>
 
                             <div className="space-y-1">
-                                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider ml-1">Total Budget (IDR)</label>
+                                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider ml-1">Total Budget (IDR)</label>
                                 <input
                                     type="number"
                                     value={form.total_budget}
                                     onChange={(e) => setForm({ ...form, total_budget: e.target.value })}
-                                    className="w-full px-4 py-3 bg-white/50 border border-slate-200 rounded-lg outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all text-slate-700 text-sm"
+                                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/5 transition-all text-slate-700 text-sm font-semibold"
                                     placeholder="0"
                                 />
                             </div>
@@ -471,14 +502,14 @@ export default function Projects({ initialProjectId = null, onConsumeInitial }) 
                                 <button
                                     type="button"
                                     onClick={() => { setIsModalOpen(false); resetForm(); }}
-                                    className="flex-1 px-6 py-3 bg-slate-100 text-slate-600 rounded-xl font-semibold hover:bg-slate-200 transition-all"
+                                    className="flex-1 px-6 py-3 bg-slate-100 text-slate-600 rounded-xl font-bold uppercase text-xs tracking-widest hover:bg-slate-200 transition-all"
                                 >
                                     Cancel
                                 </button>
                                 <button
                                     type="submit"
                                     disabled={saving}
-                                    className="flex-1 px-6 py-3 bg-emerald-600 text-white rounded-xl font-semibold shadow-lg shadow-emerald-200 hover:bg-emerald-700 transition-all flex items-center justify-center gap-2 disabled:opacity-60"
+                                    className="flex-1 px-6 py-3 bg-emerald-600 text-white rounded-xl font-bold uppercase text-xs tracking-widest shadow-lg shadow-emerald-200 hover:bg-emerald-700 transition-all flex items-center justify-center gap-2 disabled:opacity-60"
                                 >
                                     {saving ? <><Loader2 className="w-4 h-4 animate-spin" /> Saving...</> : 'Create Project'}
                                 </button>

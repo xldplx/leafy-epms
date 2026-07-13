@@ -53,7 +53,7 @@ const getAlertsRaw = async (req, res) => {
             .order('created_at', { ascending: false });
 
         const { data: tasks } = await supabase.from('tasks')
-            .select('id,project_id,task_name,wbs_code,planned_cost,actual_cost,pct_complete,planned_hours,actual_hours,weight,is_baseline_locked');
+            .select('id,project_id,task_name,wbs_code,planned_cost,actual_cost,pct_complete,planned_hours,actual_hours,weight,is_baseline_locked,planned_start,planned_end');
 
         res.json({
             success: true,

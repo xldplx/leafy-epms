@@ -239,19 +239,15 @@ export default function Consumables() {
                 </div>
             )}
 
-            {/* HEADER */}
-            <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
-                <div>
-                    <h2 className="text-3xl font-bold text-slate-800 tracking-tight">{t('consumables.title')}</h2>
-                    <p className="text-slate-500 mt-1">{t('consumables.subtitle')}</p>
-                </div>
-                {canAdd && (
+            {/* ACTIONS */}
+            {canAdd && (
+                <div className="flex justify-end mb-6">
                     <button onClick={() => { setAddForm({ name: '', category: 'Fuel', unit: 'L', current_stock: '', reorder_threshold: '' }); setAddError(''); setIsAddModalOpen(true); }}
                         className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2.5 rounded-xl font-semibold shadow-lg shadow-emerald-200 transition-all transform hover:-translate-y-0.5 flex items-center gap-2">
                         <Plus className="w-5 h-5" /> {t('consumables.addItem')}
                     </button>
-                )}
-            </div>
+                </div>
+            )}
 
             {/* PROJECT SELECTOR */}
             <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-5 flex items-center gap-4">

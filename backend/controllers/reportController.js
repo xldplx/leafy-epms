@@ -80,13 +80,13 @@ const getCriticalActivities = async (req, res) => {
                 return { ...task, schedule_pct: schedulePct, float: floatDays };
             })
             .filter(task => {
-                const isBehind  = parseFloat(task.pct_complete || 0) < task.schedule_pct;
+                const isBehind  = parseFloat(task.pct_complete || 0) < task.schedule_pct * 100;
                 const isLowFloat = task.float !== null && task.float <= 2;
                 return isBehind || isLowFloat;
             })
             .map(task => ({
                 ...task,
-                delayDays: Math.max(0, (task.schedule_pct - parseFloat(task.pct_complete || 0)) * ((task.planned_duration || 1) / 100)),
+                delayDays: Math.max(0, (task.schedule_pct * 100 - parseFloat(task.pct_complete || 0)) * ((task.planned_duration || 1) / 100)),
             }));
 
         res.json({ success: true, data: result, total: result.length });
@@ -114,7 +114,7 @@ const getDelayAnalysis = async (req, res) => {
             .map(task => {
                 const schedulePct   = task.schedule_pct != null ? parseFloat(task.schedule_pct) : computeSchedulePct(task.planned_start, task.planned_end, today);
                 const actualPct     = parseFloat(task.pct_complete || 0);
-                const pctBehind     = Math.max(0, schedulePct - actualPct);
+                const pctBehind     = Math.max(0, schedulePct * 100 - actualPct);
                 const daysBehind    = Math.round((pctBehind / 100) * (task.planned_duration || 1));
 
                 return {
@@ -149,9 +149,9 @@ const getReportSummary = async (req, res) => {
             const schedulePct = task.schedule_pct != null ? parseFloat(task.schedule_pct) : computeSchedulePct(task.planned_start, task.planned_end, today);
             const floatDays   = task.float        != null ? parseFloat(task.float)        : computeFloat(task.planned_end, today);
             const actualPct   = parseFloat(task.pct_complete || 0);
-            const pctBehind   = Math.max(0, schedulePct - actualPct);
+            const pctBehind   = Math.max(0, schedulePct * 100 - actualPct);
             const daysBehind  = Math.round((pctBehind / 100) * (task.planned_duration || 1));
-            const isBehind    = actualPct < schedulePct;
+            const isBehind    = actualPct < schedulePct * 100;
             const isLowFloat  = floatDays !== null && floatDays <= 2;
 
             return { ...task, schedule_pct: schedulePct, float: floatDays, daysBehind, isCritical: isBehind || isLowFloat };
