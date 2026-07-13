@@ -12,10 +12,10 @@ function WbsNode({
     node, allNodes, expandedNodes, toggleExpand, selectedWbsId, setSelectedWbsId,
     overrides, canRename, editingId, setEditingId, onRename, onDelete, taskCounts,
 }) {
-    const children    = allNodes.filter(n => n.parent_id === node.id);
+    const children    = allNodes.filter(n => n.parent_id !== null && Number(n.parent_id) === Number(node.id));
     const hasChildren = children.length > 0;
     const isExpanded  = expandedNodes.has(node.id);
-    const isSelected  = selectedWbsId === node.id;
+    const isSelected  = selectedWbsId !== null && Number(selectedWbsId) === Number(node.id);
     const indent      = (node.level - 1) * 16;
     const displayName = (overrides && overrides[node.id]) || node.name;
     const isEditing   = editingId === node.id;
@@ -58,7 +58,7 @@ function WbsNode({
                 )}
                 <span className="font-mono text-[10px] text-slate-400 shrink-0">{node.wbs_code}</span>
 
-                {isEditing ? (
+        {isEditing ? (
                     <div className="flex items-center gap-1 flex-1 min-w-0" onClick={e => e.stopPropagation()}>
                         <input
                             type="text"
@@ -75,7 +75,7 @@ function WbsNode({
                             type="button"
                             onClick={commit}
                             aria-label="Save name"
-                            className="p-1 rounded text-emerald-600 hover:bg-emerald-50"
+                            className="p-1 rounded text-emerald-600 hover:bg-emerald-50 cursor-pointer"
                         >
                             <Check className="w-3.5 h-3.5" />
                         </button>
@@ -83,7 +83,7 @@ function WbsNode({
                             type="button"
                             onClick={() => setEditingId(null)}
                             aria-label="Cancel edit"
-                            className="p-1 rounded text-slate-400 hover:bg-slate-100"
+                            className="p-1 rounded text-slate-400 hover:bg-slate-100 cursor-pointer"
                         >
                             <X className="w-3.5 h-3.5" />
                         </button>
@@ -102,7 +102,7 @@ function WbsNode({
                                 onClick={(e) => { e.stopPropagation(); setDraft(displayName); setEditingId(node.id); }}
                                 title="Rename"
                                 aria-label="Rename node"
-                                className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded text-slate-400 hover:text-emerald-600 hover:bg-emerald-50"
+                                className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 cursor-pointer"
                             >
                                 <Pencil className="w-3 h-3" />
                             </button>
@@ -113,7 +113,7 @@ function WbsNode({
                                 onClick={(e) => { e.stopPropagation(); onDelete(node.id); }}
                                 title="Delete node"
                                 aria-label="Delete node"
-                                className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded text-slate-400 hover:text-red-600 hover:bg-red-50"
+                                className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded text-slate-400 hover:text-red-600 hover:bg-red-50 cursor-pointer"
                             >
                                 <Trash2 className="w-3 h-3" />
                             </button>
@@ -425,9 +425,8 @@ export default function ProjectDetail({ project, onBack }) {
     };
     const expandAll   = () => setExpandedNodes(new Set(wbsNodes.map(n => n.id)));
     const collapseAll = () => setExpandedNodes(new Set());
-
-    const leafNodes = wbsNodes.filter(n => !wbsNodes.some(m => m.parent_id === n.id));
-    const rootNodes = wbsNodes.filter(n => n.parent_id === null);
+    const leafNodes = wbsNodes.filter(n => !wbsNodes.some(m => m.parent_id !== null && String(m.parent_id) === String(n.id)));
+    const rootNodes = wbsNodes.filter(n => n.parent_id === null || n.parent_id === undefined || String(n.parent_id) === 'null' || String(n.parent_id) === '');
 
     // Predecessor candidates = every other task in the project (exclude self when editing).
     const otherTasks = tasks.filter(t => t.id !== editingTaskId);
@@ -437,27 +436,25 @@ export default function ProjectDetail({ project, onBack }) {
         ? Math.round((new Date(taskForm.planned_end) - new Date(taskForm.planned_start)) / (1000 * 60 * 60 * 24))
         : null;
 
-    const getDescendantIds = (nodeId, visited = new Set()) => {
-        if (visited.has(nodeId)) return [];
-        visited.add(nodeId);
-        const children = wbsNodes.filter(n => n.parent_id === nodeId);
-        return [nodeId, ...children.flatMap(c => getDescendantIds(c.id, visited))];
-    };
-    const selectedIds   = selectedWbsId ? getDescendantIds(selectedWbsId) : null;
-    const filteredTasks = selectedIds ? tasks.filter(t => selectedIds.includes(t.wbs_id)) : tasks;
-    const selectedNode  = wbsNodes.find(n => n.id === selectedWbsId);
+    const selectedNode  = wbsNodes.find(n => String(n.id) === String(selectedWbsId));
+    
+    // Filter tasks based on WBS code hierarchy (matching exact or sub-nodes)
+    const filteredTasks = useMemo(() => {
+        if (!selectedNode) return tasks;
+        const codePrefix = selectedNode.wbs_code;
+        return tasks.filter(t => t.wbs_code && (t.wbs_code === codePrefix || t.wbs_code.startsWith(codePrefix + '.')));
+    }, [tasks, selectedNode]);
 
-    // Task count per WBS node (includes descendants) for the tree badges.
+    // Task count per WBS node (includes descendants) matching WBS codes
     const taskCounts = useMemo(() => {
         const map = {};
         for (const n of wbsNodes) {
-            const ids = getDescendantIds(n.id);
-            map[n.id] = tasks.filter(t => ids.includes(t.wbs_id)).length;
+            const codePrefix = n.wbs_code;
+            map[n.id] = tasks.filter(t => t.wbs_code && (t.wbs_code === codePrefix || t.wbs_code.startsWith(codePrefix + '.'))).length;
         }
         return map;
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [wbsNodes, tasks]);
-    const anyExpandable = wbsNodes.some(n => wbsNodes.some(m => m.parent_id === n.id));
+    const anyExpandable = wbsNodes.some(n => wbsNodes.some(m => m.parent_id !== null && String(m.parent_id) === String(n.id)));
 
     const totalCost   = filteredTasks.reduce((s, t) => s + parseFloat(t.planned_cost   || 0), 0);
     const totalHours  = filteredTasks.reduce((s, t) => s + parseFloat(t.planned_hours  || 0), 0);
@@ -629,11 +626,11 @@ export default function ProjectDetail({ project, onBack }) {
         <div className="space-y-6">
 
             {/* HEADER */}
-            <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-5">
                 <div className="flex items-start justify-between gap-4">
                     <div className="flex items-start gap-4">
                         <button onClick={onBack} aria-label="Go back to projects"
-                            className="mt-1 p-2 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors">
+                            className="mt-1 p-2 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer">
                             <ArrowLeft className="w-5 h-5" />
                         </button>
                         <div>
@@ -651,7 +648,7 @@ export default function ProjectDetail({ project, onBack }) {
                         <button
                             onClick={handleExport}
                             disabled={tasks.length === 0 && wbsNodes.length === 0}
-                            className="text-sm font-semibold px-4 py-2.5 rounded-xl transition-all flex items-center gap-2 border shadow-sm text-emerald-600 bg-emerald-50 border-emerald-100 hover:bg-emerald-600 hover:text-white hover:border-emerald-600 hover:shadow-lg hover:shadow-emerald-200 hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-40 disabled:pointer-events-none"
+                            className="text-sm font-semibold px-4 py-2.5 rounded-xl transition-all flex items-center gap-2 border shadow-sm text-emerald-600 bg-emerald-50 border-emerald-100 hover:bg-emerald-600 hover:text-white hover:border-emerald-600 hover:shadow-lg hover:shadow-emerald-200 hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-40 disabled:pointer-events-none cursor-pointer"
                         >
                             <Download className="w-4 h-4" /> Export
                         </button>
@@ -664,7 +661,7 @@ export default function ProjectDetail({ project, onBack }) {
                                 <button
                                     onClick={() => { if (tasks.length > 0) { setLockError(''); setIsLockModalOpen(true); } }}
                                     disabled={tasks.length === 0}
-                                    className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-sm transition-all shadow-lg shadow-amber-100 ${tasks.length > 0 ? 'bg-amber-500 hover:bg-amber-600 text-white cursor-pointer' : 'bg-amber-500 text-white opacity-50 cursor-not-allowed'}`}
+                                    className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-sm transition-all shadow-lg shadow-amber-100 cursor-pointer ${tasks.length > 0 ? 'bg-amber-500 hover:bg-amber-600 text-white' : 'bg-amber-500 text-white opacity-50 cursor-not-allowed'}`}
                                 >
                                     <Lock className="w-4 h-4" />
                                     {tasks.length > 0 ? 'Lock Baseline' : 'Add tasks first'}
@@ -674,20 +671,22 @@ export default function ProjectDetail({ project, onBack }) {
                     </div>
                 </div>
 
-                {/* Info chips */}
-                <div className="flex flex-wrap gap-2 ml-14">
-                    <span className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-xs text-slate-500">
-                        <Calendar className="w-3.5 h-3.5" /> Start: {project.planned_start ? formatDate(project.planned_start) : '—'}
-                    </span>
-                    <span className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-xs text-slate-500">
-                        <Calendar className="w-3.5 h-3.5" /> End: {project.planned_end ? formatDate(project.planned_end) : '—'}
-                    </span>
-                    <span className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-xs text-slate-500">
-                        <Clock className="w-3.5 h-3.5" /> {durationDays} days
-                    </span>
-                    <span className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-xs text-slate-500">
-                        <DollarSign className="w-3.5 h-3.5" /> {formatCurrency(project.total_budget)}
-                    </span>
+                {/* KPI STATS BAR STRIP */}
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 ml-14">
+                    {[
+                        { label: 'Planned Start', value: project.planned_start ? formatDate(project.planned_start) : '—', color: 'text-slate-800', icon: <Calendar className="w-4 h-4 text-emerald-600" />, bg: 'bg-emerald-50 border-emerald-100/50' },
+                        { label: 'Target Finish', value: project.planned_end ? formatDate(project.planned_end) : '—', color: 'text-slate-800', icon: <Calendar className="w-4 h-4 text-amber-650" />, bg: 'bg-amber-50 border-amber-100/50' },
+                        { label: 'Project Duration', value: `${durationDays} Days`, color: 'text-emerald-700', icon: <Clock className="w-4 h-4 text-emerald-600" />, bg: 'bg-emerald-50 border-emerald-100/50' },
+                        { label: 'Total Budget (BAC)', value: formatCurrency(project.total_budget), color: 'text-rose-705', icon: <DollarSign className="w-4 h-4 text-rose-600" />, bg: 'bg-rose-50 border-rose-100/50' }
+                    ].map((stat, idx) => (
+                        <div key={idx} className="bg-white p-4.5 rounded-2xl border border-slate-200/80 shadow-sm hover:shadow-md transition-all duration-300 flex items-center gap-3.5">
+                            <div className={`p-2.5 rounded-xl border shrink-0 ${stat.bg}`}>{stat.icon}</div>
+                            <div className="text-left">
+                                <h3 className="text-slate-400 text-[10px] font-black uppercase tracking-widest">{stat.label}</h3>
+                                <p className={`text-sm font-black tracking-tight mt-0.5 ${stat.color}`}>{stat.value}</p>
+                            </div>
+                        </div>
+                    ))}
                 </div>
 
                 {isLocked && baseline && (
@@ -710,7 +709,7 @@ export default function ProjectDetail({ project, onBack }) {
             <div className="flex gap-6 items-start">
 
                 {/* LEFT: WBS Tree */}
-                <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-6 w-72 shrink-0">
+                <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 w-72 shrink-0">
                     <div className="flex items-center justify-between mb-4">
                         <h3 className="text-sm font-bold text-slate-700 uppercase tracking-wider">WBS</h3>
                         <div className="flex items-center gap-1">
@@ -787,16 +786,16 @@ export default function ProjectDetail({ project, onBack }) {
                 </div>
 
                 {/* RIGHT: Tasks Table */}
-                <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden flex-1 min-w-0">
-                    <div className="p-6 border-b border-slate-50 flex items-center justify-between gap-4">
+                <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden flex-1 min-w-0">
+                    <div className="p-6 border-b border-slate-100 flex items-center justify-between gap-4 bg-slate-50/20">
                         <div>
                             <h3 className="font-bold text-slate-700">Tasks</h3>
                             {selectedNode ? (
-                                <p className="text-xs text-slate-400 mt-0.5">
-                                    Showing: <span className="font-mono text-emerald-600">{selectedNode.wbs_code}</span> — {wbsOverrides[selectedNode.id] || selectedNode.name}
+                                <p className="text-xs text-slate-400 mt-0.5 font-semibold">
+                                    Showing: <span className="font-mono text-emerald-600 font-bold">{selectedNode.wbs_code}</span> — {wbsOverrides[selectedNode.id] || selectedNode.name}
                                 </p>
                             ) : (
-                                <p className="text-xs text-slate-400 mt-0.5">All tasks in this project</p>
+                                <p className="text-xs text-slate-400 mt-0.5 font-semibold">All tasks in this project</p>
                             )}
                         </div>
                         {canEdit && !isLocked && (
@@ -804,9 +803,9 @@ export default function ProjectDetail({ project, onBack }) {
                                 onClick={openAddTaskModal}
                                 disabled={wbsNodes.length === 0}
                                 title={wbsNodes.length === 0 ? 'Add a WBS node first' : 'Add task'}
-                                className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl font-semibold text-sm shadow-lg shadow-emerald-200 transition-all flex items-center gap-2 shrink-0 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
+                                className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl font-bold text-xs uppercase tracking-wider shadow hover:shadow-lg transition-all flex items-center gap-1.5 shrink-0 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none cursor-pointer"
                             >
-                                <Plus className="w-4 h-4" /> Add Task
+                                <Plus className="w-3.5 h-3.5" /> Add Task
                             </button>
                         )}
                         {isLocked && (

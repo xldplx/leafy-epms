@@ -36,12 +36,6 @@ export default function MyProfile() {
 
     return (
         <div className="space-y-8 pb-12">
-            <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
-                <div>
-                    <h2 className="text-3xl font-black text-slate-800 tracking-tight">My Profile</h2>
-                    <p className="text-slate-500 mt-1 font-medium">Manage your account details</p>
-                </div>
-            </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 {/* Profile Card */}

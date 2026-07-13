@@ -39,14 +39,14 @@ export function indexColor(val) {
     if (val === null) return { bg: 'bg-slate-50',   text: 'text-slate-500',   border: 'border-slate-100',   label: '—' };
     if (val >= 1.0)  return { bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-100', label: id ? 'Sesuai Rencana' : 'On Track' };
     if (val >= 0.9)  return { bg: 'bg-amber-50',   text: 'text-amber-700',   border: 'border-amber-100',   label: id ? 'Berisiko'       : 'At Risk'  };
-    return                  { bg: 'bg-red-50',     text: 'text-red-700',     border: 'border-red-100',     label: id ? 'Kritis'         : 'Critical' };
+    return                  { bg: 'bg-rose-50',    text: 'text-rose-700',    border: 'border-rose-100',    label: id ? 'Kritis'         : 'Critical' };
 }
 
 export function varianceColor(val) {
     const id = _lang() === 'id';
     return val >= 0
         ? { text: 'text-emerald-700', bg: 'bg-emerald-50', border: 'border-emerald-100', label: id ? 'Menguntungkan'       : 'Favorable'   }
-        : { text: 'text-red-700',     bg: 'bg-red-50',     border: 'border-red-100',     label: id ? 'Tidak Menguntungkan' : 'Unfavorable' };
+        : { text: 'text-rose-700',     bg: 'bg-rose-50',     border: 'border-rose-100',     label: id ? 'Tidak Menguntungkan' : 'Unfavorable' };
 }
 
 export function formatCurrency(v) {

@@ -246,10 +246,7 @@ export default function ExcelImport() {
     if (!canImport) {
         return (
             <div className="space-y-8">
-                <div>
-                    <h2 className="text-3xl font-bold text-slate-800 tracking-tight">Excel Import</h2>
-                    <p className="text-slate-500 mt-1">Upload task data from spreadsheets</p>
-                </div>
+
                 <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-16">
                     <div className="flex flex-col items-center justify-center gap-2">
                         <Upload className="w-12 h-12 text-slate-200" />
@@ -263,18 +260,14 @@ export default function ExcelImport() {
     return (
         <div className="space-y-8">
 
-            {/* HEADER */}
-            <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
-                <div>
-                    <h2 className="text-3xl font-bold text-slate-800 tracking-tight">Excel Import</h2>
-                    <p className="text-slate-500 mt-1">Upload task data from spreadsheets</p>
-                </div>
-                {step !== 'upload' && step !== 'done' && (
+            {/* ACTIONS */}
+            {step !== 'upload' && step !== 'done' && (
+                <div className="flex justify-end mb-6">
                     <button onClick={handleReset} className="text-sm font-semibold text-slate-500 hover:text-slate-700 bg-slate-100 px-4 py-2.5 rounded-xl transition-colors flex items-center gap-2">
                         <X className="w-4 h-4" /> Start Over
                     </button>
-                )}
-            </div>
+                </div>
+            )}
 
             {/* STEP INDICATOR */}
             <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider">

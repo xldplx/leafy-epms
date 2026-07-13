@@ -253,34 +253,28 @@ export default function Budget() {
                 </div>
             )}
 
-            {/* HEADER */}
-            <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
-                <div>
-                    <h2 className="text-3xl font-bold text-slate-800 tracking-tight">{t('budget.title')}</h2>
-                    <p className="text-slate-500 mt-1">{t('budget.subtitle')}</p>
-                </div>
-                <div className="flex items-center gap-3">
-                    <button
-                        onClick={handleExport}
-                        disabled={categories.length === 0}
-                        className="text-sm font-semibold px-4 py-2.5 rounded-xl transition-all flex items-center gap-2 border shadow-sm text-emerald-600 bg-emerald-50 border-emerald-100 hover:bg-emerald-600 hover:text-white hover:border-emerald-600 hover:shadow-lg hover:shadow-emerald-200 hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-40 disabled:pointer-events-none"
-                    >
-                        <Download className="w-4 h-4" /> {t('common.export')}
+            {/* ACTIONS */}
+            <div className="flex justify-end gap-3 mb-6">
+                <button
+                    onClick={handleExport}
+                    disabled={categories.length === 0}
+                    className="text-sm font-semibold px-4 py-2.5 rounded-xl transition-all flex items-center gap-2 border shadow-sm text-emerald-600 bg-emerald-50 border-emerald-100 hover:bg-emerald-600 hover:text-white hover:border-emerald-600 hover:shadow-lg hover:shadow-emerald-200 hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-40 disabled:pointer-events-none"
+                >
+                    <Download className="w-4 h-4" /> {t('common.export')}
+                </button>
+                {canEdit && selectedProjectId && categories.length > 0 && (
+                    <button onClick={handleSyncAll} disabled={syncingAll}
+                        className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-sm border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 transition-all disabled:opacity-60">
+                        {syncingAll ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                        {t('budget.syncAll')}
                     </button>
-                    {canEdit && selectedProjectId && categories.length > 0 && (
-                        <button onClick={handleSyncAll} disabled={syncingAll}
-                            className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-sm border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 transition-all disabled:opacity-60">
-                            {syncingAll ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-                            {t('budget.syncAll')}
-                        </button>
-                    )}
-                    {canEdit && selectedProjectId && (
-                        <button onClick={openAddModal}
-                            className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2.5 rounded-xl font-semibold shadow-lg shadow-emerald-200 transition-all transform hover:-translate-y-0.5 flex items-center gap-2">
-                            <Plus className="w-5 h-5" /> {t('budget.addCategory')}
-                        </button>
-                    )}
-                </div>
+                )}
+                {canEdit && selectedProjectId && (
+                    <button onClick={openAddModal}
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2.5 rounded-xl font-semibold shadow-lg shadow-emerald-200 transition-all transform hover:-translate-y-0.5 flex items-center gap-2">
+                        <Plus className="w-5 h-5" /> {t('budget.addCategory')}
+                    </button>
+                )}
             </div>
 
             {/* PROJECT SELECTOR */}
