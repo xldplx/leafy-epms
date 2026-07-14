@@ -79,6 +79,10 @@ app.use(requestLogger);
 // ── Health ────────────────────────────────────────────────────────────────────
 app.get('/api/health', (_, res) => res.json({ ok: true, ts: new Date().toISOString() }));
 
+// ── AI Integration ────────────────────────────────────────────────────────────
+const aiRoutes = require('./routes/aiRoutes');
+app.use('/api/ai', aiRoutes);
+
 // ── Auth ──────────────────────────────────────────────────────────────────────
 app.post('/api/login',   auth.login);
 app.post('/api/refresh', auth.refreshToken);
